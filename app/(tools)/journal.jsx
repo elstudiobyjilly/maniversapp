@@ -1,0 +1,248 @@
+import { useEffect, useRef, useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  ActivityIndicator,
+  Animated,
+} from 'react-native';
+import GlassCard from '../../components/GlassCard';
+import GradientBackground from '../../components/GradientBackground';
+import ScreenHeader from '../../components/ScreenHeader';
+import Button from '../../components/Button';
+import { colors, fonts, radii } from '../../constants/theme';
+import { getJournal, addJournalEntry, deleteJournalEntry } from '../../services/api';
+
+const SUGGESTED_PROMPTS = [
+  'Free write',
+  "What's on my mind",
+  "Today I'm grateful for",
+  "I'm releasing...",
+];
+
+// ─── Single entry with delete animation ────────────────────────────────────
+function JournalEntry({ item, onDeleted }) {
+  const opacity = useRef(new Animated.Value(1)).current;
+  const scale = useRef(new Animated.Value(1)).current;
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = () => {
+    if (deleting) return;
+    setDeleting(true);
+    Animated.parallel([
+      Animated.timing(opacity, { toValue: 0, duration: 450, useNativeDriver: true }),
+      Animated.timing(scale, { toValue: 0.88, duration: 450, useNativeDriver: true }),
+    ]).start(async () => {
+      try { await deleteJournalEntry(item.id); } catch (_) {}
+      onDeleted(item.id);
+    });
+  };
+
+  return (
+    <Animated.View style={{ opacity, transform: [{ scale }], marginBottom: 12 }}>
+      <GlassCard>
+        <View style={styles.entryHeader}>
+          <View style={styles.entryHeaderLeft}>
+            <Text style={styles.promptLabel}>{item.prompt}</Text>
+            <Text style={styles.dateText}>{item.entry_date}</Text>
+          </View>
+          <TouchableOpacity
+            onPress={handleDelete}
+            disabled={deleting}
+            style={styles.removeBtn}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={styles.removeBtnIcon}>✕</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.entryText}>{item.content}</Text>
+      </GlassCard>
+    </Animated.View>
+  );
+}
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
+export default function Journal() {
+  const [prompt, setPrompt] = useState('');
+  const [content, setContent] = useState('');
+  const [list, setList] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [saved, setSaved] = useState(false);
+
+  const load = async () => {
+    try { setList(await getJournal()); } catch (e) { setError(e.message || 'Could not load'); }
+  };
+
+  useEffect(() => { load().finally(() => setLoading(false)); }, []);
+
+  const handleAdd = async () => {
+    if (!content.trim()) { setError('Write your journal entry.'); return; }
+    setError(''); setSaving(true);
+    try {
+      const row = await addJournalEntry(prompt.trim() || 'Free write', content.trim());
+      setList((prev) => [row, ...prev]);
+      setPrompt(''); setContent('');
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (e) {
+      setError(e.message || 'Could not save');
+    } finally { setSaving(false); }
+  };
+
+  const handleDeleted = (id) => {
+    setList((prev) => prev.filter((e) => e.id !== id));
+  };
+
+  return (
+    <GradientBackground>
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+
+        <ScreenHeader lead="Jour" accent="nal" subtitle={`A quiet space for your thoughts ✨`} />
+
+        {/* Input card */}
+        <GlassCard style={styles.mb20}>
+          <Text style={styles.intro}>What's on your mind today?</Text>
+
+          <View style={styles.chipRow}>
+            {SUGGESTED_PROMPTS.map((p) => (
+              <TouchableOpacity
+                key={p}
+                style={[styles.chip, prompt === p && styles.chipActive]}
+                onPress={() => setPrompt(p)}
+              >
+                <Text style={[styles.chipText, prompt === p && styles.chipTextActive]}>{p}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <TextInput
+            style={styles.promptInput}
+            placeholder="Prompt (optional)"
+            placeholderTextColor="#9a8896"
+            value={prompt}
+            onChangeText={setPrompt}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Write your journal entry..."
+            placeholderTextColor="#9a8896"
+            value={content}
+            onChangeText={setContent}
+            multiline
+          />
+          {!!error && <Text style={styles.errorText}>{error}</Text>}
+          {saved && <Text style={styles.confirmedText}>Saved ✨</Text>}
+          <Button title="Save Entry ✨" onPress={handleAdd} loading={saving} fullWidth style={{ marginTop: 4 }} />
+        </GlassCard>
+
+        {/* Entry list */}
+        {loading ? (
+          <ActivityIndicator color="#c9a8c9" style={{ marginTop: 20 }} />
+        ) : list.length === 0 ? (
+          <GlassCard style={styles.emptyCard}>
+            <Text style={styles.emptyIcon}>📔</Text>
+            <Text style={styles.emptyTitle}>No journal entries yet</Text>
+            <Text style={styles.emptySubtitle}>Your reflections will appear here</Text>
+          </GlassCard>
+        ) : (
+          <>
+            <Text style={styles.sectionHeading}>Your journal entries</Text>
+            {list.map((item) => (
+              <JournalEntry key={item.id} item={item} onDeleted={handleDeleted} />
+            ))}
+          </>
+        )}
+
+      </ScrollView>
+    </GradientBackground>
+  );
+}
+
+const styles = StyleSheet.create({
+  scroll: { padding: 20, paddingTop: 24, paddingBottom: 60 },
+
+  mb20: { marginBottom: 20 },
+
+  intro: { color: '#6b5c66', fontSize: 13, fontWeight: '500', marginBottom: 14, textAlign: 'center' },
+
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
+  chip: {
+    backgroundColor: 'rgba(255,255,255,0.5)',
+    borderRadius: 50,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(154,95,168,0.25)',
+  },
+  chipActive: { backgroundColor: '#c9a8c9', borderColor: '#c9a8c9' },
+  chipText: { color: '#2e2530', fontSize: 12 },
+  chipTextActive: { color: '#fff', fontWeight: '600' },
+
+  promptInput: {
+    backgroundColor: 'rgba(255,255,255,0.5)',
+    borderRadius: 14,
+    padding: 14,
+    fontSize: 14,
+    color: '#2e2530',
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(201,168,201,0.25)',
+  },
+  input: {
+    backgroundColor: 'rgba(255,255,255,0.5)',
+    borderRadius: 14,
+    padding: 14,
+    fontSize: 14,
+    color: '#2e2530',
+    minHeight: 110,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(201,168,201,0.25)',
+    textAlignVertical: 'top',
+  },
+  errorText: { color: '#c04040', fontSize: 13, marginBottom: 10, textAlign: 'center' },
+  confirmedText: { color: '#7da888', fontSize: 13, marginBottom: 10, textAlign: 'center', fontWeight: '600' },
+
+  sectionHeading: {
+    fontSize: 11,
+    color: '#9a5fa8',
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginBottom: 12,
+  },
+
+  entryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  entryHeaderLeft: { flex: 1, marginRight: 8 },
+  promptLabel: { color: '#9a5fa8', fontSize: 13, fontWeight: '600', marginBottom: 2 },
+  dateText: { color: '#9a8896', fontSize: 11 },
+  removeBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(154,95,168,0.2)',
+    marginTop: 1,
+  },
+  removeBtnIcon: { fontSize: 11, color: '#9a8896', fontWeight: '600' },
+
+  entryText: { color: '#2e2530', fontSize: 14, lineHeight: 20 },
+
+  emptyCard: { alignItems: 'center', paddingVertical: 32 },
+  emptyIcon: { fontSize: 36, marginBottom: 10 },
+  emptyTitle: { fontSize: 15, fontWeight: '600', color: '#2e2530', marginBottom: 4 },
+  emptySubtitle: { fontSize: 13, color: '#6b5c66' },
+});
