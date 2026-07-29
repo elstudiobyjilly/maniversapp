@@ -59,8 +59,6 @@ export default function DesireActionTool() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDay, setSelectedDay] = useState(null);
   const [noteText, setNoteText] = useState('');
-  const [loaded, setLoaded] = useState(false);
-
   const [addOpen, setAddOpen] = useState(false);
   const [addTitle, setAddTitle] = useState('');
   const [addStart, setAddStart] = useState(toDateKey(new Date()));
