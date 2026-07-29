@@ -38,7 +38,23 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Manivers to access your photos for vision boards and profile pictures.",
+          "cameraPermission": "Allow Manivers to use your camera."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow Manivers to save images to your photo library.",
+          "savePhotosPermission": "Allow Manivers to save images to your photo library.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ],
+      "expo-av"
     ],
     "experiments": {
       "typedRoutes": true,
