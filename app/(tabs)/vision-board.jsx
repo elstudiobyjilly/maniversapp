@@ -3,6 +3,7 @@ import { View, Text, Image, TouchableOpacity, StyleSheet, ScrollView, ActivityIn
 import Animated, { useSharedValue, useAnimatedStyle, useAnimatedReaction, runOnJS, withTiming } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { captureRef } from 'react-native-view-shot';
 import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
@@ -13,7 +14,7 @@ import UpgradeModal from '../../components/UpgradeModal';
 import ScreenHeader from '../../components/ScreenHeader';
 import Button from '../../components/Button';
 import { usePlanStore } from '../../store/planStore';
-import { colors, fonts, radii } from '../../constants/theme';
+import { colors, fonts, radii, gradients, shadows } from '../../constants/theme';
 import * as Linking from 'expo-linking';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -345,26 +346,35 @@ export default function VisionBoard() {
         <ScreenHeader lead="Your" accent="Vision Board" subtitle="Pin your dreams. See them. Feel them. Receive them." />
 
         <View style={styles.controlRow}>
-          <TouchableOpacity activeOpacity={0.75} style={[styles.controlPill, isLocked && styles.controlPillActive]} onPress={handleToggleLock}>
-            <Ionicons name={isLocked ? 'lock-closed' : 'lock-open'} size={14} color={isLocked ? '#fff' : colors.purpleDark} />
-            <Text style={[styles.controlText, isLocked && styles.controlTextActive]}>{isLocked ? 'Locked' : 'Unlocked'}</Text>
-          </TouchableOpacity>
+          {isLocked ? (
+            <TouchableOpacity activeOpacity={0.85} onPress={handleToggleLock} style={styles.lockShadowWrap}>
+              <LinearGradient colors={gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.controlPill, styles.controlPillActive]}>
+                <Ionicons name="lock-closed" size={14} color="#fff" />
+                <Text style={[styles.controlText, styles.controlTextActive]}>Locked</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity activeOpacity={0.75} style={styles.controlPill} onPress={handleToggleLock}>
+              <Ionicons name="lock-open" size={14} color={colors.ink2} />
+              <Text style={styles.controlText}>Unlocked</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity activeOpacity={0.75} style={styles.controlPill} onPress={handleTidy}>
-            <Ionicons name="sparkles" size={14} color={colors.purpleDark} />
+            <Ionicons name="sparkles" size={14} color={colors.ink2} />
             <Text style={styles.controlText}>Tidy</Text>
           </TouchableOpacity>
           <TouchableOpacity activeOpacity={0.75} style={styles.controlPill} onPress={handleDownload} disabled={downloading}>
-            {downloading ? <ActivityIndicator size="small" color={colors.purpleDark} /> : (
+            {downloading ? <ActivityIndicator size="small" color={colors.ink2} /> : (
               <>
-                <Ionicons name="download-outline" size={14} color={colors.purpleDark} />
+                <Ionicons name="download-outline" size={14} color={colors.ink2} />
                 <Text style={styles.controlText}>Download</Text>
               </>
             )}
           </TouchableOpacity>
           <TouchableOpacity activeOpacity={0.75} style={styles.controlPill} onPress={handleShare} disabled={sharing}>
-            {sharing ? <ActivityIndicator size="small" color={colors.purpleDark} /> : (
+            {sharing ? <ActivityIndicator size="small" color={colors.ink2} /> : (
               <>
-                <Ionicons name="share-social-outline" size={14} color={colors.purpleDark} />
+                <Ionicons name="share-social-outline" size={14} color={colors.ink2} />
                 <Text style={styles.controlText}>Share</Text>
               </>
             )}
@@ -384,7 +394,7 @@ export default function VisionBoard() {
             <Ionicons name="add" size={16} color={colors.ink} />
           </TouchableOpacity>
           <TouchableOpacity activeOpacity={0.75} style={styles.fitBtn} onPress={() => setZoomTo(1)}>
-            <Ionicons name="scan-outline" size={13} color={colors.purpleDark} />
+            <Ionicons name="scan-outline" size={13} color={colors.ink2} />
             <Text style={styles.fitBtnText}>Fit</Text>
           </TouchableOpacity>
         </View>
@@ -445,18 +455,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(255,255,255,0.75)',
+    backgroundColor: 'rgba(255,255,255,0.65)',
     borderRadius: radii.pill,
     paddingVertical: 9,
     paddingHorizontal: 15,
     borderWidth: 1,
-    borderColor: 'rgba(201,168,201,0.35)',
+    borderColor: 'rgba(248,184,200,0.35)',
     minWidth: 44,
     ...shadows.cardSm,
   },
-  controlPillActive: { backgroundColor: colors.purpleMid, borderColor: colors.purpleMid },
+  lockShadowWrap: { borderRadius: radii.pill, ...shadows.button },
+  controlPillActive: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.52)' },
   controlPillDanger: { borderColor: colors.dangerBorder, backgroundColor: colors.dangerBg },
-  controlText: { fontFamily: fonts.bodyMedium, fontSize: 12.5, color: colors.ink, fontWeight: '500' },
+  controlText: { fontFamily: fonts.bodyMedium, fontSize: 12.5, color: colors.ink2, fontWeight: '500' },
   controlTextActive: { color: '#fff' },
   controlTextDanger: { color: colors.danger },
   zoomRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
@@ -468,7 +479,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(201,168,201,0.35)',
+    borderColor: 'rgba(248,184,200,0.35)',
     ...shadows.cardSm,
   },
   zoomPct: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.mist, minWidth: 40, textAlign: 'center' },
@@ -481,19 +492,19 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     paddingHorizontal: 14,
     borderWidth: 1,
-    borderColor: 'rgba(201,168,201,0.35)',
+    borderColor: 'rgba(248,184,200,0.35)',
     ...shadows.cardSm,
   },
-  fitBtnText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.purpleDark, fontWeight: '500' },
+  fitBtnText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.ink2, fontWeight: '500' },
   errorText: { fontFamily: fonts.body, color: colors.danger, fontSize: 12, marginBottom: 6 },
   infoText: { fontFamily: fonts.body, color: colors.purpleDark, fontSize: 12, marginBottom: 6 },
   hintText: { fontFamily: fonts.displayItalic, color: colors.mist, fontSize: 12, marginBottom: 4, fontStyle: 'italic' },
   canvasWrap: { padding: 10 },
   canvas: {
-    backgroundColor: 'rgba(255,255,255,0.5)',
-    borderRadius: 22,
+    backgroundColor: '#fff',
+    borderRadius: radii.lg,
     borderWidth: 1.5,
-    borderColor: 'rgba(201,168,201,0.45)',
+    borderColor: 'rgba(248,184,200,0.5)',
     position: 'relative',
     ...shadows.card,
   },
