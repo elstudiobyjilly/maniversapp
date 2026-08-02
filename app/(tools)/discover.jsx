@@ -4,7 +4,37 @@ import { getDiscoverPosts, getDiscoverGuides } from '../../services/api';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import ScreenHeader from '../../components/ScreenHeader';
-import TabPill from '../../components/TabPill';
+import { fonts } from '../../constants/theme';
+
+// Matches the website's .disc-tab-bar / .disc-tab-book exactly: a bordered
+// cream strip of 3 equal "book tab" segments (not the app's usual mauve
+// pill switcher) — italic serif labels, active tab flips to solid ink/cream.
+const DISCOVER_TABS = [
+  { value: 'technique', label: '🌟 Technique' },
+  { value: 'knowledge', label: '📚 Knowledge' },
+  { value: 'guide', label: '📄 Paper & Guide' },
+];
+
+function DiscoverTabBar({ value, onChange }) {
+  return (
+    <View style={styles.discTabBar}>
+      {DISCOVER_TABS.map((t, i) => (
+        <View key={t.value} style={{ flex: 1, flexDirection: 'row' }}>
+          {i > 0 && <View style={styles.discTabDivider} />}
+          <TouchableOpacity
+            activeOpacity={0.75}
+            style={[styles.discTab, value === t.value && styles.discTabActive]}
+            onPress={() => onChange(t.value)}
+          >
+            <Text style={[styles.discTabText, value === t.value && styles.discTabTextActive]} numberOfLines={1}>
+              {t.label}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ))}
+    </View>
+  );
+}
 
 const PAPER_GUIDES = [
   {
@@ -205,16 +235,7 @@ export default function Discover() {
       <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 50, paddingBottom: 40 }}>
         <ScreenHeader lead="Dis" accent="cover" subtitle="Manifesting knowledge, wisdom & guides — curated with love." />
 
-        <TabPill
-          style={{ marginBottom: 16 }}
-          value={tab}
-          onChange={setTab}
-          options={[
-            { value: 'knowledge', label: '📚 Knowledge' },
-            { value: 'guide', label: '📄 Guide' },
-            { value: 'techniques', label: '🌟 Techniques' },
-          ]}
-        />
+        <DiscoverTabBar value={tab} onChange={setTab} />
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
@@ -317,11 +338,21 @@ const styles = StyleSheet.create({
   title: { fontSize: 26, color: '#2e2530', fontWeight: '600' },
   titleAccent: { fontStyle: 'italic', color: '#9a5fa8', fontWeight: '400' },
   subtitle: { fontSize: 13, color: '#6b5c66', marginTop: 4, marginBottom: 16, fontWeight: '500' },
-  tabRow: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.5)', borderRadius: 50, padding: 4, marginBottom: 16 },
-  tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 50 },
-  tabActive: { backgroundColor: '#2e2530' },
-  tabText: { color: '#6b5c66', fontSize: 13, fontWeight: '600' },
-  tabTextActive: { color: '#fff' },
+  discTabBar: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    borderWidth: 1,
+    borderColor: 'rgba(46,37,48,0.1)',
+    borderRadius: 4,
+    overflow: 'hidden',
+    backgroundColor: '#f7f2ee',
+    marginBottom: 20,
+  },
+  discTabDivider: { width: 1, backgroundColor: 'rgba(46,37,48,0.1)' },
+  discTab: { flex: 1, paddingVertical: 11, alignItems: 'center', justifyContent: 'center' },
+  discTabActive: { backgroundColor: '#2e2530' },
+  discTabText: { fontFamily: fonts.display, fontSize: 13.5, fontStyle: 'italic', fontWeight: '400', color: '#7a5870' },
+  discTabTextActive: { fontFamily: fonts.displayMedium, fontStyle: 'normal', fontWeight: '500', color: '#fdfaf6' },
   errorText: { color: '#c04040', fontSize: 13, marginBottom: 10, textAlign: 'center' },
   muted: { color: '#6b5c66', fontSize: 13, textAlign: 'center', marginTop: 10 },
   postImage: { width: '100%', height: 160, borderRadius: 12, marginBottom: 10, backgroundColor: 'rgba(255,255,255,0.3)' },

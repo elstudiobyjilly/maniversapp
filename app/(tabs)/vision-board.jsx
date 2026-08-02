@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Dimensions } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, useAnimatedReaction, runOnJS, withTiming } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { captureRef } from 'react-native-view-shot';
 import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
@@ -12,7 +14,7 @@ import UpgradeModal from '../../components/UpgradeModal';
 import ScreenHeader from '../../components/ScreenHeader';
 import Button from '../../components/Button';
 import { usePlanStore } from '../../store/planStore';
-import { colors, fonts, radii } from '../../constants/theme';
+import { colors, fonts, radii, gradients, shadows } from '../../constants/theme';
 import * as Linking from 'expo-linking';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -95,14 +97,14 @@ function DraggableImage({ item, index, isLocked, onMove, onResize, onRemove }) {
       <Animated.View style={[styles.draggable, containerStyle]}>
         <Image source={{ uri: item.url }} style={styles.image} />
         {!isLocked && (
-          <TouchableOpacity style={styles.removeBtn} onPress={() => onRemove(index)}>
-            <Text style={styles.removeText}>✕</Text>
+          <TouchableOpacity style={styles.removeBtn} onPress={() => onRemove(index)} hitSlop={8}>
+            <Ionicons name="close" size={13} color="#fff" />
           </TouchableOpacity>
         )}
         {!isLocked && (
           <GestureDetector gesture={resizePan}>
             <View style={styles.resizeHandle}>
-              <Text style={styles.resizeHandleIcon}>◢</Text>
+              <Ionicons name="resize" size={11} color="#9a5fa8" />
             </View>
           </GestureDetector>
         )}
@@ -344,33 +346,56 @@ export default function VisionBoard() {
         <ScreenHeader lead="Your" accent="Vision Board" subtitle="Pin your dreams. See them. Feel them. Receive them." />
 
         <View style={styles.controlRow}>
-          <TouchableOpacity style={[styles.controlPill, isLocked && styles.controlPillActive]} onPress={handleToggleLock}>
-            <Text style={[styles.controlText, isLocked && styles.controlTextActive]}>{isLocked ? '🔒 Locked' : '🔓 Unlocked'}</Text>
+          {isLocked ? (
+            <TouchableOpacity activeOpacity={0.85} onPress={handleToggleLock} style={styles.lockShadowWrap}>
+              <LinearGradient colors={gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.controlPill, styles.controlPillActive]}>
+                <Ionicons name="lock-closed" size={14} color="#fff" />
+                <Text style={[styles.controlText, styles.controlTextActive]}>Locked</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity activeOpacity={0.75} style={styles.controlPill} onPress={handleToggleLock}>
+              <Ionicons name="lock-open" size={14} color={colors.ink2} />
+              <Text style={styles.controlText}>Unlocked</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity activeOpacity={0.75} style={styles.controlPill} onPress={handleTidy}>
+            <Ionicons name="sparkles" size={14} color={colors.ink2} />
+            <Text style={styles.controlText}>Tidy</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.controlPill} onPress={handleTidy}>
-            <Text style={styles.controlText}>✨ Tidy</Text>
+          <TouchableOpacity activeOpacity={0.75} style={styles.controlPill} onPress={handleDownload} disabled={downloading}>
+            {downloading ? <ActivityIndicator size="small" color={colors.ink2} /> : (
+              <>
+                <Ionicons name="download-outline" size={14} color={colors.ink2} />
+                <Text style={styles.controlText}>Download</Text>
+              </>
+            )}
           </TouchableOpacity>
-          <TouchableOpacity style={styles.controlPill} onPress={handleDownload} disabled={downloading}>
-            {downloading ? <ActivityIndicator size="small" color="#2e2530" /> : <Text style={styles.controlText}>⬇️ Download</Text>}
+          <TouchableOpacity activeOpacity={0.75} style={styles.controlPill} onPress={handleShare} disabled={sharing}>
+            {sharing ? <ActivityIndicator size="small" color={colors.ink2} /> : (
+              <>
+                <Ionicons name="share-social-outline" size={14} color={colors.ink2} />
+                <Text style={styles.controlText}>Share</Text>
+              </>
+            )}
           </TouchableOpacity>
-          <TouchableOpacity style={styles.controlPill} onPress={handleShare} disabled={sharing}>
-            {sharing ? <ActivityIndicator size="small" color="#2e2530" /> : <Text style={styles.controlText}>🔗 Share</Text>}
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.controlPill, styles.controlPillDanger]} onPress={handleClear}>
-            <Text style={[styles.controlText, styles.controlTextDanger]}>🗑️ Clear</Text>
+          <TouchableOpacity activeOpacity={0.75} style={[styles.controlPill, styles.controlPillDanger]} onPress={handleClear}>
+            <Ionicons name="trash-outline" size={14} color={colors.danger} />
+            <Text style={[styles.controlText, styles.controlTextDanger]}>Clear</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.zoomRow}>
-          <TouchableOpacity style={styles.zoomBtn} onPress={() => setZoomTo(zoom.value - 0.1)}>
-            <Text style={styles.zoomBtnText}>−</Text>
+          <TouchableOpacity activeOpacity={0.75} style={styles.zoomBtn} onPress={() => setZoomTo(zoom.value - 0.1)}>
+            <Ionicons name="remove" size={16} color={colors.ink} />
           </TouchableOpacity>
           <Text style={styles.zoomPct}>{zoomPct}%</Text>
-          <TouchableOpacity style={styles.zoomBtn} onPress={() => setZoomTo(zoom.value + 0.1)}>
-            <Text style={styles.zoomBtnText}>+</Text>
+          <TouchableOpacity activeOpacity={0.75} style={styles.zoomBtn} onPress={() => setZoomTo(zoom.value + 0.1)}>
+            <Ionicons name="add" size={16} color={colors.ink} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.fitBtn} onPress={() => setZoomTo(1)}>
-            <Text style={styles.fitBtnText}>⟳ Fit</Text>
+          <TouchableOpacity activeOpacity={0.75} style={styles.fitBtn} onPress={() => setZoomTo(1)}>
+            <Ionicons name="scan-outline" size={13} color={colors.ink2} />
+            <Text style={styles.fitBtnText}>Fit</Text>
           </TouchableOpacity>
         </View>
 
@@ -426,40 +451,92 @@ const styles = StyleSheet.create({
   upsellPerks: { alignSelf: 'stretch', marginBottom: 24 },
   upsellPerk: { fontFamily: fonts.body, fontSize: 13, color: colors.ink2, marginBottom: 8, textAlign: 'center' },
   controlRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
-  controlPill: { backgroundColor: 'rgba(255,255,255,0.6)', borderRadius: radii.pill, paddingVertical: 9, paddingHorizontal: 14, borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)', minWidth: 44, alignItems: 'center' },
-  controlPillActive: { backgroundColor: colors.purpleMid, borderColor: colors.purpleMid },
-  controlPillDanger: { borderColor: colors.dangerBorder },
-  controlText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.ink, fontWeight: '500' },
+  controlPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.65)',
+    borderRadius: radii.pill,
+    paddingVertical: 9,
+    paddingHorizontal: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(248,184,200,0.35)',
+    minWidth: 44,
+    ...shadows.cardSm,
+  },
+  lockShadowWrap: { borderRadius: radii.pill, ...shadows.button },
+  controlPillActive: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.52)' },
+  controlPillDanger: { borderColor: colors.dangerBorder, backgroundColor: colors.dangerBg },
+  controlText: { fontFamily: fonts.bodyMedium, fontSize: 12.5, color: colors.ink2, fontWeight: '500' },
   controlTextActive: { color: '#fff' },
   controlTextDanger: { color: colors.danger },
   zoomRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
-  zoomBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.6)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)' },
-  zoomBtnText: { fontFamily: fonts.bodyMedium, fontSize: 16, color: colors.ink, fontWeight: '600' },
-  zoomPct: { fontFamily: fonts.body, fontSize: 13, color: colors.mist, minWidth: 40, textAlign: 'center' },
-  fitBtn: { backgroundColor: 'rgba(255,255,255,0.6)', borderRadius: radii.pill, paddingVertical: 7, paddingHorizontal: 14, borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)' },
-  fitBtnText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.ink, fontWeight: '500' },
+  zoomBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(248,184,200,0.35)',
+    ...shadows.cardSm,
+  },
+  zoomPct: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.mist, minWidth: 40, textAlign: 'center' },
+  fitBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(255,255,255,0.75)',
+    borderRadius: radii.pill,
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(248,184,200,0.35)',
+    ...shadows.cardSm,
+  },
+  fitBtnText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.ink2, fontWeight: '500' },
   errorText: { fontFamily: fonts.body, color: colors.danger, fontSize: 12, marginBottom: 6 },
   infoText: { fontFamily: fonts.body, color: colors.purpleDark, fontSize: 12, marginBottom: 6 },
   hintText: { fontFamily: fonts.displayItalic, color: colors.mist, fontSize: 12, marginBottom: 4, fontStyle: 'italic' },
   canvasWrap: { padding: 10 },
-  canvas: { backgroundColor: 'rgba(255,255,255,0.35)', borderRadius: 20, position: 'relative' },
+  canvas: {
+    backgroundColor: '#fff',
+    borderRadius: radii.lg,
+    borderWidth: 1.5,
+    borderColor: 'rgba(248,184,200,0.5)',
+    position: 'relative',
+    ...shadows.card,
+  },
   draggable: { position: 'absolute' },
   image: { width: '100%', height: '100%', borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.4)' },
-  removeBtn: { position: 'absolute', top: -6, right: -6, backgroundColor: '#c04040', borderRadius: 12, width: 24, height: 24, justifyContent: 'center', alignItems: 'center' },
-  removeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  removeBtn: {
+    position: 'absolute',
+    top: -7,
+    right: -7,
+    backgroundColor: colors.danger,
+    borderRadius: 12,
+    width: 22,
+    height: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#fff',
+    ...shadows.cardSm,
+  },
   resizeHandle: {
     position: 'absolute',
-    bottom: -6,
-    right: -6,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.7)',
+    bottom: -7,
+    right: -7,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(255,255,255,0.9)',
     borderWidth: 1,
     borderColor: 'rgba(154,95,168,0.4)',
     justifyContent: 'center',
     alignItems: 'center',
+    ...shadows.cardSm,
   },
-  resizeHandleIcon: { fontSize: 10, color: '#9a5fa8' },
   emptyText: { color: '#6b5c66', fontSize: 13, textAlign: 'center', marginTop: 300, paddingHorizontal: 30, width: '100%' },
 });
