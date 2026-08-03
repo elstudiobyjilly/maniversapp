@@ -6,13 +6,13 @@ import { captureRef } from 'react-native-view-shot';
 import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
 import * as ImagePicker from 'expo-image-picker';
-import { getVisionBoard, saveVisionBoard, setVisionBoardLock, uploadImage, createCheckout } from '../../services/api';
+import { getVisionBoard, saveVisionBoard, setVisionBoardLock, uploadImage, createCheckout, getMindMovies } from '../../services/api';
 import GradientBackground from '../../components/GradientBackground';
 import UpgradeModal from '../../components/UpgradeModal';
 import ScreenHeader from '../../components/ScreenHeader';
 import Button from '../../components/Button';
 import { usePlanStore } from '../../store/planStore';
-import { colors, fonts, radii } from '../../constants/theme';
+import { colors, fonts, radii, shadows } from '../../constants/theme';
 import * as Linking from 'expo-linking';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -21,7 +21,9 @@ const CANVAS_HEIGHT = 1000;
 const ITEM_SIZE = 120;
 const MIN_ITEM_SIZE = 60;
 
-function DraggableImage({ item, index, isLocked, onMove, onResize, onRemove }) {
+const CATEGORIES = ['💰 Wealth', '💕 Love', '🌿 Health', '🚀 Career', '🏡 Home', '✨ Purpose', '🕊️ Peace'];
+
+function DraggableImage({ item, index, isLocked, selectMode, selected, onMove, onResize, onRemove, onToggleSelect, onLongPressItem }) {
   const translateX = useSharedValue(item.x || 0);
   const translateY = useSharedValue(item.y || 0);
   const startX = useSharedValue(item.x || 0);
@@ -33,8 +35,8 @@ function DraggableImage({ item, index, isLocked, onMove, onResize, onRemove }) {
   const startH = useSharedValue(item.h || ITEM_SIZE);
 
   // Re-sync from props when something outside this gesture changes position/size
-  // (e.g. Tidy, or a fresh load) — without this the shared values would keep
-  // showing the stale spot since they only update from the gestures below.
+  // (e.g. Tidy, Group, or a fresh load) — without this the shared values would
+  // keep showing the stale spot since they only update from the gestures below.
   useEffect(() => {
     translateX.value = item.x || 0;
     translateY.value = item.y || 0;
@@ -46,7 +48,7 @@ function DraggableImage({ item, index, isLocked, onMove, onResize, onRemove }) {
   }, [item.w, item.h]);
 
   const resizePan = Gesture.Pan()
-    .enabled(!isLocked)
+    .enabled(!isLocked && !selectMode)
     .hitSlop(10)
     .onStart(() => {
       startW.value = width.value;
@@ -61,7 +63,7 @@ function DraggableImage({ item, index, isLocked, onMove, onResize, onRemove }) {
     });
 
   const movePan = Gesture.Pan()
-    .enabled(!isLocked)
+    .enabled(!isLocked && !selectMode)
     .onStart(() => {
       startX.value = translateX.value;
       startY.value = translateY.value;
@@ -84,6 +86,21 @@ function DraggableImage({ item, index, isLocked, onMove, onResize, onRemove }) {
   // movePan wait to see whether the touch landed on the handle first.
   movePan.requireExternalGestureToFail(resizePan);
 
+  // Press-and-hold on the image opens the category picker — matches the
+  // website's "Press and hold an image for a moment to add a category" hint.
+  const longPress = Gesture.LongPress()
+    .enabled(!isLocked && !selectMode)
+    .minDuration(500)
+    .onStart(() => {
+      runOnJS(onLongPressItem)(index);
+    });
+
+  const moveOrLongPress = Gesture.Race(longPress, movePan);
+
+  const tapToSelect = Gesture.Tap().onEnd(() => {
+    runOnJS(onToggleSelect)(index);
+  });
+
   const containerStyle = useAnimatedStyle(() => ({
     width: width.value,
     height: height.value,
@@ -91,15 +108,23 @@ function DraggableImage({ item, index, isLocked, onMove, onResize, onRemove }) {
   }));
 
   return (
-    <GestureDetector gesture={movePan}>
-      <Animated.View style={[styles.draggable, containerStyle]}>
+    <GestureDetector gesture={selectMode ? tapToSelect : moveOrLongPress}>
+      <Animated.View style={[styles.draggable, containerStyle, selected && styles.draggableSelected]}>
         <Image source={{ uri: item.url }} style={styles.image} />
-        {!isLocked && (
+        {item.category ? (
+          <View style={styles.categoryBadge}><Text style={styles.categoryBadgeText}>{item.category}</Text></View>
+        ) : null}
+        {selectMode && (
+          <View style={[styles.selectCheck, selected && styles.selectCheckOn]}>
+            {selected ? <Text style={styles.selectCheckText}>✓</Text> : null}
+          </View>
+        )}
+        {!isLocked && !selectMode && (
           <TouchableOpacity style={styles.removeBtn} onPress={() => onRemove(index)}>
             <Text style={styles.removeText}>✕</Text>
           </TouchableOpacity>
         )}
-        {!isLocked && (
+        {!isLocked && !selectMode && (
           <GestureDetector gesture={resizePan}>
             <View style={styles.resizeHandle}>
               <Text style={styles.resizeHandleIcon}>◢</Text>
@@ -120,10 +145,17 @@ export default function VisionBoard() {
   const [isLocked, setIsLocked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [loadingMM, setLoadingMM] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [savingWallpaper, setSavingWallpaper] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
+
+  const [fullscreen, setFullscreen] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIndices, setSelectedIndices] = useState([]);
+  const [categorizingIndex, setCategorizingIndex] = useState(null);
 
   useEffect(() => {
     refresh().finally(() => setCheckingPlan(false));
@@ -177,6 +209,9 @@ export default function VisionBoard() {
       savedZoom.value = zoom.value;
     });
 
+  // The white board's boundary scales together with its contents — the
+  // border/background live on this same animated node as the pinch scale,
+  // so the "boundary" always exactly wraps whatever is zoomed.
   const canvasAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: zoom.value }],
   }));
@@ -246,6 +281,40 @@ export default function VisionBoard() {
     } finally { setUploading(false); }
   };
 
+  // Pulls every scene image out of the user's saved Mind Movies and adds any
+  // not already on the board — matches the website's "From Mind Movies" button.
+  const handleFromMindMovies = async () => {
+    if (isLocked) { setError('Unlock the board to add images.'); return; }
+    setLoadingMM(true); setError(''); setInfo('');
+    try {
+      const movies = await getMindMovies();
+      const urls = [];
+      (movies || []).forEach((m) => (m.scenes || []).forEach((s) => { if (s.img) urls.push(s.img); }));
+      const existing = new Set(items.map((it) => it.url));
+      const fresh = [...new Set(urls)].filter((u) => !existing.has(u));
+      if (fresh.length === 0) { setInfo('No new Mind Movie images to add.'); setTimeout(() => setInfo(''), 3000); return; }
+
+      const capRemaining = imageCap != null ? Math.max(0, imageCap - items.length) : fresh.length;
+      const toAdd = fresh.slice(0, capRemaining);
+      if (toAdd.length === 0) { setError(`Vision board limit is ${imageCap} images — remove some to add more. ✨`); return; }
+
+      const newItems = toAdd.map((url) => ({
+        url, label: '', type: 'image',
+        x: Math.floor(Math.random() * Math.max(1, CANVAS_WIDTH - ITEM_SIZE)),
+        y: Math.floor(Math.random() * Math.max(1, CANVAS_HEIGHT - ITEM_SIZE)),
+        w: ITEM_SIZE, h: ITEM_SIZE,
+      }));
+      const updatedItems = [...items, ...newItems];
+      const saved = await saveVisionBoard(updatedItems);
+      setItems(saved.items || updatedItems);
+      setInfo(`Added ${toAdd.length} image${toAdd.length === 1 ? '' : 's'} from Mind Movies ✨`);
+      setTimeout(() => setInfo(''), 3000);
+    } catch (e) {
+      if (e.status === 403) setShowUpgrade(true);
+      else setError(e.message || 'Could not load Mind Movies');
+    } finally { setLoadingMM(false); }
+  };
+
   const handleRemove = async (index) => {
     if (isLocked) { setError('Unlock the board to remove images.'); return; }
     const updatedItems = items.filter((_, i) => i !== index);
@@ -256,6 +325,7 @@ export default function VisionBoard() {
   const handleToggleLock = async () => {
     const next = !isLocked;
     setIsLocked(next);
+    if (next) { setSelectMode(false); setSelectedIndices([]); }
     try { await setVisionBoardLock(next); } catch (e) { setError(e.message || 'Could not update lock'); }
   };
 
@@ -269,6 +339,41 @@ export default function VisionBoard() {
     }));
     setItems(tidied);
     persist(tidied);
+  };
+
+  // Toggling on enters selection mode (tap images to select instead of
+  // dragging them); toggling off clusters whatever's selected together —
+  // matches the website's "Group" button.
+  const handleGroupToggle = () => {
+    if (isLocked) { setError('Unlock the board to group images.'); return; }
+    if (selectMode) {
+      if (selectedIndices.length > 1) {
+        const cx = CANVAS_WIDTH / 2 - ITEM_SIZE / 2;
+        const cy = CANVAS_HEIGHT / 2 - ITEM_SIZE / 2;
+        const updated = items.map((it, i) => {
+          const pos = selectedIndices.indexOf(i);
+          return pos === -1 ? it : { ...it, x: cx + pos * 18, y: cy + pos * 18 };
+        });
+        setItems(updated);
+        persist(updated);
+      }
+      setSelectedIndices([]);
+    }
+    setSelectMode((v) => !v);
+  };
+
+  const toggleSelect = (index) => {
+    setSelectedIndices((prev) => (prev.includes(index) ? prev.filter((i) => i !== index) : [...prev, index]));
+  };
+
+  const handleLongPressItem = (index) => setCategorizingIndex(index);
+
+  const handleSetCategory = (cat) => {
+    if (categorizingIndex == null) return;
+    const updated = items.map((it, i) => (i === categorizingIndex ? { ...it, category: cat } : it));
+    setItems(updated);
+    persist(updated);
+    setCategorizingIndex(null);
   };
 
   const handleClear = () => {
@@ -292,6 +397,25 @@ export default function VisionBoard() {
     } catch (e) {
       setError(e.message || 'Could not save your vision board');
     } finally { setDownloading(false); }
+  };
+
+  // Expo has no cross-platform "set system wallpaper" API, so this saves a
+  // full-quality capture to Photos and tells the user to set it from there.
+  const handleWallpaper = async () => {
+    setError(''); setInfo(''); setSavingWallpaper(true);
+    try {
+      const uri = await captureRef(canvasRef, { format: 'png', quality: 1 });
+      const { granted } = await MediaLibrary.requestPermissionsAsync();
+      if (!granted) {
+        setError('Photo library permission is needed to save your wallpaper.');
+        return;
+      }
+      await MediaLibrary.saveToLibraryAsync(uri);
+      setInfo('Saved to Photos — set it as your wallpaper from there ✨');
+      setTimeout(() => setInfo(''), 3500);
+    } catch (e) {
+      setError(e.message || 'Could not create wallpaper');
+    } finally { setSavingWallpaper(false); }
   };
 
   const handleShare = async () => {
@@ -338,76 +462,135 @@ export default function VisionBoard() {
     );
   }
 
+  const canvasNode = (
+    <ScrollView horizontal style={{ flex: 1, marginTop: 10 }}>
+      <ScrollView>
+        <View style={[styles.canvasWrap, { width: CANVAS_WIDTH * (zoomPct / 100), height: CANVAS_HEIGHT * (zoomPct / 100) }]}>
+          <GestureDetector gesture={pinchGesture}>
+            <Animated.View
+              ref={canvasRef}
+              collapsable={false}
+              style={[styles.canvas, { width: CANVAS_WIDTH, height: CANVAS_HEIGHT }, canvasAnimatedStyle]}
+            >
+              {items.map((item, i) => (
+                <DraggableImage
+                  key={i}
+                  item={item}
+                  index={i}
+                  isLocked={isLocked}
+                  selectMode={selectMode}
+                  selected={selectedIndices.includes(i)}
+                  onMove={handleMove}
+                  onResize={handleResize}
+                  onRemove={handleRemove}
+                  onToggleSelect={toggleSelect}
+                  onLongPressItem={handleLongPressItem}
+                />
+              ))}
+              {items.length === 0 && (
+                <Text style={styles.emptyText}>Your vision board is empty — add your first image ✨</Text>
+              )}
+            </Animated.View>
+          </GestureDetector>
+        </View>
+      </ScrollView>
+    </ScrollView>
+  );
+
   return (
     <GradientBackground>
-      <View style={{ paddingTop: 50, paddingHorizontal: 16 }}>
-        <ScreenHeader lead="Your" accent="Vision Board" subtitle="Pin your dreams. See them. Feel them. Receive them." />
+      {!fullscreen && (
+        <View style={{ paddingTop: 50, paddingHorizontal: 16 }}>
+          <ScreenHeader lead="Your" accent="Vision Board" subtitle="Pin your dreams. See them. Feel them. Receive them." />
 
-        <View style={styles.controlRow}>
-          <TouchableOpacity style={[styles.controlPill, isLocked && styles.controlPillActive]} onPress={handleToggleLock}>
-            <Text style={[styles.controlText, isLocked && styles.controlTextActive]}>{isLocked ? '🔒 Locked' : '🔓 Unlocked'}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.controlPill} onPress={handleTidy}>
-            <Text style={styles.controlText}>✨ Tidy</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.controlPill} onPress={handleDownload} disabled={downloading}>
-            {downloading ? <ActivityIndicator size="small" color="#2e2530" /> : <Text style={styles.controlText}>⬇️ Download</Text>}
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.controlPill} onPress={handleShare} disabled={sharing}>
-            {sharing ? <ActivityIndicator size="small" color="#2e2530" /> : <Text style={styles.controlText}>🔗 Share</Text>}
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.controlPill, styles.controlPillDanger]} onPress={handleClear}>
-            <Text style={[styles.controlText, styles.controlTextDanger]}>🗑️ Clear</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.zoomRow}>
-          <TouchableOpacity style={styles.zoomBtn} onPress={() => setZoomTo(zoom.value - 0.1)}>
-            <Text style={styles.zoomBtnText}>−</Text>
-          </TouchableOpacity>
-          <Text style={styles.zoomPct}>{zoomPct}%</Text>
-          <TouchableOpacity style={styles.zoomBtn} onPress={() => setZoomTo(zoom.value + 0.1)}>
-            <Text style={styles.zoomBtnText}>+</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.fitBtn} onPress={() => setZoomTo(1)}>
-            <Text style={styles.fitBtnText}>⟳ Fit</Text>
-          </TouchableOpacity>
-        </View>
-
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
-        {info ? <Text style={styles.infoText}>{info}</Text> : null}
-        <Text style={styles.hintText}>Pinch to zoom · Drag to move · Corner to resize ✨</Text>
-      </View>
-
-      <ScrollView horizontal style={{ flex: 1, marginTop: 10 }}>
-        <ScrollView>
-          <View style={[styles.canvasWrap, { width: CANVAS_WIDTH * (zoomPct / 100), height: CANVAS_HEIGHT * (zoomPct / 100) }]}>
-            <GestureDetector gesture={pinchGesture}>
-              <Animated.View
-                ref={canvasRef}
-                collapsable={false}
-                style={[styles.canvas, { width: CANVAS_WIDTH, height: CANVAS_HEIGHT }, canvasAnimatedStyle]}
-              >
-                {items.map((item, i) => (
-                  <DraggableImage key={i} item={item} index={i} isLocked={isLocked} onMove={handleMove} onResize={handleResize} onRemove={handleRemove} />
-                ))}
-                {items.length === 0 && (
-                  <Text style={styles.emptyText}>Your vision board is empty — add your first image ✨</Text>
-                )}
-              </Animated.View>
-            </GestureDetector>
+          <View style={styles.controlRow}>
+            <Button title="📸 Add Photos" size="sm" onPress={handleAddImage} loading={uploading} disabled={isLocked} />
+            <TouchableOpacity style={styles.controlPill} onPress={handleFromMindMovies} disabled={loadingMM}>
+              {loadingMM ? <ActivityIndicator size="small" color="#2e2530" /> : <Text style={styles.controlText}>🎬 From Mind Movies</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.controlPill, isLocked && styles.controlPillActive]} onPress={handleToggleLock}>
+              <Text style={[styles.controlText, isLocked && styles.controlTextActive]}>{isLocked ? '🔒 Locked' : '🔓 Lock'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.controlPill} onPress={() => setFullscreen(true)}>
+              <Text style={styles.controlText}>⛶ Fullscreen</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.controlPill} onPress={handleTidy}>
+              <Text style={styles.controlText}>✨ Tidy</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.controlPill, selectMode && styles.controlPillActive]} onPress={handleGroupToggle}>
+              <Text style={[styles.controlText, selectMode && styles.controlTextActive]}>🗂 Group{selectMode && selectedIndices.length ? ` (${selectedIndices.length})` : ''}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.controlPill} onPress={handleDownload} disabled={downloading}>
+              {downloading ? <ActivityIndicator size="small" color="#2e2530" /> : <Text style={styles.controlText}>⬇️ Board</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.controlPill} onPress={handleWallpaper} disabled={savingWallpaper}>
+              {savingWallpaper ? <ActivityIndicator size="small" color="#2e2530" /> : <Text style={styles.controlText}>📱 Wallpaper</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.controlPill} onPress={handleShare} disabled={sharing}>
+              {sharing ? <ActivityIndicator size="small" color="#2e2530" /> : <Text style={styles.controlText}>🔗 Share</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.controlPill, styles.controlPillDanger]} onPress={handleClear}>
+              <Text style={[styles.controlText, styles.controlTextDanger]}>🗑️ Clear</Text>
+            </TouchableOpacity>
           </View>
-        </ScrollView>
-      </ScrollView>
 
-      <Button
-        title="+ Add Image"
-        onPress={handleAddImage}
-        loading={uploading}
-        disabled={isLocked}
-        fullWidth
-        style={{ marginHorizontal: 16, marginVertical: 14 }}
-      />
+          <View style={styles.zoomRow}>
+            <TouchableOpacity style={styles.zoomBtn} onPress={() => setZoomTo(zoom.value - 0.1)}>
+              <Text style={styles.zoomBtnText}>−</Text>
+            </TouchableOpacity>
+            <Text style={styles.zoomPct}>{zoomPct}%</Text>
+            <TouchableOpacity style={styles.zoomBtn} onPress={() => setZoomTo(zoom.value + 0.1)}>
+              <Text style={styles.zoomBtnText}>+</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.fitBtn} onPress={() => setZoomTo(1)}>
+              <Text style={styles.fitBtnText}>⟳ Fit</Text>
+            </TouchableOpacity>
+          </View>
+
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+          {info ? <Text style={styles.infoText}>{info}</Text> : null}
+          <Text style={styles.hintText}>Drag to move (or use two fingers) · Resize from corner · Lock when done ✨</Text>
+          <Text style={styles.hintText}>Press and hold an image for a moment to add a category 🏷️</Text>
+        </View>
+      )}
+
+      {canvasNode}
+
+      {fullscreen && (
+        <TouchableOpacity style={styles.fullscreenClose} onPress={() => setFullscreen(false)}>
+          <Text style={styles.fullscreenCloseText}>✕ Exit Fullscreen</Text>
+        </TouchableOpacity>
+      )}
+
+      {!fullscreen && (
+        <Button
+          title="+ Add Image"
+          onPress={handleAddImage}
+          loading={uploading}
+          disabled={isLocked}
+          fullWidth
+          style={{ marginHorizontal: 16, marginVertical: 14 }}
+        />
+      )}
+
+      {categorizingIndex != null && (
+        <View style={styles.categoryOverlay}>
+          <View style={styles.categoryPanel}>
+            <Text style={styles.categoryPanelTitle}>Tag this image</Text>
+            <View style={styles.categoryChipRow}>
+              {CATEGORIES.map((c) => (
+                <TouchableOpacity key={c} style={styles.categoryChip} onPress={() => handleSetCategory(c)}>
+                  <Text style={styles.categoryChipText}>{c}</Text>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity style={[styles.categoryChip, styles.categoryChipClear]} onPress={() => handleSetCategory('')}>
+                <Text style={styles.categoryChipText}>✕ Remove</Text>
+              </TouchableOpacity>
+            </View>
+            <Button title="Close" size="sm" variant="ghost" onPress={() => setCategorizingIndex(null)} style={{ marginTop: 12 }} />
+          </View>
+        </View>
+      )}
 
       <UpgradeModal
         visible={showUpgrade}
@@ -425,9 +608,9 @@ const styles = StyleSheet.create({
   upsellIcon: { fontSize: 44, marginBottom: 10 },
   upsellPerks: { alignSelf: 'stretch', marginBottom: 24 },
   upsellPerk: { fontFamily: fonts.body, fontSize: 13, color: colors.ink2, marginBottom: 8, textAlign: 'center' },
-  controlRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
+  controlRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10, alignItems: 'center' },
   controlPill: { backgroundColor: 'rgba(255,255,255,0.6)', borderRadius: radii.pill, paddingVertical: 9, paddingHorizontal: 14, borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)', minWidth: 44, alignItems: 'center' },
-  controlPillActive: { backgroundColor: colors.purpleMid, borderColor: colors.purpleMid },
+  controlPillActive: { backgroundColor: colors.pinkAccent, borderColor: colors.pinkAccent },
   controlPillDanger: { borderColor: colors.dangerBorder },
   controlText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.ink, fontWeight: '500' },
   controlTextActive: { color: '#fff' },
@@ -442,8 +625,19 @@ const styles = StyleSheet.create({
   infoText: { fontFamily: fonts.body, color: colors.purpleDark, fontSize: 12, marginBottom: 6 },
   hintText: { fontFamily: fonts.displayItalic, color: colors.mist, fontSize: 12, marginBottom: 4, fontStyle: 'italic' },
   canvasWrap: { padding: 10 },
-  canvas: { backgroundColor: 'rgba(255,255,255,0.35)', borderRadius: 20, position: 'relative' },
+  // The visible "boundary" — a coloured border + soft shadow so the board's
+  // edges read clearly against the page background, and scale together with
+  // pinch-zoom since they live on the same animated node as the content.
+  canvas: {
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: 'rgba(200,120,180,0.35)',
+    position: 'relative',
+    ...shadows.card,
+  },
   draggable: { position: 'absolute' },
+  draggableSelected: { borderWidth: 2, borderColor: colors.pinkAccent, borderRadius: 14 },
   image: { width: '100%', height: '100%', borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.4)' },
   removeBtn: { position: 'absolute', top: -6, right: -6, backgroundColor: '#c04040', borderRadius: 12, width: 24, height: 24, justifyContent: 'center', alignItems: 'center' },
   removeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
@@ -462,4 +656,22 @@ const styles = StyleSheet.create({
   },
   resizeHandleIcon: { fontSize: 10, color: '#9a5fa8' },
   emptyText: { color: '#6b5c66', fontSize: 13, textAlign: 'center', marginTop: 300, paddingHorizontal: 30, width: '100%' },
+
+  categoryBadge: { position: 'absolute', top: 6, left: 6, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 8, paddingVertical: 3, paddingHorizontal: 7 },
+  categoryBadgeText: { color: '#fff', fontSize: 9.5, fontFamily: fonts.bodyMedium, fontWeight: '600' },
+
+  selectCheck: { position: 'absolute', top: 6, right: 6, width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(255,255,255,0.85)', borderWidth: 1.5, borderColor: colors.pinkAccent, justifyContent: 'center', alignItems: 'center' },
+  selectCheckOn: { backgroundColor: colors.pinkAccent },
+  selectCheckText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+
+  fullscreenClose: { position: 'absolute', top: 50, right: 16, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: radii.pill, paddingVertical: 8, paddingHorizontal: 14, zIndex: 10 },
+  fullscreenCloseText: { color: '#fff', fontFamily: fonts.bodyMedium, fontSize: 12, fontWeight: '600' },
+
+  categoryOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  categoryPanel: { backgroundColor: '#fdfbfe', borderRadius: radii.md, padding: 20, width: '100%', maxWidth: 360 },
+  categoryPanelTitle: { fontFamily: fonts.displayMedium, fontSize: 16, color: colors.ink, fontWeight: '600', marginBottom: 12, textAlign: 'center' },
+  categoryChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' },
+  categoryChip: { backgroundColor: 'rgba(201,168,201,0.15)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.35)', borderRadius: radii.pill, paddingVertical: 8, paddingHorizontal: 12 },
+  categoryChipClear: { backgroundColor: colors.dangerBg, borderColor: colors.dangerBorder },
+  categoryChipText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.ink2, fontWeight: '500' },
 });
