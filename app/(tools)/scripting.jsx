@@ -6,6 +6,7 @@ import GradientBackground from '../../components/GradientBackground';
 import ScreenHeader from '../../components/ScreenHeader';
 import TabPill from '../../components/TabPill';
 import Button from '../../components/Button';
+import ExpandableTextArea from '../../components/ExpandableTextArea';
 import { colors, fonts, radii } from '../../constants/theme';
 import { getScripts, addScript, updateScript, deleteScript, getScriptMyDay, saveScriptMyDay } from '../../services/api';
 
@@ -171,16 +172,13 @@ export default function Scripting() {
           <>
             <GlassCard style={styles.mb16}>
               <Text style={styles.label}>☀️ WRITE TODAY'S SCRIPT</Text>
-              <View style={[styles.inputBox, { minHeight: 140 }]}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Today I woke up feeling deeply grateful. My life is beautiful..."
-                  placeholderTextColor="rgba(46,37,48,0.4)"
-                  value={dailyText}
-                  onChangeText={handleDailyChange}
-                  multiline
-                />
-              </View>
+              <ExpandableTextArea
+                value={dailyText}
+                onChangeText={handleDailyChange}
+                placeholder="Today I woke up feeling deeply grateful. My life is beautiful..."
+                modalTitle="Today's Script"
+                minHeight={140}
+              />
               <View style={styles.btnRow}>
                 <Button title="💾 Save" size="sm" onPress={handleSaveDaily} loading={savingDaily} />
                 <Button title="Clear" size="sm" variant="ghost" onPress={handleClearDaily} />
@@ -249,16 +247,14 @@ export default function Scripting() {
                   onChangeText={setDreamTitle}
                 />
               </View>
-              <View style={[styles.inputBox, { minHeight: 220, marginTop: 8 }]}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="I am so grateful and happy now that I wake up every morning in my beautiful home by the ocean..."
-                  placeholderTextColor="rgba(46,37,48,0.4)"
-                  value={dreamBody}
-                  onChangeText={setDreamBody}
-                  multiline
-                />
-              </View>
+              <ExpandableTextArea
+                value={dreamBody}
+                onChangeText={setDreamBody}
+                placeholder="I am so grateful and happy now that I wake up every morning in my beautiful home by the ocean..."
+                modalTitle="Dream Life Script"
+                minHeight={220}
+                style={{ marginTop: 8 }}
+              />
               <View style={styles.btnRow}>
                 <Button title={editingDreamId ? '💾 Update' : '💾 Save'} size="sm" onPress={handleSaveDream} loading={savingDream} />
                 <Button title="Clear" size="sm" variant="ghost" onPress={handleClearDream} />
