@@ -46,6 +46,7 @@ export default function ToolsLayout() {
       <Stack.Screen name="meditate" options={{ title: '', headerTransparent: true }} />
       <Stack.Screen name="aura-card" options={{ title: 'Aura Card' }} />
       <Stack.Screen name="practice-tools" options={{ title: 'Practice Tools' }} />
+      <Stack.Screen name="dreammap" options={{ title: '', headerTransparent: true }} />
     </Stack>
   );
 }

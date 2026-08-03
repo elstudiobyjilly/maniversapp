@@ -683,6 +683,17 @@ export async function generateHoroscope(starSign) {
   return req('POST', '/horoscope/generate', { star_sign: starSign });
 }
 
+// ── DREAM MAP ─────────────────────────────────────────────────────────
+// AI chat that builds a visual map of the user's dream life as they talk.
+// Paid-plan feature. history: [{role: 'user'|'assistant', content}].
+export async function dreamMapChat(message, history = []) {
+  return req('POST', '/dreammap/chat', { message, history });
+}
+
+export async function saveDreamMap({ title, nodes = [], raw_conversation = '' }) {
+  return req('POST', '/dreammap/save', { title, nodes, raw_conversation });
+}
+
 // ── MEDITATIONS ───────────────────────────────────────────────────────
 // Curated preset library (no auth required) — shared audio content.
 export async function getMeditationLibrary() {
