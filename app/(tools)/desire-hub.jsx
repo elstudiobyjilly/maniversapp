@@ -16,7 +16,10 @@ import { getDesires, createDesire, uploadImage } from '../../services/api';
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const COLS = SCREEN_WIDTH >= 700 ? 3 : 2;
 
-const CATEGORY_FILTER_OPTIONS = [{ value: 'all', label: 'All Categories' }, ...CATEGORIES];
+const CATEGORY_FILTER_OPTIONS = [
+  { value: 'all', label: 'All Categories' },
+  ...CATEGORIES.map((c) => ({ value: c.id, label: `${c.emoji} ${c.label}` })),
+];
 
 export default function DesireHub() {
   const router = useRouter();
@@ -27,7 +30,9 @@ export default function DesireHub() {
 
   const [addOpen, setAddOpen] = useState(false);
   const [title, setTitle] = useState('');
-  const [category, setCategory] = useState('general');
+  const [category, setCategory] = useState(null); // null = none picked yet
+  const [customCategory, setCustomCategory] = useState('');
+  const [showCustomCategory, setShowCustomCategory] = useState(false);
   const [targetDate, setTargetDate] = useState('');
   const [description, setDescription] = useState('');
   const [coverUrl, setCoverUrl] = useState(null);
@@ -53,7 +58,8 @@ export default function DesireHub() {
   };
 
   const resetForm = () => {
-    setTitle(''); setCategory('general'); setTargetDate(''); setDescription(''); setCoverUrl(null);
+    setTitle(''); setCategory(null); setCustomCategory(''); setShowCustomCategory(false);
+    setTargetDate(''); setDescription(''); setCoverUrl(null);
   };
 
   const handleCreate = async () => {
@@ -64,7 +70,7 @@ export default function DesireHub() {
         title: title.trim(),
         description: description.trim(),
         target_date: targetDate.trim() || null,
-        category,
+        category: showCustomCategory ? (customCategory.trim() || null) : category,
         images: coverUrl ? [coverUrl] : null,
       });
       setDesires((prev) => [desire, ...prev]);
@@ -75,7 +81,7 @@ export default function DesireHub() {
     } finally { setSaving(false); }
   };
 
-  const filtered = desires.filter((d) => categoryFilter === 'all' || (d.category || 'general') === categoryFilter);
+  const filtered = desires.filter((d) => categoryFilter === 'all' || d.category === categoryFilter);
 
   return (
     <GradientBackground>
@@ -100,12 +106,30 @@ export default function DesireHub() {
               />
             </View>
 
-            <Text style={[styles.fieldLbl, { marginTop: 12 }]}>Category</Text>
+            <Text style={[styles.fieldLbl, { marginTop: 12 }]}>Category (optional)</Text>
             <View style={styles.chipRow}>
               {CATEGORIES.map((c) => (
-                <Chip key={c.value} label={c.label} active={category === c.value} onPress={() => setCategory(c.value)} />
+                <Chip
+                  key={c.id}
+                  label={`${c.emoji} ${c.label}`}
+                  active={!showCustomCategory && category === c.id}
+                  onPress={() => { setCategory(c.id); setShowCustomCategory(false); }}
+                />
               ))}
+              <Chip label="✏️ Custom" active={showCustomCategory} onPress={() => setShowCustomCategory(true)} />
             </View>
+            {showCustomCategory && (
+              <View style={[styles.inputBox, { marginTop: 8 }]}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Type your own category..."
+                  placeholderTextColor="rgba(46,37,48,0.4)"
+                  value={customCategory}
+                  onChangeText={setCustomCategory}
+                  maxLength={50}
+                />
+              </View>
+            )}
 
             <Text style={[styles.fieldLbl, { marginTop: 12 }]}>Target Date (optional, YYYY-MM-DD)</Text>
             <View style={styles.inputBox}>
@@ -118,11 +142,11 @@ export default function DesireHub() {
               />
             </View>
 
-            <Text style={[styles.fieldLbl, { marginTop: 12 }]}>Description (optional)</Text>
+            <Text style={[styles.fieldLbl, { marginTop: 12 }]}>Intention (optional)</Text>
             <View style={[styles.inputBox, { minHeight: 70 }]}>
               <TextInput
                 style={styles.input}
-                placeholder="What does having this look and feel like?"
+                placeholder="Feel into it... describe how it feels to already have this 🌸"
                 placeholderTextColor="rgba(46,37,48,0.4)"
                 value={description}
                 onChangeText={setDescription}
@@ -164,9 +188,9 @@ export default function DesireHub() {
                 )}
                 <View style={styles.cardBody}>
                   <Text style={styles.cardTitle} numberOfLines={1}>{d.title}</Text>
-                  <Text style={styles.cardCategory}>{categoryLabel(d.category)}</Text>
+                  {d.category ? <Text style={styles.cardCategory}>{categoryLabel(d.category)}</Text> : null}
                   <View style={styles.cardMetaRow}>
-                    <Text style={styles.cardMeta}>{timeAgo(d.updated_at || d.created_at)}</Text>
+                    <Text style={styles.cardMeta}>{timeAgo(d.last_activity_at || d.updated_at || d.created_at)}</Text>
                     <Text style={styles.cardMeta}>{d.target_date ? new Date(d.target_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'no target date'}</Text>
                   </View>
                 </View>

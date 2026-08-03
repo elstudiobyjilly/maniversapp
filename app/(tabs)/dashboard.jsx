@@ -107,7 +107,7 @@ export default function Dashboard() {
                   )}
                   <View style={styles.previewBody}>
                     <Text style={styles.previewTitle} numberOfLines={1}>{d.title}</Text>
-                    <Text style={styles.previewCategory}>{categoryLabel(d.category)}</Text>
+                    {d.category ? <Text style={styles.previewCategory}>{categoryLabel(d.category)}</Text> : null}
                   </View>
                 </TouchableOpacity>
               ))}

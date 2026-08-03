@@ -7,20 +7,8 @@ import GradientBackground from '../../../components/GradientBackground';
 import Chip from '../../../components/Chip';
 import Button from '../../../components/Button';
 import { colors, fonts, gradients, radii } from '../../../constants/theme';
-import { CATEGORIES, categoryLabel, timeAgo } from '../../../constants/desires';
+import { CATEGORIES, categoryLabel, STATUSES, CONTENT_TYPES, timeAgo } from '../../../constants/desires';
 import { getDesire, updateDesire, deleteDesire, touchDesireActivity, unlinkDesire } from '../../../services/api';
-
-const STATUSES = [
-  { value: 'active', label: '🌱 Active' },
-  { value: 'manifested', label: '🏆 Manifested' },
-  { value: 'released', label: '🕊️ Released' },
-];
-
-const CONTENT_ICONS = {
-  affirmation: '✨', story: '📖', mind_movie: '🎬', script: '✍️', feel_it_card: '💫',
-  let_go: '🌿', practice: '🌟', read: '📄', self_work: '🪞', gratitude: '🙏',
-  meditation: '🧘', vision_board: '🖼️', belief: '💡', roadmap: '🗺️', subliminal: '🎧',
-};
 
 export default function DesireDetail() {
   const { id } = useLocalSearchParams();
@@ -32,7 +20,9 @@ export default function DesireDetail() {
 
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState('');
-  const [category, setCategory] = useState('general');
+  const [category, setCategory] = useState(null);
+  const [customCategory, setCustomCategory] = useState('');
+  const [showCustomCategory, setShowCustomCategory] = useState(false);
   const [targetDate, setTargetDate] = useState('');
   const [description, setDescription] = useState('');
 
@@ -41,7 +31,10 @@ export default function DesireDetail() {
       const d = await getDesire(id);
       setDesire(d);
       setTitle(d.title || '');
-      setCategory(d.category || 'general');
+      const isKnown = CATEGORIES.some((c) => c.id === d.category);
+      setCategory(isKnown ? d.category : null);
+      setShowCustomCategory(!!d.category && !isKnown);
+      setCustomCategory(!isKnown ? (d.category || '') : '');
       setTargetDate(d.target_date ? String(d.target_date).slice(0, 10) : '');
       setDescription(d.description || '');
     } catch (e) {
@@ -65,7 +58,7 @@ export default function DesireDetail() {
     try {
       const updated = await updateDesire(id, {
         title: title.trim(),
-        category,
+        category: showCustomCategory ? (customCategory.trim() || null) : category,
         target_date: targetDate.trim() || null,
         description: description.trim(),
       });
@@ -77,7 +70,7 @@ export default function DesireDetail() {
   };
 
   const handleDelete = () => {
-    Alert.alert('Delete this desire?', 'This cannot be undone.', [
+    Alert.alert('Delete this desire?', 'All links will be removed. Your content stays.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
         try { await deleteDesire(id); router.back(); } catch (e) { setError(e.message || 'Could not delete'); }
@@ -85,10 +78,18 @@ export default function DesireDetail() {
     ]);
   };
 
-  const handleUnlink = async (linkId) => {
+  // desire.links is an object keyed by content type (e.g. { affirmation: [...],
+  // story: [...] }), not a flat array — matches the website's desires.js shape.
+  const handleUnlink = async (linkId, contentType) => {
     try {
       await unlinkDesire(id, linkId);
-      setDesire((prev) => ({ ...prev, links: (prev.links || []).filter((l) => l.id !== linkId) }));
+      setDesire((prev) => ({
+        ...prev,
+        links: {
+          ...(prev.links || {}),
+          [contentType]: (prev.links?.[contentType] || []).filter((l) => l.link_id !== linkId),
+        },
+      }));
     } catch (_) {}
   };
 
@@ -106,6 +107,9 @@ export default function DesireDetail() {
     );
   }
 
+  const linksByType = desire.links || {};
+  const typesWithLinks = CONTENT_TYPES.filter((ct) => (linksByType[ct.key] || []).length > 0);
+
   return (
     <GradientBackground>
       <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 20, paddingBottom: 40 }}>
@@ -121,17 +125,37 @@ export default function DesireDetail() {
             <View style={styles.inputBox}>
               <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholderTextColor="rgba(46,37,48,0.4)" />
             </View>
+
             <Text style={[styles.fieldLbl, { marginTop: 12 }]}>Category</Text>
             <View style={styles.chipRow}>
               {CATEGORIES.map((c) => (
-                <Chip key={c.value} label={c.label} active={category === c.value} onPress={() => setCategory(c.value)} />
+                <Chip
+                  key={c.id}
+                  label={`${c.emoji} ${c.label}`}
+                  active={!showCustomCategory && category === c.id}
+                  onPress={() => { setCategory(c.id); setShowCustomCategory(false); }}
+                />
               ))}
+              <Chip label="✏️ Custom" active={showCustomCategory} onPress={() => setShowCustomCategory(true)} />
             </View>
+            {showCustomCategory && (
+              <View style={[styles.inputBox, { marginTop: 8 }]}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Type your own category..."
+                  placeholderTextColor="rgba(46,37,48,0.4)"
+                  value={customCategory}
+                  onChangeText={setCustomCategory}
+                  maxLength={50}
+                />
+              </View>
+            )}
+
             <Text style={[styles.fieldLbl, { marginTop: 12 }]}>Target Date (YYYY-MM-DD)</Text>
             <View style={styles.inputBox}>
               <TextInput style={styles.input} value={targetDate} onChangeText={setTargetDate} placeholder="2026-12-31" placeholderTextColor="rgba(46,37,48,0.4)" />
             </View>
-            <Text style={[styles.fieldLbl, { marginTop: 12 }]}>Description</Text>
+            <Text style={[styles.fieldLbl, { marginTop: 12 }]}>Intention</Text>
             <View style={[styles.inputBox, { minHeight: 70 }]}>
               <TextInput style={styles.input} value={description} onChangeText={setDescription} multiline placeholderTextColor="rgba(46,37,48,0.4)" />
             </View>
@@ -147,7 +171,9 @@ export default function DesireDetail() {
               <Text style={styles.title}>{desire.title}</Text>
               <TouchableOpacity onPress={() => setEditing(true)}><Text style={styles.editIcon}>✏️</Text></TouchableOpacity>
             </View>
-            <Text style={styles.category}>{categoryLabel(desire.category)} · {timeAgo(desire.updated_at || desire.created_at)}</Text>
+            {desire.category ? <Text style={styles.category}>{categoryLabel(desire.category)} · {timeAgo(desire.last_activity_at || desire.updated_at || desire.created_at)}</Text> : (
+              <Text style={styles.category}>{timeAgo(desire.last_activity_at || desire.updated_at || desire.created_at)}</Text>
+            )}
             {desire.target_date ? <Text style={styles.targetDate}>🎯 Target: {new Date(desire.target_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</Text> : null}
             {desire.description ? <Text style={styles.description}>{desire.description}</Text> : null}
 
@@ -160,21 +186,25 @@ export default function DesireDetail() {
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
             <Text style={styles.sectionTitle}>Linked Practices</Text>
-            {(desire.links || []).length === 0 ? (
+            {typesWithLinks.length === 0 ? (
               <Text style={styles.muted}>Nothing linked yet — affirmations, stories, and other practices you connect to this desire will show up here.</Text>
             ) : (
-              <GlassCard noPadding>
-                {(desire.links || []).map((l, i) => (
-                  <View key={l.id} style={[styles.linkRow, i < desire.links.length - 1 && styles.linkRowDivider]}>
-                    <Text style={styles.linkIcon}>{CONTENT_ICONS[l.content_type] || '✦'}</Text>
-                    <Text style={styles.linkTitle} numberOfLines={1}>{l.content_title || l.content_type}</Text>
-                    <TouchableOpacity onPress={() => handleUnlink(l.id)}><Text style={styles.unlinkIcon}>✕</Text></TouchableOpacity>
-                  </View>
-                ))}
-              </GlassCard>
+              typesWithLinks.map((ct) => (
+                <View key={ct.key} style={{ marginBottom: 14 }}>
+                  <Text style={styles.linkTypeHeading}>{ct.icon} {ct.label}</Text>
+                  <GlassCard noPadding>
+                    {linksByType[ct.key].map((l, i) => (
+                      <View key={l.link_id} style={[styles.linkRow, i < linksByType[ct.key].length - 1 && styles.linkRowDivider]}>
+                        <Text style={styles.linkTitle} numberOfLines={1}>{l.content_title || 'Untitled'}</Text>
+                        <TouchableOpacity onPress={() => handleUnlink(l.link_id, ct.key)}><Text style={styles.unlinkIcon}>✕</Text></TouchableOpacity>
+                      </View>
+                    ))}
+                  </GlassCard>
+                </View>
+              ))
             )}
 
-            <Button title="🗑️ Delete This Desire" variant="danger" onPress={handleDelete} fullWidth style={{ marginTop: 24 }} />
+            <Button title="🗑️ Delete This Desire" variant="danger" onPress={handleDelete} fullWidth style={{ marginTop: 12 }} />
           </>
         )}
       </ScrollView>
@@ -204,9 +234,9 @@ const styles = StyleSheet.create({
   muted: { fontFamily: fonts.body, color: colors.mist, fontSize: 13, lineHeight: 19 },
 
   sectionTitle: { fontFamily: fonts.displayMedium, fontSize: 15, color: colors.ink, fontWeight: '600', marginTop: 24, marginBottom: 10 },
+  linkTypeHeading: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.purpleDark, fontWeight: '700', marginBottom: 6 },
   linkRow: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 13 },
   linkRowDivider: { borderBottomWidth: 1, borderBottomColor: 'rgba(154,95,168,0.12)' },
-  linkIcon: { fontSize: 16 },
   linkTitle: { flex: 1, fontFamily: fonts.body, fontSize: 13.5, color: colors.ink },
   unlinkIcon: { fontSize: 13, color: colors.mist2 },
 });
