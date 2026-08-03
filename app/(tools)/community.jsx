@@ -141,13 +141,11 @@ export default function Community() {
           <TouchableOpacity style={[styles.filterPill, typeFilter === 'all' && categoryFilter === 'all' && !mineOnly && styles.filterPillActive]} onPress={() => { setTypeFilter('all'); setCategoryFilter('all'); setMineOnly(false); }}>
             <Text style={[styles.filterPillText, typeFilter === 'all' && categoryFilter === 'all' && !mineOnly && styles.filterPillTextActive]}>All</Text>
           </TouchableOpacity>
+          <Dropdown label="🎉 Type" value={typeFilter} options={TYPE_FILTER_OPTIONS} onSelect={setTypeFilter} />
+          <Dropdown label="🌸 Category" value={categoryFilter} options={CATEGORY_FILTER_OPTIONS} onSelect={setCategoryFilter} />
           <TouchableOpacity style={[styles.filterPill, mineOnly && styles.filterPillActive]} onPress={() => setMineOnly(!mineOnly)}>
             <Text style={[styles.filterPillText, mineOnly && styles.filterPillTextActive]}>Mine</Text>
           </TouchableOpacity>
-        </View>
-        <View style={{ gap: 8, marginBottom: 16 }}>
-          <Dropdown label="Filter by Type" value={typeFilter} options={TYPE_FILTER_OPTIONS} onSelect={setTypeFilter} fullWidth />
-          <Dropdown label="Filter by Category" value={categoryFilter} options={CATEGORY_FILTER_OPTIONS} onSelect={setCategoryFilter} fullWidth />
         </View>
 
         {loading ? (
@@ -155,36 +153,33 @@ export default function Community() {
         ) : visiblePosts.length === 0 ? (
           <Text style={styles.muted}>No posts yet — be the first ✨</Text>
         ) : (
-          visiblePosts.map((p, i) => {
+          visiblePosts.map((p) => {
             const isLong = p.content.length > TRUNCATE_AT;
             const isExpanded = expanded.has(p.id);
             const displayText = isLong && !isExpanded ? p.content.slice(0, TRUNCATE_AT).trim() + '…' : p.content;
             return (
-              <View key={p.id} style={[styles.feedRow, i === visiblePosts.length - 1 && { borderBottomWidth: 0 }]}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>{(p.display_name || p.username || '?')[0].toUpperCase()}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.feedText}>
-                    <Text style={styles.feedName}>{p.display_name || p.username} </Text>
-                    {displayText}
-                    {isLong && (
-                      <Text style={styles.moreLink} onPress={() => toggleExpand(p.id)}> {isExpanded ? 'less' : 'more'}</Text>
-                    )}
-                  </Text>
-                  <View style={styles.metaRow}>
-                    <Text style={styles.metaText}>{timeAgo(p.created_at)}</Text>
-                    <TouchableOpacity onPress={() => handleLove(p.id)} style={styles.metaIcon}>
-                      <Text style={styles.metaIconText}>{p.i_loved ? '💗' : '🤍'} {p.love_count}</Text>
+              <GlassCard key={p.id} style={styles.feedCard}>
+                <View style={styles.feedHead}>
+                  <Text style={styles.feedName}>{p.display_name || p.username} 🌸</Text>
+                  <View style={styles.feedHeadRight}>
+                    <TouchableOpacity onPress={() => handleLove(p.id)} style={styles.lovePill}>
+                      <Text style={styles.lovePillText}>{p.i_loved ? '💕' : '🤍'} {p.love_count}</Text>
                     </TouchableOpacity>
-                    {p.username === myUsername && (
-                      <TouchableOpacity onPress={() => handleDelete(p.id)} style={styles.metaIcon}>
-                        <Text style={styles.deleteIconText}>🗑️</Text>
-                      </TouchableOpacity>
-                    )}
+                    <Text style={styles.metaText}>{timeAgo(p.created_at)}</Text>
                   </View>
                 </View>
-              </View>
+                <Text style={styles.feedText}>
+                  {displayText}
+                  {isLong && (
+                    <Text style={styles.moreLink} onPress={() => toggleExpand(p.id)}> {isExpanded ? 'less' : 'more'}</Text>
+                  )}
+                </Text>
+                {p.username === myUsername && (
+                  <TouchableOpacity onPress={() => handleDelete(p.id)} style={styles.deleteRow}>
+                    <Text style={styles.deleteIconText}>🗑️ Delete</Text>
+                  </TouchableOpacity>
+                )}
+              </GlassCard>
             );
           })
         )}
@@ -209,21 +204,22 @@ const styles = StyleSheet.create({
   charCount: { fontFamily: fonts.body, fontSize: 11, color: colors.mist2, textAlign: 'right', marginTop: 6 },
   errorText: { fontFamily: fonts.body, color: colors.danger, fontSize: 13, marginTop: 10, textAlign: 'center' },
   shareRow: { flexDirection: 'row', gap: 8, marginTop: 14 },
-  filterTopRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
+  filterTopRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16, alignItems: 'flex-start' },
   filterPill: { backgroundColor: 'rgba(255,255,255,0.55)', borderRadius: 50, paddingVertical: 10, paddingHorizontal: 18, borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)' },
   filterPillActive: { backgroundColor: '#c9a8c9', borderColor: '#c9a8c9' },
   filterPillText: { color: '#2e2530', fontSize: 12, fontWeight: '500' },
   filterPillTextActive: { color: '#fff', fontWeight: '700' },
   muted: { color: '#6b5c66', fontSize: 13, textAlign: 'center', marginTop: 20 },
-  feedRow: { flexDirection: 'row', gap: 10, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(46,37,48,0.08)' },
-  avatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#c9a8c9', justifyContent: 'center', alignItems: 'center' },
-  avatarText: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  feedText: { color: '#2e2530', fontSize: 14, lineHeight: 19 },
-  feedName: { fontWeight: '700', color: '#2e2530' },
-  moreLink: { color: '#6b5c66', fontSize: 13, fontWeight: '600' },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 5 },
+
+  feedCard: { marginBottom: 12 },
+  feedHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  feedHeadRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  feedName: { fontFamily: fonts.bodyMedium, fontWeight: '700', color: colors.ink, fontSize: 13 },
+  feedText: { fontFamily: fonts.displayItalic, color: colors.ink2, fontSize: 14, lineHeight: 20, fontStyle: 'italic' },
+  moreLink: { fontFamily: fonts.bodyMedium, color: colors.mist, fontSize: 13, fontWeight: '600', fontStyle: 'normal' },
+  lovePill: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(248,184,200,0.2)', borderRadius: radii.pill, paddingVertical: 4, paddingHorizontal: 9 },
+  lovePillText: { fontSize: 11.5, color: colors.pinkDark, fontWeight: '600' },
   metaText: { color: '#6b5c66', fontSize: 11 },
-  metaIcon: { flexDirection: 'row', alignItems: 'center' },
-  metaIconText: { fontSize: 11, color: '#6b5c66' },
-  deleteIconText: { fontSize: 12 },
+  deleteRow: { alignSelf: 'flex-start', marginTop: 10 },
+  deleteIconText: { fontSize: 11.5, color: colors.mist },
 });
