@@ -683,6 +683,40 @@ export async function generateHoroscope(starSign) {
   return req('POST', '/horoscope/generate', { star_sign: starSign });
 }
 
+// ── DREAM MAP ─────────────────────────────────────────────────────────
+// AI chat that builds a visual map of the user's dream life as they talk.
+// Paid-plan feature. history: [{role: 'user'|'assistant', content}].
+export async function dreamMapChat(message, history = []) {
+  return req('POST', '/dreammap/chat', { message, history });
+}
+
+export async function saveDreamMap({ title, nodes = [], raw_conversation = '' }) {
+  return req('POST', '/dreammap/save', { title, nodes, raw_conversation });
+}
+
+// ── MEDITATIONS ───────────────────────────────────────────────────────
+// Curated preset library (no auth required) — shared audio content.
+export async function getMeditationLibrary() {
+  return req('GET', '/meditations/library');
+}
+
+export async function playMeditationLibraryItem(id) {
+  return req('POST', `/meditations/library/${id}/play`);
+}
+
+// AI-generated personal meditations (auth required).
+export async function generateMeditation({ desire, duration, style }) {
+  return req('POST', '/meditations/generate', { desire, duration, style });
+}
+
+export async function getMyMeditations() {
+  return req('GET', '/meditations/');
+}
+
+export async function deleteMeditation(id) {
+  return req('DELETE', `/meditations/${id}`);
+}
+
 // ── PROFILE ───────────────────────────────────────────────────────────
 export async function getProfile() {
   return req('GET', '/profile');
@@ -690,6 +724,17 @@ export async function getProfile() {
 
 export async function updateProfile(body) {
   return req('PUT', '/profile', body);
+}
+
+// People the user is manifesting around (partner, friends, family) — the AI
+// uses this list for real names in generated stories/affirmations instead of
+// inventing one. Also returned embedded as `people` on GET /profile.
+export async function addProfilePerson({ name, relationship, descriptor = '' }) {
+  return req('POST', '/profile/people', { name, relationship, descriptor });
+}
+
+export async function deleteProfilePerson(personId) {
+  return req('DELETE', `/profile/people/${personId}`);
 }
 
 // ── SUBSCRIPTIONS ─────────────────────────────────────────────────────

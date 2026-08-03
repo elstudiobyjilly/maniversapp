@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react';
 import { Modal, View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { getFoundingCount } from '../services/api';
 
 // Mirrors the website's paywallOverlay (core.js) — same 3 tiers, same
 // copy. Shown whenever a free (or under-tier) user hits a plan limit.
@@ -60,6 +62,18 @@ const PLANS = [
 ];
 
 export default function UpgradeModal({ visible, message, onClose, onSelectPlan }) {
+  const [foundingRemaining, setFoundingRemaining] = useState(null);
+
+  useEffect(() => {
+    if (!visible) return;
+    getFoundingCount()
+      .then((d) => {
+        const taken = d?.count ?? d?.taken ?? 0;
+        setFoundingRemaining(Math.max(0, 100 - taken));
+      })
+      .catch(() => {});
+  }, [visible]);
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.backdrop}>
@@ -79,7 +93,9 @@ export default function UpgradeModal({ visible, message, onClose, onSelectPlan }
                 onPress={() => onSelectPlan && onSelectPlan(p.id)}
               >
                 <View style={[styles.planBadge, p.gold && styles.planBadgeGold]}>
-                  <Text style={[styles.planBadgeText, p.gold && styles.planBadgeTextGold]}>{p.badge}</Text>
+                  <Text style={[styles.planBadgeText, p.gold && styles.planBadgeTextGold]}>
+                    {p.gold && foundingRemaining != null ? `👑 ${foundingRemaining} of 100 Left` : p.badge}
+                  </Text>
                 </View>
                 <Text style={[styles.planName, p.gold && styles.goldText]}>{p.name}</Text>
                 <Text style={[styles.planPrice, p.gold && styles.goldText]}>

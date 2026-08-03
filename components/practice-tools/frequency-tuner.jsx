@@ -1,8 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
 import GlassCard from '../GlassCard';
 import { generateToneFile } from '../../services/toneGenerator';
+import { getFunToolData, saveFunToolData } from '../../services/api';
+
+const PLAYS_KEY = 'mv_frequency_plays_local';
 
 const STATIONS = [
   { id: 'love', label: '💗 Love', hz: 528, beatHz: 7, baseFreq: 174, color: '#f090b8',
@@ -30,13 +34,29 @@ const STATIONS = [
 export default function FrequencyTunerTool() {
   const [activeId, setActiveId] = useState(null);
   const [loadingId, setLoadingId] = useState(null);
+  const [playCounts, setPlayCounts] = useState({});
   const soundRef = useRef(null);
 
   useEffect(() => {
     Audio.setAudioModeAsync({ playsInSilentModeIOS: true, staysActiveInBackground: false }).catch(() => {});
+    (async () => {
+      try {
+        const local = await AsyncStorage.getItem(PLAYS_KEY);
+        if (local) setPlayCounts(JSON.parse(local));
+      } catch (e) {}
+      try {
+        const remote = await getFunToolData('fun_frequency');
+        if (remote && typeof remote === 'object') setPlayCounts(remote);
+      } catch (e) {}
+    })();
     return () => {
       if (soundRef.current) soundRef.current.unloadAsync().catch(() => {});
     };
+  }, []);
+
+  const persistCounts = useCallback(async (next) => {
+    try { await AsyncStorage.setItem(PLAYS_KEY, JSON.stringify(next)); } catch (e) {}
+    try { await saveFunToolData('fun_frequency', next); } catch (e) {}
   }, []);
 
   const stopTone = async () => {
@@ -60,6 +80,9 @@ export default function FrequencyTunerTool() {
       const { sound } = await Audio.Sound.createAsync({ uri }, { shouldPlay: true, isLooping: true, volume: 0.7 });
       soundRef.current = sound;
       setActiveId(station.id);
+      const nextCounts = { ...playCounts, [station.id]: (playCounts[station.id] || 0) + 1 };
+      setPlayCounts(nextCounts);
+      persistCounts(nextCounts);
     } catch (e) {
       // silently fail to keep UX calm; could surface a toast here
     } finally {
@@ -80,7 +103,10 @@ export default function FrequencyTunerTool() {
               <View style={styles.stHeader}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.stLabel}>{station.label}</Text>
-                  <Text style={styles.stHz}>{station.hz} Hz · {station.beatHz} Hz beat</Text>
+                  <Text style={styles.stHz}>
+                    {station.hz} Hz · {station.beatHz} Hz beat
+                    {playCounts[station.id] ? ` · played ${playCounts[station.id]}x` : ''}
+                  </Text>
                 </View>
                 <TouchableOpacity
                   style={[styles.playBtn, { backgroundColor: isActive ? station.color : 'rgba(201,168,201,0.18)' }]}

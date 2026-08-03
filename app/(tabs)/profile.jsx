@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Switch } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Switch, Alert, Modal } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '../../store/authStore';
-import { getProfile, updateProfile, getSubscriptionStatus, cancelSubscription, reactivateSubscription, openBillingPortal, createCheckout } from '../../services/api';
+import { getProfile, updateProfile, getSubscriptionStatus, cancelSubscription, reactivateSubscription, openBillingPortal, createCheckout, changePassword, deleteAccount, submitFeedback, addProfilePerson, deleteProfilePerson } from '../../services/api';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import UpgradeModal from '../../components/UpgradeModal';
@@ -14,6 +14,7 @@ import { colors, fonts, radii } from '../../constants/theme';
 import * as Linking from 'expo-linking';
 
 const AFF_STYLES = ['i_am', 'you_are', 'mix'];
+const RELATIONSHIPS = ['partner', 'best_friend', 'family', 'mentor', 'friend', 'other'];
 
 export default function Profile() {
   const user = useAuthStore((s) => s.user);
@@ -33,6 +34,25 @@ export default function Profile() {
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
 
+  const [pwOpen, setPwOpen] = useState(false);
+  const [currentPw, setCurrentPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwError, setPwError] = useState('');
+
+  const [fbOpen, setFbOpen] = useState(false);
+  const [fbMessage, setFbMessage] = useState('');
+  const [fbSaving, setFbSaving] = useState(false);
+  const [fbError, setFbError] = useState('');
+
+  const [deleting, setDeleting] = useState(false);
+
+  const [people, setPeople] = useState([]);
+  const [personName, setPersonName] = useState('');
+  const [personRelationship, setPersonRelationship] = useState('partner');
+  const [personDescriptor, setPersonDescriptor] = useState('');
+  const [addingPerson, setAddingPerson] = useState(false);
+
   const load = async () => {
     try {
       const [profile, sub] = await Promise.all([getProfile(), getSubscriptionStatus()]);
@@ -40,6 +60,7 @@ export default function Profile() {
       setPrimaryDesire(profile.primary_desire || '');
       setAffStyle(profile.affirmation_style || 'mix');
       setMarketingConsent(!!profile.marketing_consent);
+      setPeople(Array.isArray(profile.people) ? profile.people : []);
       setSubStatus(sub);
     } catch (e) {
       setError(e.message || 'Could not load profile');
@@ -104,6 +125,75 @@ export default function Profile() {
   const handleLogout = async () => {
     await logout();
     router.replace('/(auth)/login');
+  };
+
+  const handleAddPerson = async () => {
+    if (!personName.trim()) { Alert.alert('Enter a name ✨'); return; }
+    setAddingPerson(true);
+    try {
+      const person = await addProfilePerson({ name: personName.trim(), relationship: personRelationship, descriptor: personDescriptor.trim() });
+      setPeople((prev) => [...prev, person]);
+      setPersonName(''); setPersonDescriptor('');
+    } catch (e) {
+      Alert.alert('Could not add person', e.message || 'Please try again.');
+    } finally { setAddingPerson(false); }
+  };
+
+  const handleRemovePerson = (person, index) => {
+    Alert.alert(`Remove ${person.name}?`, null, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: async () => {
+        setPeople((prev) => prev.filter((_, i) => i !== index));
+        if (person.id != null) { try { await deleteProfilePerson(person.id); } catch (e) {} }
+      } },
+    ]);
+  };
+
+  const handleChangePassword = async () => {
+    if (!currentPw || !newPw) { setPwError('Enter both your current and new password.'); return; }
+    setPwError(''); setPwSaving(true);
+    try {
+      await changePassword(currentPw, newPw);
+      setPwOpen(false);
+      setCurrentPw(''); setNewPw('');
+      Alert.alert('Password changed ✨');
+    } catch (e) {
+      setPwError(e.message || 'Could not change password');
+    } finally { setPwSaving(false); }
+  };
+
+  const handleSubmitFeedback = async () => {
+    if (!fbMessage.trim()) { setFbError('Write your feedback first.'); return; }
+    setFbError(''); setFbSaving(true);
+    try {
+      await submitFeedback(fbMessage.trim());
+      setFbOpen(false);
+      setFbMessage('');
+      Alert.alert('Thank you for your feedback ✨');
+    } catch (e) {
+      setFbError(e.message || 'Could not submit feedback');
+    } finally { setFbSaving(false); }
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete your account?',
+      'This permanently deletes your account and all your data. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete Account', style: 'destructive', onPress: async () => {
+          setDeleting(true);
+          try {
+            await deleteAccount();
+            await logout();
+            router.replace('/(auth)/login');
+          } catch (e) {
+            setDeleting(false);
+            Alert.alert('Could not delete account', e.message || 'Please try again.');
+          }
+        } },
+      ],
+    );
   };
 
   if (loading) {
@@ -172,6 +262,43 @@ export default function Profile() {
           <Button title="Save Changes" onPress={handleSave} loading={saving} fullWidth style={{ marginTop: 4 }} />
         </GlassCard>
 
+        <GlassCard style={styles.cardMargin}>
+          <Text style={styles.label}>MY PEOPLE</Text>
+          <Text style={styles.helperText}>Add the people you're manifesting around — your AI-generated stories and affirmations will use their real names instead of a placeholder.</Text>
+
+          {people.map((p, i) => (
+            <View key={p.id ?? i} style={styles.personRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.personName}>{p.name}</Text>
+                <Text style={styles.personMeta}>{(RELATIONSHIPS.find((r) => r === p.relationship) || p.relationship || '').replace('_', ' ')}{p.descriptor ? ` · ${p.descriptor}` : ''}</Text>
+              </View>
+              <TouchableOpacity onPress={() => handleRemovePerson(p, i)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Text style={styles.personRemove}>✕</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+
+          <View style={[styles.inputBox, { marginTop: people.length ? 12 : 0 }]}>
+            <TextInput style={styles.input} placeholder="Name" placeholderTextColor="rgba(46,37,48,0.4)" value={personName} onChangeText={setPersonName} />
+          </View>
+          <View style={styles.chipRow}>
+            {RELATIONSHIPS.map((r) => (
+              <Chip key={r} label={r.replace('_', ' ')} active={personRelationship === r} onPress={() => setPersonRelationship(r)} />
+            ))}
+          </View>
+          <View style={[styles.inputBox, { marginTop: 10 }]}>
+            <TextInput style={styles.input} placeholder="Descriptor (optional) — e.g. 'loves hiking'" placeholderTextColor="rgba(46,37,48,0.4)" value={personDescriptor} onChangeText={setPersonDescriptor} />
+          </View>
+          <Button title="+ Add Person" variant="ghost" onPress={handleAddPerson} loading={addingPerson} fullWidth style={{ marginTop: 10 }} />
+        </GlassCard>
+
+        <GlassCard style={styles.cardMargin}>
+          <Text style={styles.label}>ACCOUNT MANAGEMENT</Text>
+          <Button title="Change Password" variant="ghost" fullWidth onPress={() => setPwOpen(true)} style={{ marginTop: 4 }} />
+          <Button title="Send Feedback" variant="ghost" fullWidth onPress={() => setFbOpen(true)} style={{ marginTop: 8 }} />
+          <Button title="Delete Account" variant="danger" fullWidth loading={deleting} onPress={handleDeleteAccount} style={{ marginTop: 8 }} />
+        </GlassCard>
+
         <Button title="Log out" variant="danger" onPress={handleLogout} style={{ alignSelf: 'center', marginTop: 8, marginBottom: 40 }} />
       </ScrollView>
 
@@ -181,6 +308,62 @@ export default function Profile() {
         onClose={() => setShowUpgrade(false)}
         onSelectPlan={handleSelectPlan}
       />
+
+      <Modal visible={pwOpen} animationType="slide" transparent onRequestClose={() => setPwOpen(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <Text style={styles.modalTitle}>Change Password</Text>
+            <View style={[styles.inputBox, { marginBottom: 10 }]}>
+              <TextInput
+                style={styles.input}
+                placeholder="Current password"
+                placeholderTextColor="rgba(46,37,48,0.4)"
+                secureTextEntry
+                value={currentPw}
+                onChangeText={setCurrentPw}
+              />
+            </View>
+            <View style={styles.inputBox}>
+              <TextInput
+                style={styles.input}
+                placeholder="New password"
+                placeholderTextColor="rgba(46,37,48,0.4)"
+                secureTextEntry
+                value={newPw}
+                onChangeText={setNewPw}
+              />
+            </View>
+            {pwError ? <Text style={styles.errorText}>{pwError}</Text> : null}
+            <Button title="Change Password" onPress={handleChangePassword} loading={pwSaving} fullWidth style={{ marginTop: 14 }} />
+            <TouchableOpacity onPress={() => { setPwOpen(false); setPwError(''); setCurrentPw(''); setNewPw(''); }} style={{ marginTop: 10, alignItems: 'center' }}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={fbOpen} animationType="slide" transparent onRequestClose={() => setFbOpen(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <Text style={styles.modalTitle}>Send Feedback</Text>
+            <View style={[styles.inputBox, { minHeight: 100 }]}>
+              <TextInput
+                style={styles.input}
+                placeholder="What's on your mind?"
+                placeholderTextColor="rgba(46,37,48,0.4)"
+                multiline
+                value={fbMessage}
+                onChangeText={setFbMessage}
+              />
+            </View>
+            {fbError ? <Text style={styles.errorText}>{fbError}</Text> : null}
+            <Button title="Send Feedback" onPress={handleSubmitFeedback} loading={fbSaving} fullWidth style={{ marginTop: 14 }} />
+            <TouchableOpacity onPress={() => { setFbOpen(false); setFbError(''); setFbMessage(''); }} style={{ marginTop: 10, alignItems: 'center' }}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </GradientBackground>
   );
 }
@@ -196,7 +379,17 @@ const styles = StyleSheet.create({
   inputBox: { borderWidth: 1.5, borderColor: 'rgba(154,95,168,0.3)', borderRadius: radii.sm, padding: 12, backgroundColor: 'rgba(255,255,255,0.5)' },
   input: { fontFamily: fonts.body, fontSize: 14.5, color: colors.ink },
   chipRow: { flexDirection: 'row', gap: 8, marginBottom: 16, marginTop: 8, flexWrap: 'wrap' },
+  helperText: { fontFamily: fonts.body, fontSize: 12, color: colors.mist, marginBottom: 12, lineHeight: 18 },
+  personRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: 'rgba(154,95,168,0.12)' },
+  personName: { fontFamily: fonts.bodyMedium, fontSize: 14, fontWeight: '500', color: colors.ink },
+  personMeta: { fontFamily: fonts.body, fontSize: 11.5, color: colors.mist, marginTop: 2, textTransform: 'capitalize' },
+  personRemove: { color: colors.danger, fontSize: 15, paddingHorizontal: 6 },
   switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   errorText: { fontFamily: fonts.body, color: colors.danger, fontSize: 13, marginBottom: 10, textAlign: 'center' },
   savedText: { fontFamily: fonts.bodyMedium, color: colors.success, fontSize: 13, marginBottom: 10, textAlign: 'center', fontWeight: '600' },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(46,37,48,0.4)', justifyContent: 'flex-end' },
+  modalSheet: { backgroundColor: '#fffaf3', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 36 },
+  modalTitle: { fontFamily: fonts.displayMedium, fontSize: 19, fontWeight: '400', color: colors.ink, marginBottom: 16 },
+  cancelText: { fontFamily: fonts.body, color: colors.mist, fontSize: 13.5, fontWeight: '500' },
 });

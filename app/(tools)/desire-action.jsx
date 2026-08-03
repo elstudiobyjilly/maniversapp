@@ -89,7 +89,6 @@ export default function DesireActionTool() {
           if (localLogs) setLogs(JSON.parse(localLogs));
         }
       } catch (e) {}
-      setLoaded(true);
 
       // background refresh from backend
       try {
@@ -267,20 +266,13 @@ export default function DesireActionTool() {
       return;
     }
 
-    const customList = addCustom.split('\n').map((s) => s.trim()).filter(Boolean);
-    const desire = {
-      id: 'dt_' + Date.now(),
-      title: addTitle.trim(),
-      startDate: addStart,
-      endDate: addEndDate,
-      practices: [...addPracs, ...customList],
-      createdAt: new Date().toISOString(),
-    };
-
     // Create the REAL backend desire too, so it counts against the shared
-    // cap and can be linked from other features (Vision Board, etc).
+    // cap and can be linked from other features (Vision Board, etc), and
+    // so it can be deleted/edited from the Dashboard later.
+    let backendId = null;
     try {
-      await createDesire({ title: addTitle.trim(), target_date: addEndDate });
+      const created = await createDesire({ title: addTitle.trim(), target_date: addEndDate });
+      backendId = created?.id || null;
       setBackendDesireCount((c) => (c == null ? 1 : c + 1));
     } catch (e) {
       if (e.status === 403) {
@@ -290,6 +282,17 @@ export default function DesireActionTool() {
       }
       // Non-plan errors (network, etc) -- still let the local tracker work
     }
+
+    const customList = addCustom.split('\n').map((s) => s.trim()).filter(Boolean);
+    const desire = {
+      id: 'dt_' + Date.now(),
+      backendId,
+      title: addTitle.trim(),
+      startDate: addStart,
+      endDate: addEndDate,
+      practices: [...addPracs, ...customList],
+      createdAt: new Date().toISOString(),
+    };
 
     const next = [...desires, desire];
     persistDesires(next);
@@ -328,6 +331,9 @@ export default function DesireActionTool() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
         try { await AsyncStorage.removeItem(LOG_KEY_PREFIX + currentId); } catch (e) {}
+        if (currentDesire?.backendId) {
+          try { await deleteDesire(currentDesire.backendId); } catch (e) {}
+        }
         const next = desires.filter((d) => d.id !== currentId);
         persistDesires(next);
         setCurrentId(next.length ? next[0].id : null);

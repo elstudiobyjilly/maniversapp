@@ -28,6 +28,7 @@ const SECTIONS = [
       { key: 'letgo', label: 'Let Go', icon: 'leaf-outline', desc: 'Release what no longer serves you' },
       { key: 'identity', label: 'Identity', icon: 'star-outline', desc: '"I am..." statements' },
       { key: 'futureself', label: 'Future Self', icon: 'person-outline', desc: 'Letters from who you\'re becoming' },
+      { key: 'dreammap', label: 'Dream Map', icon: 'chatbubbles-outline', desc: 'Chat your way to a visual dream map' },
     ],
   },
   {

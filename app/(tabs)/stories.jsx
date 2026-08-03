@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Modal, Alert } from 'react-native';
 import { Audio } from 'expo-av';
 import {
   generateStory, saveOwnStory, getStories, getItemAudio,
   favoriteStory, pinStory, deleteStory, regenerateStory,
   getStoryAudioStatus, getStoryPlaysToday, addStoryPlay, createCheckout,
+  updateStoryTitle, updateStoryContent, regenerateStoryAudio, getStoryUsage,
+  getVoices,
 } from '../../services/api';
+import LinkDesireButton from '../../components/LinkDesireButton';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import UpgradeModal from '../../components/UpgradeModal';
@@ -41,6 +44,7 @@ export default function Stories() {
   const { limits, loaded, hasFeature, refresh } = usePlanStore();
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [upgradeMsg, setUpgradeMsg] = useState('');
+  const [voices, setVoices] = useState(VOICES);
 
   const [tab, setTab] = useState('manifest'); // 'manifest' | 'write'
   const [libFilter, setLibFilter] = useState('ai'); // 'ai' | 'own'
@@ -61,6 +65,14 @@ export default function Stories() {
   const [error, setError] = useState('');
   const [sound, setSound] = useState(null);
   const [playsToday, setPlaysToday] = useState(null);
+  const [usage, setUsage] = useState(null);
+
+  const [editing, setEditing] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editContent, setEditContent] = useState('');
+  const [editVoice, setEditVoice] = useState('luna');
+  const [editSaving, setEditSaving] = useState(false);
+  const [regenAudioLoading, setRegenAudioLoading] = useState(false);
 
   const canGenerateAi = hasFeature('ai_stories');
   const ownStoriesTotal = library.filter((s) => s.source !== 'ai').length;
@@ -83,10 +95,21 @@ export default function Stories() {
     try { setPlaysToday(await getStoryPlaysToday()); } catch (_) {}
   };
 
+  const loadUsage = async () => {
+    try { setUsage(await getStoryUsage()); } catch (_) {}
+  };
+
   useEffect(() => {
     refresh();
     loadLibrary();
     loadPlaysToday();
+    loadUsage();
+    getVoices()
+      .then((list) => {
+        const mapped = Array.isArray(list) ? list.filter((v) => v && v.id).map((v) => ({ id: v.id, label: v.label || v.name || v.id })) : [];
+        if (mapped.length) setVoices(mapped);
+      })
+      .catch(() => {});
   }, []);
 
   const stopSound = async () => { if (sound) { try { await sound.unloadAsync(); } catch (_) {} } setSound(null); setPlayingId(null); };
@@ -103,6 +126,7 @@ export default function Stories() {
       const story = await generateStory(desire.trim(), { length, theme: 'general', story_mode: mode, voice_id: voice });
       setLibrary((prev) => [story, ...prev]);
       setDesire('');
+      loadUsage();
     } catch (e) {
       if (e.status === 403) { setUpgradeMsg(e.message || 'Upgrade to generate AI stories.'); setShowUpgrade(true); }
       else setError(e.message || 'Could not generate story');
@@ -121,6 +145,7 @@ export default function Stories() {
       const story = await saveOwnStory({ title: ownTitle.trim() || 'My Story', content: ownContent.trim(), voice_id: voice });
       setLibrary((prev) => [story, ...prev]);
       setOwnTitle(''); setOwnContent('');
+      loadUsage();
     } catch (e) {
       if (e.status === 403) { setUpgradeMsg(e.message || 'Upgrade for more own stories.'); setShowUpgrade(true); }
       else setError(e.message || 'Could not save story');
@@ -167,6 +192,52 @@ export default function Stories() {
   const handlePin = async (id) => { try { await pinStory(id); loadLibrary(); } catch (_) {} };
   const handleDelete = async (id) => { try { await deleteStory(id); setLibrary((l) => l.filter((s) => s.id !== id)); } catch (_) {} };
   const handleRegenerate = async (id) => { try { await regenerateStory(id); } catch (e) { setError(e.message || 'Regenerate failed'); } };
+
+  const openEdit = (story) => {
+    setEditing(story);
+    setEditTitle(story.title || '');
+    setEditContent(story.content || '');
+    setEditVoice(story.voice_id || 'luna');
+  };
+
+  const handleSaveEditTitle = async () => {
+    if (!editing) return;
+    if (!editTitle.trim()) { Alert.alert('Enter a title ✨'); return; }
+    setEditSaving(true);
+    try {
+      await updateStoryTitle(editing.id, editTitle.trim());
+      setLibrary((prev) => prev.map((s) => (s.id === editing.id ? { ...s, title: editTitle.trim() } : s)));
+      setEditing((prev) => (prev ? { ...prev, title: editTitle.trim() } : prev));
+    } catch (e) {
+      Alert.alert('Could not rename', e.message || 'Please try again.');
+    } finally { setEditSaving(false); }
+  };
+
+  const handleSaveEditContent = async () => {
+    if (!editing) return;
+    if (!editContent.trim()) { Alert.alert('Story text can\'t be empty ✨'); return; }
+    setEditSaving(true);
+    try {
+      const updated = await updateStoryContent(editing.id, editContent.trim(), editTitle.trim(), editVoice);
+      setLibrary((prev) => prev.map((s) => (s.id === editing.id ? { ...s, ...updated, content: editContent.trim() } : s)));
+      setEditing(null);
+      Alert.alert('Story updated ✨');
+    } catch (e) {
+      Alert.alert('Could not save', e.message || 'Please try again.');
+    } finally { setEditSaving(false); }
+  };
+
+  const handleRegenerateVoice = async () => {
+    if (!editing) return;
+    setRegenAudioLoading(true);
+    try {
+      await regenerateStoryAudio(editing.id, editVoice);
+      setLibrary((prev) => prev.map((s) => (s.id === editing.id ? { ...s, voice_id: editVoice, audio_url: null } : s)));
+      Alert.alert('Voice changed — audio is regenerating ✨');
+    } catch (e) {
+      Alert.alert('Could not change voice', e.message || 'Please try again.');
+    } finally { setRegenAudioLoading(false); }
+  };
 
   const filteredLibrary = library.filter((s) => (libFilter === 'ai' ? s.source === 'ai' : s.source !== 'ai'));
 
@@ -215,13 +286,16 @@ export default function Stories() {
 
             <Text style={[styles.label, { marginTop: 14 }]}>VOICE</Text>
             <View style={styles.chipRow}>
-              {VOICES.map((v) => (
+              {voices.map((v) => (
                 <Chip key={v.id} label={v.label} active={voice === v.id} onPress={() => setVoice(v.id)} />
               ))}
             </View>
 
             {loaded && !canGenerateAi ? (
               <Text style={styles.upsellHint}>✨ AI story generation is a Basic Manifestor feature — write your own for free, or upgrade.</Text>
+            ) : null}
+            {canGenerateAi && usage?.month_limit != null ? (
+              <Text style={styles.usageHint}>{usage.month_used ?? 0} / {usage.month_limit} AI stories used this month</Text>
             ) : null}
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
             <Button title="Generate My Story ✨" onPress={handleGenerate} loading={generating} fullWidth style={{ marginTop: 14 }} />
@@ -251,7 +325,7 @@ export default function Stories() {
 
             <Text style={[styles.label, { marginTop: 14 }]}>VOICE</Text>
             <View style={styles.chipRow}>
-              {VOICES.map((v) => (
+              {voices.map((v) => (
                 <Chip key={v.id} label={v.label} active={voice === v.id} onPress={() => setVoice(v.id)} />
               ))}
             </View>
@@ -290,10 +364,12 @@ export default function Stories() {
                   {story.source === 'ai' && (
                     <TouchableOpacity onPress={() => handleRegenerate(story.id)}><Text style={styles.libIconText}>🔄</Text></TouchableOpacity>
                   )}
+                  <TouchableOpacity onPress={() => openEdit(story)}><Text style={styles.libIconText}>✏️</Text></TouchableOpacity>
                   <TouchableOpacity onPress={() => handleDelete(story.id)}><Text style={styles.libIconText}>🗑</Text></TouchableOpacity>
                 </View>
               </View>
               <Text style={styles.storyPreview} numberOfLines={2}>{story.content}</Text>
+              <LinkDesireButton contentType="story" contentId={story.id} contentTitle={story.title} style={{ marginBottom: 8 }} />
               <Button
                 title="▶ Play"
                 size="sm"
@@ -313,6 +389,45 @@ export default function Stories() {
         onClose={() => setShowUpgrade(false)}
         onSelectPlan={handleSelectPlan}
       />
+
+      <Modal visible={!!editing} animationType="slide" transparent onRequestClose={() => setEditing(null)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <ScrollView keyboardShouldPersistTaps="handled">
+              <Text style={styles.modalTitle}>Edit Story</Text>
+
+              <Text style={styles.label}>TITLE</Text>
+              <View style={styles.inputBoxSm}>
+                <TextInput style={styles.input} value={editTitle} onChangeText={setEditTitle} placeholder="Story title" placeholderTextColor="rgba(46,37,48,0.4)" />
+              </View>
+              <Button title="Save Title" variant="ghost" size="sm" onPress={handleSaveEditTitle} loading={editSaving} style={{ marginTop: 8, alignSelf: 'flex-start' }} />
+
+              {editing?.source !== 'ai' && (
+                <>
+                  <Text style={[styles.label, { marginTop: 16 }]}>STORY TEXT</Text>
+                  <View style={[styles.inputBox, { minHeight: 140 }]}>
+                    <TextInput style={styles.input} value={editContent} onChangeText={setEditContent} multiline />
+                  </View>
+                </>
+              )}
+
+              <Text style={[styles.label, { marginTop: 16 }]}>VOICE</Text>
+              <View style={styles.chipRow}>
+                {voices.map((v) => (
+                  <Chip key={v.id} label={v.label} active={editVoice === v.id} onPress={() => setEditVoice(v.id)} />
+                ))}
+              </View>
+
+              <Button title="💾 Save Story Text" onPress={handleSaveEditContent} loading={editSaving} fullWidth style={{ marginTop: 14 }} />
+              <Button title="🎙️ Regenerate Audio in This Voice" variant="ghost" onPress={handleRegenerateVoice} loading={regenAudioLoading} fullWidth style={{ marginTop: 8 }} />
+
+              <TouchableOpacity onPress={() => setEditing(null)} style={{ marginTop: 12, alignItems: 'center' }}>
+                <Text style={styles.cancelText}>Close</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </GradientBackground>
   );
 }
@@ -339,4 +454,10 @@ const styles = StyleSheet.create({
   storyIconRow: { flexDirection: 'row', gap: 8 },
   libIconText: { fontSize: 14 },
   storyPreview: { fontFamily: fonts.displayItalic, color: colors.mist, fontSize: 13.5, lineHeight: 20, marginBottom: 10, fontStyle: 'italic' },
+  usageHint: { fontFamily: fonts.body, fontSize: 11.5, color: colors.mist, marginTop: 8, textAlign: 'center' },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(46,37,48,0.4)', justifyContent: 'flex-end' },
+  modalSheet: { backgroundColor: '#fffaf3', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 36, maxHeight: '88%' },
+  modalTitle: { fontFamily: fonts.displayMedium, fontSize: 19, fontWeight: '400', color: colors.ink, marginBottom: 16 },
+  cancelText: { fontFamily: fonts.body, color: colors.mist, fontSize: 13.5, fontWeight: '500' },
 });

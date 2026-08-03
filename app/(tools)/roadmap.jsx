@@ -10,7 +10,8 @@ import {
 } from 'react-native';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
-import { getRoadmaps, createRoadmap, checkRoadmapAction, deleteRoadmap, createCheckout } from '../../services/api';
+import { getRoadmaps, createRoadmap, checkRoadmapAction, noteRoadmap, deleteRoadmap, createCheckout } from '../../services/api';
+import LinkDesireButton from '../../components/LinkDesireButton';
 import UpgradeModal from '../../components/UpgradeModal';
 import ScreenHeader from '../../components/ScreenHeader';
 import Button from '../../components/Button';
@@ -35,9 +36,10 @@ function ProgressBar({ done, total }) {
 }
 
 // ─── Single roadmap card ──────────────────────────────────────────────────────
-function RoadmapCard({ rm, onToggle, onDelete, onLockedTap }) {
+function RoadmapCard({ rm, onToggle, onDelete, onSaveNote }) {
   const actions = rm.weeks?.[0]?.actions ?? [];
   const done = actions.filter((a) => a.checked).length;
+  const [note, setNote] = useState(rm.weeks?.[0]?.note || '');
 
   return (
     <GlassCard style={styles.mb16}>
@@ -83,6 +85,19 @@ function RoadmapCard({ rm, onToggle, onDelete, onLockedTap }) {
           </Text>
         </TouchableOpacity>
       ))}
+
+      <Text style={styles.noteLabel}>NOTES</Text>
+      <TextInput
+        style={styles.noteInput}
+        placeholder="Reflections, wins, adjustments..."
+        placeholderTextColor="#9a8896"
+        value={note}
+        onChangeText={setNote}
+        onBlur={() => onSaveNote(rm, note)}
+        multiline
+      />
+
+      <LinkDesireButton contentType="roadmap" contentId={rm.id} contentTitle={rm.desire} style={{ marginTop: 12 }} />
     </GlassCard>
   );
 }
@@ -154,6 +169,15 @@ export default function Roadmap() {
     try { await checkRoadmapAction(rm.id, 1, actionIdx, newChecked); } catch (e) { setError(e.message || 'Could not save'); }
   };
 
+  const handleSaveNote = async (rm, note) => {
+    setRoadmaps((prev) => prev.map((r) => {
+      if (r.id !== rm.id) return r;
+      const weeks = r.weeks.map((w, wi) => (wi === 0 ? { ...w, note } : w));
+      return { ...r, weeks };
+    }));
+    try { await noteRoadmap(rm.id, 1, note); } catch (e) { setError(e.message || 'Could not save note'); }
+  };
+
   const handleDelete = async (rmId) => {
     try {
       await deleteRoadmap(rmId);
@@ -215,6 +239,7 @@ export default function Roadmap() {
                 rm={rm}
                 onToggle={rm.locked ? () => { setUpgradeMsg('This roadmap is locked -- upgrade to edit it again.'); setShowUpgrade(true); } : handleToggle}
                 onDelete={handleDelete}
+                onSaveNote={rm.locked ? () => { setUpgradeMsg('This roadmap is locked -- upgrade to edit it again.'); setShowUpgrade(true); } : handleSaveNote}
               />
             ))}
           </>
@@ -322,6 +347,19 @@ const styles = StyleSheet.create({
   checkmark: { color: '#fff', fontSize: 13, fontWeight: '700' },
   actionText: { color: '#2e2530', fontSize: 14, flex: 1, lineHeight: 20 },
   actionTextChecked: { color: '#9a8896', textDecorationLine: 'line-through' },
+
+  noteLabel: { fontSize: 10.5, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: '#9a5fa8', marginTop: 14, marginBottom: 8 },
+  noteInput: {
+    backgroundColor: 'rgba(255,255,255,0.5)',
+    borderRadius: 14,
+    padding: 12,
+    fontSize: 13.5,
+    color: '#2e2530',
+    minHeight: 60,
+    textAlignVertical: 'top',
+    borderWidth: 1,
+    borderColor: 'rgba(201,168,201,0.25)',
+  },
 
   // Empty state
   emptyCard: { alignItems: 'center', paddingVertical: 32 },
