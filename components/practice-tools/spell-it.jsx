@@ -1,6 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import GlassCard from '../GlassCard';
+import { getFunToolData, saveFunToolData } from '../../services/api';
+
+const SPELL_KEY = 'mv_spell_local';
 
 const SPELL_TRANSFORMS = [
   { test: /\b(want|wish|hope|need|trying|working|would like)\b/i, fn: (d) => d.replace(/\b(want|wish|hope|need|trying|working|would like)\b/gi, 'have') },
@@ -62,15 +66,44 @@ export default function SpellItTool() {
   const [spell, setSpell] = useState(null);
   const [reads, setReads] = useState(0);
 
+  useEffect(() => {
+    (async () => {
+      let state = null;
+      try {
+        const local = await AsyncStorage.getItem(SPELL_KEY);
+        if (local) state = JSON.parse(local);
+      } catch (e) {}
+      try {
+        const remote = await getFunToolData('fun_spell');
+        if (remote) state = remote;
+      } catch (e) {}
+      if (state) {
+        if (state.desire !== undefined) setDesire(state.desire);
+        if (state.spell !== undefined) setSpell(state.spell);
+        if (state.reads !== undefined) setReads(state.reads);
+      }
+    })();
+  }, []);
+
+  const persist = useCallback(async (state) => {
+    try { await AsyncStorage.setItem(SPELL_KEY, JSON.stringify(state)); } catch (e) {}
+    try { await saveFunToolData('fun_spell', state); } catch (e) {}
+  }, []);
+
   const handleCast = () => {
     if (!desire.trim()) { Alert.alert('Write your desire first ✨'); return; }
     const s = castSpell(desire);
     setSpell(s);
     setReads(0);
+    persist({ desire, spell: s, reads: 0 });
   };
 
   const handleRead = () => {
-    setReads((r) => Math.min(r + 1, 3));
+    setReads((r) => {
+      const next = Math.min(r + 1, 3);
+      persist({ desire, spell, reads: next });
+      return next;
+    });
   };
 
   return (

@@ -1,8 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { Audio } from 'expo-av';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import GlassCard from '../GlassCard';
 import { generateToneFile } from '../../services/toneGenerator';
+import { getFunToolData, saveFunToolData } from '../../services/api';
+
+const FREQ_KEY = 'mv_frequency_local';
 
 const STATIONS = [
   { id: 'love', label: '💗 Love', hz: 528, beatHz: 7, baseFreq: 174, color: '#f090b8',
@@ -30,6 +34,7 @@ const STATIONS = [
 export default function FrequencyTunerTool() {
   const [activeId, setActiveId] = useState(null);
   const [loadingId, setLoadingId] = useState(null);
+  const [lastStationId, setLastStationId] = useState(null);
   const soundRef = useRef(null);
 
   useEffect(() => {
@@ -37,6 +42,27 @@ export default function FrequencyTunerTool() {
     return () => {
       if (soundRef.current) soundRef.current.unloadAsync().catch(() => {});
     };
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      let state = null;
+      try {
+        const local = await AsyncStorage.getItem(FREQ_KEY);
+        if (local) state = JSON.parse(local);
+      } catch (e) {}
+      try {
+        const remote = await getFunToolData('fun_frequency');
+        if (remote) state = remote;
+      } catch (e) {}
+      if (state && state.lastStationId) setLastStationId(state.lastStationId);
+    })();
+  }, []);
+
+  const persistLastStation = useCallback(async (stationId) => {
+    const state = { lastStationId: stationId };
+    try { await AsyncStorage.setItem(FREQ_KEY, JSON.stringify(state)); } catch (e) {}
+    try { await saveFunToolData('fun_frequency', state); } catch (e) {}
   }, []);
 
   const stopTone = async () => {
@@ -60,6 +86,8 @@ export default function FrequencyTunerTool() {
       const { sound } = await Audio.Sound.createAsync({ uri }, { shouldPlay: true, isLooping: true, volume: 0.7 });
       soundRef.current = sound;
       setActiveId(station.id);
+      setLastStationId(station.id);
+      persistLastStation(station.id);
     } catch (e) {
       // silently fail to keep UX calm; could surface a toast here
     } finally {
@@ -79,7 +107,7 @@ export default function FrequencyTunerTool() {
             <GlassCard key={station.id} style={{ marginBottom: 14, borderColor: isActive ? station.color : undefined }}>
               <View style={styles.stHeader}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.stLabel}>{station.label}</Text>
+                  <Text style={styles.stLabel}>{station.label}{!isActive && lastStationId === station.id ? '  ·  last played' : ''}</Text>
                   <Text style={styles.stHz}>{station.hz} Hz · {station.beatHz} Hz beat</Text>
                 </View>
                 <TouchableOpacity

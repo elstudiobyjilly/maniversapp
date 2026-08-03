@@ -1,6 +1,10 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Animated, Easing, Dimensions } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import GlassCard from '../GlassCard';
+import { getFunToolData, saveFunToolData } from '../../services/api';
+
+const RESULT_KEY = 'mv_roulette_result_local';
 
 const SEGMENTS = [
   { label: '369 Method', ic: '3️⃣', color: '#fdeaf4', mins: 10, prompt: 'Write your desire 3 times in the morning, 6 times in the afternoon, 9 times at night. Feel it each time.', action: 'Grab your journal. Write your desire right now — start with the 3x morning round. Keep it short, present tense, fully felt.' },
@@ -24,6 +28,24 @@ export default function RouletteTool() {
   const rotation = useRef(new Animated.Value(0)).current;
   const currentDeg = useRef(0);
 
+  useEffect(() => {
+    (async () => {
+      try {
+        const local = await AsyncStorage.getItem(RESULT_KEY);
+        if (local) setResult(JSON.parse(local));
+      } catch (e) {}
+      try {
+        const remote = await getFunToolData('fun_roulette');
+        if (remote && remote.result) setResult(remote.result);
+      } catch (e) {}
+    })();
+  }, []);
+
+  const persist = useCallback(async (r) => {
+    try { await AsyncStorage.setItem(RESULT_KEY, JSON.stringify(r)); } catch (e) {}
+    try { await saveFunToolData('fun_roulette', { result: r }); } catch (e) {}
+  }, []);
+
   const spin = () => {
     if (spinning) return;
     setSpinning(true);
@@ -45,8 +67,10 @@ export default function RouletteTool() {
       // original center angle equals -currentDeg (mod 360).
       const normalized = ((-currentDeg.current % 360) + 360) % 360;
       const idx = Math.round(normalized / ARC) % N;
-      setResult(SEGMENTS[idx]);
+      const picked = SEGMENTS[idx];
+      setResult(picked);
       setSpinning(false);
+      persist(picked);
     });
   };
 

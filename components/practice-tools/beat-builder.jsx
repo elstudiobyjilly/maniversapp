@@ -1,8 +1,12 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { Audio } from 'expo-av';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import GlassCard from '../GlassCard';
 import { generateToneFile } from '../../services/toneGenerator';
+import { getFunToolData, saveFunToolData } from '../../services/api';
+
+const BEAT_KEY = 'mv_beat_local';
 
 const TEMPOS = [
   { id: 'calm', label: '🕊️ Calm (60 BPM)', bpm: 60 },
@@ -63,6 +67,30 @@ export default function BeatBuilderTool() {
     };
   }, []);
 
+  useEffect(() => {
+    (async () => {
+      let state = null;
+      try {
+        const local = await AsyncStorage.getItem(BEAT_KEY);
+        if (local) state = JSON.parse(local);
+      } catch (e) {}
+      try {
+        const remote = await getFunToolData('fun_beat');
+        if (remote) state = remote;
+      } catch (e) {}
+      if (state) {
+        if (state.tempo !== undefined) setTempo(state.tempo);
+        if (state.category !== undefined) setCategory(state.category);
+      }
+    })();
+  }, []);
+
+  const persist = useCallback(async (nextTempo, nextCategory) => {
+    const state = { tempo: nextTempo, category: nextCategory };
+    try { await AsyncStorage.setItem(BEAT_KEY, JSON.stringify(state)); } catch (e) {}
+    try { await saveFunToolData('fun_beat', state); } catch (e) {}
+  }, []);
+
   const ensureClickSound = async () => {
     if (!clickUriRef.current) {
       clickUriRef.current = await generateToneFile({ leftFreq: 600, rightFreq: 600, durationSec: 0.08, amplitude: 0.3 });
@@ -103,11 +131,13 @@ export default function BeatBuilderTool() {
     stopBeat();
     setTempo(id);
     setLines([]);
+    persist(id, category);
   };
   const handleCategorySelect = (id) => {
     stopBeat();
     setCategory(id);
     setLines([]);
+    persist(tempo, id);
   };
   const handleBuild = () => {
     if (!tempo || !category) return;

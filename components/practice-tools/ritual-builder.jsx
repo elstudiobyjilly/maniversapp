@@ -1,6 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import GlassCard from '../GlassCard';
+import { getFunToolData, saveFunToolData } from '../../services/api';
+
+const RITUAL_KEY = 'mv_ritual_local';
 
 const MOODS = [
   { id: 'doubtful', label: '😟 Doubtful' },
@@ -92,6 +96,33 @@ export default function RitualBuilderTool() {
   const [mood, setMood] = useState(null);
   const [area, setArea] = useState(null);
 
+  useEffect(() => {
+    (async () => {
+      let state = null;
+      try {
+        const local = await AsyncStorage.getItem(RITUAL_KEY);
+        if (local) state = JSON.parse(local);
+      } catch (e) {}
+      try {
+        const remote = await getFunToolData('fun_ritual');
+        if (remote) state = remote;
+      } catch (e) {}
+      if (state) {
+        if (state.mood !== undefined) setMood(state.mood);
+        if (state.area !== undefined) setArea(state.area);
+      }
+    })();
+  }, []);
+
+  const persist = useCallback(async (nextMood, nextArea) => {
+    const state = { mood: nextMood, area: nextArea };
+    try { await AsyncStorage.setItem(RITUAL_KEY, JSON.stringify(state)); } catch (e) {}
+    try { await saveFunToolData('fun_ritual', state); } catch (e) {}
+  }, []);
+
+  const handleMood = (id) => { setMood(id); persist(id, area); };
+  const handleArea = (id) => { setArea(id); persist(mood, id); };
+
   const steps = mood && area ? (RITUALS[mood]?.[area] || RITUALS[mood]?.general || []) : null;
   const totalMins = steps ? steps.reduce((s, st) => s + (parseInt(st.time, 10) || 0), 0) : 0;
   const moodLabel = MOODS.find((m) => m.id === mood)?.label || '';
@@ -105,7 +136,7 @@ export default function RitualBuilderTool() {
         <Text style={styles.stepLbl}>How are you feeling right now?</Text>
         <View style={styles.chipsRow}>
           {MOODS.map((m) => (
-            <TouchableOpacity key={m.id} style={[styles.chip, mood === m.id && styles.chipOn]} onPress={() => setMood(m.id)}>
+            <TouchableOpacity key={m.id} style={[styles.chip, mood === m.id && styles.chipOn]} onPress={() => handleMood(m.id)}>
               <Text style={[styles.chipText, mood === m.id && styles.chipTextOn]}>{m.label}</Text>
             </TouchableOpacity>
           ))}
@@ -114,7 +145,7 @@ export default function RitualBuilderTool() {
         <Text style={styles.stepLbl}>What area are you focusing on?</Text>
         <View style={styles.chipsRow}>
           {AREAS.map((a) => (
-            <TouchableOpacity key={a.id} style={[styles.chip, area === a.id && styles.chipOn]} onPress={() => setArea(a.id)}>
+            <TouchableOpacity key={a.id} style={[styles.chip, area === a.id && styles.chipOn]} onPress={() => handleArea(a.id)}>
               <Text style={[styles.chipText, area === a.id && styles.chipTextOn]}>{a.label}</Text>
             </TouchableOpacity>
           ))}
