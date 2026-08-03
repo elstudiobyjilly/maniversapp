@@ -7,10 +7,24 @@ import ScreenHeader from '../../components/ScreenHeader';
 import Button from '../../components/Button';
 import { colors, fonts, radii } from '../../constants/theme';
 
-const CATEGORIES = ['money', 'love', 'health', 'career', 'general'];
+// Canonical category list — matches futureself.jsx's IdentityTab, which shares
+// this same /identity/ backend record (stored flat: { money: [...], love: [...], ... }).
+// 'general' is kept for backward compatibility with statements saved before
+// selfworth/spirituality existed.
+const CATEGORY_LABELS = {
+  money: 'Money & Abundance',
+  love: 'Love & Relationships',
+  health: 'Health & Body',
+  career: 'Career & Purpose',
+  selfworth: 'Self-Worth & Confidence',
+  spirituality: 'Spirituality & Growth',
+  general: 'General',
+};
+const CATEGORIES = Object.keys(CATEGORY_LABELS);
+const EMPTY_AREAS = Object.fromEntries(CATEGORIES.map((c) => [c, []]));
 
 export default function Identity() {
-  const [areas, setAreas] = useState({ money: [], love: [], health: [], career: [], general: [] });
+  const [areas, setAreas] = useState({ ...EMPTY_AREAS });
   const [drafts, setDrafts] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -19,7 +33,8 @@ export default function Identity() {
   const load = async () => {
     try {
       const data = await getIdentity();
-      setAreas({ money: [], love: [], health: [], career: [], general: [], ...data.areas });
+      // Backend stores this flat: { money: [...], love: [...], ... } — not nested under "areas".
+      setAreas({ ...EMPTY_AREAS, ...data });
     } catch (e) {
       setError(e.message || 'Could not load');
     }
@@ -41,7 +56,7 @@ export default function Identity() {
   const handleSaveAll = async () => {
     setError(''); setSaving(true);
     try {
-      await saveIdentity({ areas });
+      await saveIdentity(areas);
     } catch (e) {
       setError(e.message || 'Could not save');
     } finally { setSaving(false); }
@@ -64,7 +79,7 @@ export default function Identity() {
 
         {CATEGORIES.map((cat) => (
           <GlassCard key={cat} style={styles.cardMargin}>
-            <Text style={styles.catTitle}>{cat.charAt(0).toUpperCase() + cat.slice(1)}</Text>
+            <Text style={styles.catTitle}>{CATEGORY_LABELS[cat] || cat}</Text>
             {(areas[cat] || []).map((stmt, i) => (
               <View key={i} style={styles.stmtRow}>
                 <Text style={styles.stmtText}>I am {stmt}</Text>

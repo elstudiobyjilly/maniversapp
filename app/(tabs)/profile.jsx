@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Switch } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Switch, Alert, Modal } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '../../store/authStore';
-import { getProfile, updateProfile, getSubscriptionStatus, cancelSubscription, reactivateSubscription, openBillingPortal, createCheckout } from '../../services/api';
+import { getProfile, updateProfile, getSubscriptionStatus, cancelSubscription, reactivateSubscription, openBillingPortal, createCheckout, changePassword, deleteAccount, submitFeedback } from '../../services/api';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import UpgradeModal from '../../components/UpgradeModal';
@@ -32,6 +32,19 @@ export default function Profile() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
+
+  const [pwOpen, setPwOpen] = useState(false);
+  const [currentPw, setCurrentPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwError, setPwError] = useState('');
+
+  const [fbOpen, setFbOpen] = useState(false);
+  const [fbMessage, setFbMessage] = useState('');
+  const [fbSaving, setFbSaving] = useState(false);
+  const [fbError, setFbError] = useState('');
+
+  const [deleting, setDeleting] = useState(false);
 
   const load = async () => {
     try {
@@ -106,6 +119,53 @@ export default function Profile() {
     router.replace('/(auth)/login');
   };
 
+  const handleChangePassword = async () => {
+    if (!currentPw || !newPw) { setPwError('Enter both your current and new password.'); return; }
+    setPwError(''); setPwSaving(true);
+    try {
+      await changePassword(currentPw, newPw);
+      setPwOpen(false);
+      setCurrentPw(''); setNewPw('');
+      Alert.alert('Password changed ✨');
+    } catch (e) {
+      setPwError(e.message || 'Could not change password');
+    } finally { setPwSaving(false); }
+  };
+
+  const handleSubmitFeedback = async () => {
+    if (!fbMessage.trim()) { setFbError('Write your feedback first.'); return; }
+    setFbError(''); setFbSaving(true);
+    try {
+      await submitFeedback(fbMessage.trim());
+      setFbOpen(false);
+      setFbMessage('');
+      Alert.alert('Thank you for your feedback ✨');
+    } catch (e) {
+      setFbError(e.message || 'Could not submit feedback');
+    } finally { setFbSaving(false); }
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete your account?',
+      'This permanently deletes your account and all your data. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete Account', style: 'destructive', onPress: async () => {
+          setDeleting(true);
+          try {
+            await deleteAccount();
+            await logout();
+            router.replace('/(auth)/login');
+          } catch (e) {
+            setDeleting(false);
+            Alert.alert('Could not delete account', e.message || 'Please try again.');
+          }
+        } },
+      ],
+    );
+  };
+
   if (loading) {
     return <GradientBackground><View style={styles.center}><ActivityIndicator size="large" color="#c9a8c9" /></View></GradientBackground>;
   }
@@ -172,6 +232,13 @@ export default function Profile() {
           <Button title="Save Changes" onPress={handleSave} loading={saving} fullWidth style={{ marginTop: 4 }} />
         </GlassCard>
 
+        <GlassCard style={styles.cardMargin}>
+          <Text style={styles.label}>ACCOUNT MANAGEMENT</Text>
+          <Button title="Change Password" variant="ghost" fullWidth onPress={() => setPwOpen(true)} style={{ marginTop: 4 }} />
+          <Button title="Send Feedback" variant="ghost" fullWidth onPress={() => setFbOpen(true)} style={{ marginTop: 8 }} />
+          <Button title="Delete Account" variant="danger" fullWidth loading={deleting} onPress={handleDeleteAccount} style={{ marginTop: 8 }} />
+        </GlassCard>
+
         <Button title="Log out" variant="danger" onPress={handleLogout} style={{ alignSelf: 'center', marginTop: 8, marginBottom: 40 }} />
       </ScrollView>
 
@@ -181,6 +248,62 @@ export default function Profile() {
         onClose={() => setShowUpgrade(false)}
         onSelectPlan={handleSelectPlan}
       />
+
+      <Modal visible={pwOpen} animationType="slide" transparent onRequestClose={() => setPwOpen(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <Text style={styles.modalTitle}>Change Password</Text>
+            <View style={[styles.inputBox, { marginBottom: 10 }]}>
+              <TextInput
+                style={styles.input}
+                placeholder="Current password"
+                placeholderTextColor="rgba(46,37,48,0.4)"
+                secureTextEntry
+                value={currentPw}
+                onChangeText={setCurrentPw}
+              />
+            </View>
+            <View style={styles.inputBox}>
+              <TextInput
+                style={styles.input}
+                placeholder="New password"
+                placeholderTextColor="rgba(46,37,48,0.4)"
+                secureTextEntry
+                value={newPw}
+                onChangeText={setNewPw}
+              />
+            </View>
+            {pwError ? <Text style={styles.errorText}>{pwError}</Text> : null}
+            <Button title="Change Password" onPress={handleChangePassword} loading={pwSaving} fullWidth style={{ marginTop: 14 }} />
+            <TouchableOpacity onPress={() => { setPwOpen(false); setPwError(''); setCurrentPw(''); setNewPw(''); }} style={{ marginTop: 10, alignItems: 'center' }}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={fbOpen} animationType="slide" transparent onRequestClose={() => setFbOpen(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <Text style={styles.modalTitle}>Send Feedback</Text>
+            <View style={[styles.inputBox, { minHeight: 100 }]}>
+              <TextInput
+                style={styles.input}
+                placeholder="What's on your mind?"
+                placeholderTextColor="rgba(46,37,48,0.4)"
+                multiline
+                value={fbMessage}
+                onChangeText={setFbMessage}
+              />
+            </View>
+            {fbError ? <Text style={styles.errorText}>{fbError}</Text> : null}
+            <Button title="Send Feedback" onPress={handleSubmitFeedback} loading={fbSaving} fullWidth style={{ marginTop: 14 }} />
+            <TouchableOpacity onPress={() => { setFbOpen(false); setFbError(''); setFbMessage(''); }} style={{ marginTop: 10, alignItems: 'center' }}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </GradientBackground>
   );
 }
@@ -199,4 +322,9 @@ const styles = StyleSheet.create({
   switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   errorText: { fontFamily: fonts.body, color: colors.danger, fontSize: 13, marginBottom: 10, textAlign: 'center' },
   savedText: { fontFamily: fonts.bodyMedium, color: colors.success, fontSize: 13, marginBottom: 10, textAlign: 'center', fontWeight: '600' },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(46,37,48,0.4)', justifyContent: 'flex-end' },
+  modalSheet: { backgroundColor: '#fffaf3', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 36 },
+  modalTitle: { fontFamily: fonts.displayMedium, fontSize: 19, fontWeight: '400', color: colors.ink, marginBottom: 16 },
+  cancelText: { fontFamily: fonts.body, color: colors.mist, fontSize: 13.5, fontWeight: '500' },
 });

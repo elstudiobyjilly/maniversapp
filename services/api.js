@@ -683,6 +683,29 @@ export async function generateHoroscope(starSign) {
   return req('POST', '/horoscope/generate', { star_sign: starSign });
 }
 
+// ── MEDITATIONS ───────────────────────────────────────────────────────
+// Curated preset library (no auth required) — shared audio content.
+export async function getMeditationLibrary() {
+  return req('GET', '/meditations/library');
+}
+
+export async function playMeditationLibraryItem(id) {
+  return req('POST', `/meditations/library/${id}/play`);
+}
+
+// AI-generated personal meditations (auth required).
+export async function generateMeditation({ desire, duration, style }) {
+  return req('POST', '/meditations/generate', { desire, duration, style });
+}
+
+export async function getMyMeditations() {
+  return req('GET', '/meditations/');
+}
+
+export async function deleteMeditation(id) {
+  return req('DELETE', `/meditations/${id}`);
+}
+
 // ── PROFILE ───────────────────────────────────────────────────────────
 export async function getProfile() {
   return req('GET', '/profile');

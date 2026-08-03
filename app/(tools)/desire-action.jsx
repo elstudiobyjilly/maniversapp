@@ -89,7 +89,6 @@ export default function DesireActionTool() {
           if (localLogs) setLogs(JSON.parse(localLogs));
         }
       } catch (e) {}
-      setLoaded(true);
 
       // background refresh from backend
       try {
