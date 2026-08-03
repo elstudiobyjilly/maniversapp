@@ -101,16 +101,16 @@ export default function Daily() {
             <Text style={styles.messageText}>"{todaysMessage}"</Text>
             <Text style={styles.dateText}>{todaysDate}</Text>
             <View style={styles.btnRow}>
-              <Button title="📤 Share This Message" size="sm" variant="ghost" onPress={() => shareText(todaysMessage)} style={{ flex: 1 }} />
-              <Button title="🔊 Read Aloud" size="sm" variant="ghost" onPress={() => readAloud(todaysMessage)} style={{ flex: 1 }} />
+              <Button title="📤 Share This Message" size="sm" variant="ghost" onPress={() => shareText(todaysMessage)} />
+              <Button title="🔊 Read Aloud" size="sm" variant="ghost" onPress={() => readAloud(todaysMessage)} />
             </View>
           </GlassCard>
 
           <Text style={styles.sectionHeading}>🔮 Oracle Pull</Text>
           <Text style={styles.sectionSub}>Quiet your mind. Hold your question. Then tap a card.</Text>
           <View style={styles.btnRow}>
-            <Button title="🔀 Shuffle Deck" size="sm" variant="ghost" onPress={handleShuffleOracle} style={{ flex: 1 }} />
-            <Button title="✕ Clear" size="sm" variant="ghost" onPress={handleClearOracle} style={{ flex: 1 }} />
+            <Button title="🔀 Shuffle Deck" size="sm" variant="ghost" onPress={handleShuffleOracle} />
+            <Button title="✕ Clear" size="sm" variant="ghost" onPress={handleClearOracle} />
           </View>
 
           <View style={styles.oracleGrid}>
@@ -143,8 +143,8 @@ export default function Daily() {
               <Text style={styles.oracleRevealMsg}>{pulledCard.msg}</Text>
               <Text style={styles.oracleRevealAction}>✨ Today's Practice: {pulledCard.action}</Text>
               <View style={styles.btnRow}>
-                <Button title="📤 Share" size="sm" variant="ghost" onPress={() => shareText(`${pulledCard.name}. ${pulledCard.msg} ${pulledCard.action}`)} style={{ flex: 1 }} />
-                <Button title="🔊 Read Aloud" size="sm" variant="ghost" onPress={() => readAloud(`${pulledCard.name}. ${pulledCard.msg} ${pulledCard.action}`)} style={{ flex: 1 }} />
+                <Button title="📤 Share" size="sm" variant="ghost" onPress={() => shareText(`${pulledCard.name}. ${pulledCard.msg} ${pulledCard.action}`)} />
+                <Button title="🔊 Read Aloud" size="sm" variant="ghost" onPress={() => readAloud(`${pulledCard.name}. ${pulledCard.msg} ${pulledCard.action}`)} />
               </View>
             </GlassCard>
           )}
