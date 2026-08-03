@@ -8,6 +8,7 @@ import Dropdown from '../../components/Dropdown';
 import UpgradeModal from '../../components/UpgradeModal';
 import ScreenHeader from '../../components/ScreenHeader';
 import Button from '../../components/Button';
+import ExpandableTextArea from '../../components/ExpandableTextArea';
 import { usePlanStore } from '../../store/planStore';
 import { colors, fonts, radii } from '../../constants/theme';
 import * as Linking from 'expo-linking';
@@ -154,17 +155,13 @@ export default function Community() {
         <ScreenHeader lead="Community" accent="Wall" subtitle="Share your manifestations. Send love. Rise together. 🌸" />
 
         <GlassCard style={{ marginTop: 16, marginBottom: 18 }}>
-          <View style={styles.writeBox}>
-            <TextInput
-              style={styles.composeInput}
-              placeholder="I am manifesting my dream... / I just manifested... 🌸"
-              placeholderTextColor="rgba(46,37,48,0.4)"
-              value={content}
-              onChangeText={setContent}
-              multiline
-              maxLength={500}
-            />
-          </View>
+          <ExpandableTextArea
+            value={content}
+            onChangeText={(t) => setContent(t.slice(0, 500))}
+            placeholder="I am manifesting my dream... / I just manifested... 🌸"
+            modalTitle="Share with the Community"
+            minHeight={70}
+          />
           <Text style={styles.charCount}>{content.length} / 500</Text>
 
           <View style={{ gap: 8, marginTop: 12 }}>

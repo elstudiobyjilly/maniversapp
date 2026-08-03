@@ -8,6 +8,7 @@ import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import ScreenHeader from '../../components/ScreenHeader';
 import Button from '../../components/Button';
+import ExpandableTextArea from '../../components/ExpandableTextArea';
 import { colors, fonts, radii } from '../../constants/theme';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -452,13 +453,13 @@ export default function AuraCard() {
 
         <GlassCard style={styles.mb20}>
           <Text style={styles.label}>✨ YOUR WORDS, AFFIRMATIONS & GRATITUDE</Text>
-          <TextInput
-            style={styles.input}
-            placeholder={'Abundant\nI am magnetic and loved\nI am grateful for everything flowing to me\nMoney comes easily and effortlessly\nI attract all that I desire...'}
-            placeholderTextColor="#9a8896"
+          <ExpandableTextArea
             value={wordsText}
             onChangeText={setWordsText}
-            multiline
+            placeholder={'Abundant\nI am magnetic and loved\nI am grateful for everything flowing to me\nMoney comes easily and effortlessly\nI attract all that I desire...'}
+            modalTitle="Your Words"
+            minHeight={110}
+            style={{ marginBottom: 12 }}
           />
 
           <Text style={styles.quickAddLabel}>Quick add:</Text>

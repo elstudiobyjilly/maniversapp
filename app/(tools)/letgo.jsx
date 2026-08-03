@@ -5,6 +5,7 @@ import GradientBackground from '../../components/GradientBackground';
 import ScreenHeader from '../../components/ScreenHeader';
 import TabPill from '../../components/TabPill';
 import Button from '../../components/Button';
+import ExpandableTextArea from '../../components/ExpandableTextArea';
 import { colors, fonts, radii } from '../../constants/theme';
 import { getLetGo, addLetGo, deleteLetGo } from '../../services/api';
 
@@ -105,13 +106,11 @@ export default function LetGo() {
                 ))}
               </View>
 
-              <TextInput
-                style={styles.input}
-                placeholder="What triggered this feeling? What are you holding on to?..."
-                placeholderTextColor="#9a8896"
+              <ExpandableTextArea
                 value={trigger}
                 onChangeText={setTrigger}
-                multiline
+                placeholder="What triggered this feeling? What are you holding on to?..."
+                modalTitle="Let Go"
               />
               {!!error && <Text style={styles.errorText}>{error}</Text>}
               {logged && <Text style={styles.loggedText}>Logged ✨</Text>}
