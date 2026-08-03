@@ -5,7 +5,7 @@ import {
   generateAffirmation, getAffirmations, getAffirmationAudio,
   favoriteAffirmation, pinAffirmation, deleteAffirmation, getPinnedSets,
   saveOwnAffirmationSet, getAffirmationAudioStatus, createCheckout,
-  renameAffirmationSet, regenerateAffirmationAudio,
+  renameAffirmationSet, regenerateAffirmationAudio, getVoices,
 } from '../../services/api';
 import LinkDesireButton from '../../components/LinkDesireButton';
 import GlassCard from '../../components/GlassCard';
@@ -42,6 +42,7 @@ export default function Affirmations() {
   const { limits, loaded, hasFeature, allowedVoices, refresh } = usePlanStore();
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [upgradeMsg, setUpgradeMsg] = useState('');
+  const [voices, setVoices] = useState(VOICES);
 
   // 'create' = AI-generated, 'own' = write-your-own, 'library' = saved sets
   const [tab, setTab] = useState('create');
@@ -96,7 +97,16 @@ export default function Affirmations() {
     } catch (_) {} finally { setLoadingLib(false); }
   };
 
-  useEffect(() => { refresh(); loadLibrary(); }, []);
+  useEffect(() => {
+    refresh();
+    loadLibrary();
+    getVoices()
+      .then((list) => {
+        const mapped = Array.isArray(list) ? list.filter((v) => v && v.id).map((v) => ({ id: v.id, label: v.label || v.name || v.id })) : [];
+        if (mapped.length) setVoices(mapped);
+      })
+      .catch(() => {});
+  }, []);
   useEffect(() => { if (tab === 'library') loadLibrary(); }, [tab]);
 
   const stopSound = async () => { if (sound) { try { await sound.unloadAsync(); } catch (_) {} } setSound(null); setPlaying(false); };
@@ -299,7 +309,7 @@ export default function Affirmations() {
 
               <Text style={[styles.label, { marginTop: 14 }]}>VOICE</Text>
               <View style={styles.chipRow}>
-                {VOICES.map((v) => {
+                {voices.map((v) => {
                   const allowed = voicesAllowed.includes(v.id);
                   return (
                     <Chip
@@ -366,7 +376,7 @@ export default function Affirmations() {
 
               <Text style={[styles.label, { marginTop: 14 }]}>VOICE</Text>
               <View style={styles.chipRow}>
-                {VOICES.map((v) => {
+                {voices.map((v) => {
                   const allowed = voicesAllowed.includes(v.id);
                   return (
                     <Chip
@@ -462,7 +472,7 @@ export default function Affirmations() {
 
             <Text style={[styles.label, { marginTop: 16 }]}>VOICE</Text>
             <View style={styles.chipRow}>
-              {VOICES.map((v) => {
+              {voices.map((v) => {
                 const allowed = voicesAllowed.includes(v.id);
                 return (
                   <Chip

@@ -6,6 +6,7 @@ import {
   favoriteStory, pinStory, deleteStory, regenerateStory,
   getStoryAudioStatus, getStoryPlaysToday, addStoryPlay, createCheckout,
   updateStoryTitle, updateStoryContent, regenerateStoryAudio, getStoryUsage,
+  getVoices,
 } from '../../services/api';
 import LinkDesireButton from '../../components/LinkDesireButton';
 import GlassCard from '../../components/GlassCard';
@@ -43,6 +44,7 @@ export default function Stories() {
   const { limits, loaded, hasFeature, refresh } = usePlanStore();
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [upgradeMsg, setUpgradeMsg] = useState('');
+  const [voices, setVoices] = useState(VOICES);
 
   const [tab, setTab] = useState('manifest'); // 'manifest' | 'write'
   const [libFilter, setLibFilter] = useState('ai'); // 'ai' | 'own'
@@ -102,6 +104,12 @@ export default function Stories() {
     loadLibrary();
     loadPlaysToday();
     loadUsage();
+    getVoices()
+      .then((list) => {
+        const mapped = Array.isArray(list) ? list.filter((v) => v && v.id).map((v) => ({ id: v.id, label: v.label || v.name || v.id })) : [];
+        if (mapped.length) setVoices(mapped);
+      })
+      .catch(() => {});
   }, []);
 
   const stopSound = async () => { if (sound) { try { await sound.unloadAsync(); } catch (_) {} } setSound(null); setPlayingId(null); };
@@ -278,7 +286,7 @@ export default function Stories() {
 
             <Text style={[styles.label, { marginTop: 14 }]}>VOICE</Text>
             <View style={styles.chipRow}>
-              {VOICES.map((v) => (
+              {voices.map((v) => (
                 <Chip key={v.id} label={v.label} active={voice === v.id} onPress={() => setVoice(v.id)} />
               ))}
             </View>
@@ -317,7 +325,7 @@ export default function Stories() {
 
             <Text style={[styles.label, { marginTop: 14 }]}>VOICE</Text>
             <View style={styles.chipRow}>
-              {VOICES.map((v) => (
+              {voices.map((v) => (
                 <Chip key={v.id} label={v.label} active={voice === v.id} onPress={() => setVoice(v.id)} />
               ))}
             </View>
@@ -405,7 +413,7 @@ export default function Stories() {
 
               <Text style={[styles.label, { marginTop: 16 }]}>VOICE</Text>
               <View style={styles.chipRow}>
-                {VOICES.map((v) => (
+                {voices.map((v) => (
                   <Chip key={v.id} label={v.label} active={editVoice === v.id} onPress={() => setEditVoice(v.id)} />
                 ))}
               </View>
