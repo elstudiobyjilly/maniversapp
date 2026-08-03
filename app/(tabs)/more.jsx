@@ -127,7 +127,7 @@ function ReorderableRow({ tool, index, total, isLast, onPress, onDragEnd, onDrag
           <Text style={styles.rowDesc}>{tool.desc}</Text>
         </View>
       </TouchableOpacity>
-      <GestureDetector gesture={dragGesture}>
+      <GestureDetector gesture={pan}>
         <View style={styles.dragHandle}>
           <Ionicons name="reorder-three-outline" size={20} color={colors.mist2} />
         </View>
