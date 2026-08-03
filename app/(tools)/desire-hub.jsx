@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, ScrollView, ActivityIndicator, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as ImagePicker from 'expo-image-picker';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import ScreenHeader from '../../components/ScreenHeader';
@@ -11,7 +10,7 @@ import Chip from '../../components/Chip';
 import Button from '../../components/Button';
 import { colors, fonts, gradients, radii } from '../../constants/theme';
 import { CATEGORIES, categoryLabel, timeAgo } from '../../constants/desires';
-import { getDesires, createDesire, uploadImage } from '../../services/api';
+import { getDesires, createDesire, getVisionBoard, getMindMovies } from '../../services/api';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const COLS = SCREEN_WIDTH >= 700 ? 3 : 2;
@@ -36,7 +35,9 @@ export default function DesireHub() {
   const [targetDate, setTargetDate] = useState('');
   const [description, setDescription] = useState('');
   const [coverUrl, setCoverUrl] = useState(null);
-  const [uploadingCover, setUploadingCover] = useState(false);
+  const [imgPickerOpen, setImgPickerOpen] = useState(false);
+  const [availableImages, setAvailableImages] = useState([]);
+  const [loadingImages, setLoadingImages] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const load = async () => {
@@ -45,16 +46,33 @@ export default function DesireHub() {
 
   useEffect(() => { load().finally(() => setLoading(false)); }, []);
 
-  const handlePickCover = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) return;
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
-    if (result.canceled) return;
-    setUploadingCover(true);
+  // The website doesn't upload a fresh photo for a desire cover — it lets
+  // you pick from images you've already added to Vision Board or Mind
+  // Movies. Matches that exactly instead of a separate upload flow.
+  const handleOpenImagePicker = async () => {
+    setImgPickerOpen(true);
+    setLoadingImages(true);
     try {
-      const url = await uploadImage(result.assets[0].uri, 'vision-board');
-      setCoverUrl(url);
-    } catch (_) {} finally { setUploadingCover(false); }
+      const imgs = [];
+      try {
+        const vb = await getVisionBoard();
+        (vb.items || []).forEach((item) => { if (item.url) imgs.push(item.url); });
+      } catch (_) {}
+      try {
+        const movies = await getMindMovies();
+        (Array.isArray(movies) ? movies : []).forEach((m) => {
+          (m.scenes || []).forEach((s) => { if (s.img) imgs.push(s.img); });
+        });
+      } catch (_) {}
+      setAvailableImages([...new Set(imgs)]);
+    } finally {
+      setLoadingImages(false);
+    }
+  };
+
+  const handlePickCover = (url) => {
+    setCoverUrl(url);
+    setImgPickerOpen(false);
   };
 
   const resetForm = () => {
@@ -154,18 +172,42 @@ export default function DesireHub() {
               />
             </View>
 
-            <TouchableOpacity style={styles.coverBtn} onPress={handlePickCover} disabled={uploadingCover}>
-              {uploadingCover ? (
-                <ActivityIndicator size="small" color={colors.purpleDark} />
-              ) : coverUrl ? (
+            <Text style={[styles.fieldLbl, { marginTop: 12 }]}>Vision Image (optional)</Text>
+            <TouchableOpacity style={styles.coverBtn} onPress={handleOpenImagePicker}>
+              {coverUrl ? (
                 <Image source={{ uri: coverUrl }} style={styles.coverPreview} />
               ) : (
-                <Text style={styles.coverBtnText}>📷 Add a cover photo (optional)</Text>
+                <Text style={styles.coverBtnText}>🖼️ Choose from Vision Board / Mind Movies</Text>
               )}
             </TouchableOpacity>
+            {coverUrl ? (
+              <TouchableOpacity onPress={() => setCoverUrl(null)}><Text style={styles.removeCoverText}>✕ Remove image</Text></TouchableOpacity>
+            ) : null}
 
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
-            <Button title="✨ Create Desire" onPress={handleCreate} loading={saving} fullWidth style={{ marginTop: 12 }} />
+            <Button title="🌙 Create Desire" onPress={handleCreate} loading={saving} fullWidth style={{ marginTop: 12 }} />
+          </GlassCard>
+        )}
+
+        {imgPickerOpen && (
+          <GlassCard style={{ marginBottom: 16 }}>
+            <View style={styles.pickerHeadRow}>
+              <Text style={styles.fieldLbl}>Choose an Image</Text>
+              <TouchableOpacity onPress={() => setImgPickerOpen(false)}><Text style={styles.pickerClose}>✕</Text></TouchableOpacity>
+            </View>
+            {loadingImages ? (
+              <ActivityIndicator color={colors.purpleMid} style={{ marginVertical: 16 }} />
+            ) : availableImages.length === 0 ? (
+              <Text style={styles.muted}>No images yet — add some to your Vision Board or Mind Movies first ✨</Text>
+            ) : (
+              <View style={styles.imgPickerGrid}>
+                {availableImages.map((url) => (
+                  <TouchableOpacity key={url} onPress={() => handlePickCover(url)}>
+                    <Image source={{ uri: url }} style={styles.imgPickerCell} />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
           </GlassCard>
         )}
 
@@ -214,9 +256,15 @@ const styles = StyleSheet.create({
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   errorText: { fontFamily: fonts.body, color: colors.danger, fontSize: 13, marginTop: 10, textAlign: 'center' },
 
-  coverBtn: { marginTop: 12, borderWidth: 1.5, borderColor: 'rgba(154,95,168,0.3)', borderStyle: 'dashed', borderRadius: radii.sm, padding: 14, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.35)' },
+  coverBtn: { borderWidth: 1.5, borderColor: 'rgba(154,95,168,0.3)', borderStyle: 'dashed', borderRadius: radii.sm, padding: 14, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.35)' },
   coverBtnText: { fontFamily: fonts.body, fontSize: 12.5, color: colors.mist },
   coverPreview: { width: '100%', height: 100, borderRadius: radii.sm },
+  removeCoverText: { fontFamily: fonts.body, fontSize: 11.5, color: colors.mist2, marginTop: 6, textAlign: 'center' },
+
+  pickerHeadRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  pickerClose: { fontSize: 16, color: colors.mist },
+  imgPickerGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  imgPickerCell: { width: 80, height: 80, borderRadius: radii.sm },
 
   muted: { fontFamily: fonts.body, color: colors.mist, fontSize: 13, textAlign: 'center', marginTop: 20 },
 
