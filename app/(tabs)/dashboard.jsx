@@ -130,7 +130,7 @@ export default function Dashboard() {
             { icon: '🧰', label: 'Tools', route: '/practice-tools' },
           ]} />
           <ShortcutRow router={router} items={[
-            { icon: '☀️', label: 'Daily', route: '/daily-intention' },
+            { icon: '☀️', label: 'Daily', route: '/daily' },
             { icon: '🏆', label: 'Manifested', route: '/manifested' },
           ]} />
           <ShortcutRow router={router} items={[
