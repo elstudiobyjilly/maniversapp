@@ -92,29 +92,24 @@ const DEFAULT_ORDER = ALL_TOOLS.map((t) => t.key);
 // the animated transform, so plain taps elsewhere on the row still navigate.
 function ReorderableRow({ tool, index, total, isLast, onPress, onDragEnd, onDragStateChange }) {
   const translateY = useSharedValue(0);
-  const isDragging = useSharedValue(false);
-
-  const longPress = Gesture.LongPress()
-    .minDuration(250)
-    .onStart(() => {
-      isDragging.value = true;
-      runOnJS(onDragStateChange)(true);
-    });
-
+  // The handle has its own dedicated hit area (separate from the row's tap
+  // target below), so a plain Pan gesture is enough to disambiguate
+  // dragging from navigating — no long-press gate or gesture composition
+  // needed.
   const pan = Gesture.Pan()
+    .onStart(() => {
+      runOnJS(onDragStateChange)(true);
+    })
     .onUpdate((e) => {
-      if (isDragging.value) translateY.value = e.translationY;
+      translateY.value = e.translationY;
     })
     .onEnd((e) => {
       const delta = Math.round(e.translationY / ROW_HEIGHT);
       const newIndex = Math.max(0, Math.min(total - 1, index + delta));
       translateY.value = withTiming(0);
-      isDragging.value = false;
       runOnJS(onDragStateChange)(false);
       if (newIndex !== index) runOnJS(onDragEnd)(index, newIndex);
     });
-
-  const dragGesture = Gesture.Sequence(longPress, pan);
 
   const rowStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
