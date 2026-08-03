@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Switch, Alert, Modal } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '../../store/authStore';
-import { getProfile, updateProfile, getSubscriptionStatus, cancelSubscription, reactivateSubscription, openBillingPortal, createCheckout, changePassword, deleteAccount, submitFeedback } from '../../services/api';
+import { getProfile, updateProfile, getSubscriptionStatus, cancelSubscription, reactivateSubscription, openBillingPortal, createCheckout, changePassword, deleteAccount, submitFeedback, addProfilePerson, deleteProfilePerson } from '../../services/api';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import UpgradeModal from '../../components/UpgradeModal';
@@ -14,6 +14,7 @@ import { colors, fonts, radii } from '../../constants/theme';
 import * as Linking from 'expo-linking';
 
 const AFF_STYLES = ['i_am', 'you_are', 'mix'];
+const RELATIONSHIPS = ['partner', 'best_friend', 'family', 'mentor', 'friend', 'other'];
 
 export default function Profile() {
   const user = useAuthStore((s) => s.user);
@@ -46,6 +47,12 @@ export default function Profile() {
 
   const [deleting, setDeleting] = useState(false);
 
+  const [people, setPeople] = useState([]);
+  const [personName, setPersonName] = useState('');
+  const [personRelationship, setPersonRelationship] = useState('partner');
+  const [personDescriptor, setPersonDescriptor] = useState('');
+  const [addingPerson, setAddingPerson] = useState(false);
+
   const load = async () => {
     try {
       const [profile, sub] = await Promise.all([getProfile(), getSubscriptionStatus()]);
@@ -53,6 +60,7 @@ export default function Profile() {
       setPrimaryDesire(profile.primary_desire || '');
       setAffStyle(profile.affirmation_style || 'mix');
       setMarketingConsent(!!profile.marketing_consent);
+      setPeople(Array.isArray(profile.people) ? profile.people : []);
       setSubStatus(sub);
     } catch (e) {
       setError(e.message || 'Could not load profile');
@@ -117,6 +125,28 @@ export default function Profile() {
   const handleLogout = async () => {
     await logout();
     router.replace('/(auth)/login');
+  };
+
+  const handleAddPerson = async () => {
+    if (!personName.trim()) { Alert.alert('Enter a name ✨'); return; }
+    setAddingPerson(true);
+    try {
+      const person = await addProfilePerson({ name: personName.trim(), relationship: personRelationship, descriptor: personDescriptor.trim() });
+      setPeople((prev) => [...prev, person]);
+      setPersonName(''); setPersonDescriptor('');
+    } catch (e) {
+      Alert.alert('Could not add person', e.message || 'Please try again.');
+    } finally { setAddingPerson(false); }
+  };
+
+  const handleRemovePerson = (person, index) => {
+    Alert.alert(`Remove ${person.name}?`, null, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: async () => {
+        setPeople((prev) => prev.filter((_, i) => i !== index));
+        if (person.id != null) { try { await deleteProfilePerson(person.id); } catch (e) {} }
+      } },
+    ]);
   };
 
   const handleChangePassword = async () => {
@@ -233,6 +263,36 @@ export default function Profile() {
         </GlassCard>
 
         <GlassCard style={styles.cardMargin}>
+          <Text style={styles.label}>MY PEOPLE</Text>
+          <Text style={styles.helperText}>Add the people you're manifesting around — your AI-generated stories and affirmations will use their real names instead of a placeholder.</Text>
+
+          {people.map((p, i) => (
+            <View key={p.id ?? i} style={styles.personRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.personName}>{p.name}</Text>
+                <Text style={styles.personMeta}>{(RELATIONSHIPS.find((r) => r === p.relationship) || p.relationship || '').replace('_', ' ')}{p.descriptor ? ` · ${p.descriptor}` : ''}</Text>
+              </View>
+              <TouchableOpacity onPress={() => handleRemovePerson(p, i)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Text style={styles.personRemove}>✕</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+
+          <View style={[styles.inputBox, { marginTop: people.length ? 12 : 0 }]}>
+            <TextInput style={styles.input} placeholder="Name" placeholderTextColor="rgba(46,37,48,0.4)" value={personName} onChangeText={setPersonName} />
+          </View>
+          <View style={styles.chipRow}>
+            {RELATIONSHIPS.map((r) => (
+              <Chip key={r} label={r.replace('_', ' ')} active={personRelationship === r} onPress={() => setPersonRelationship(r)} />
+            ))}
+          </View>
+          <View style={[styles.inputBox, { marginTop: 10 }]}>
+            <TextInput style={styles.input} placeholder="Descriptor (optional) — e.g. 'loves hiking'" placeholderTextColor="rgba(46,37,48,0.4)" value={personDescriptor} onChangeText={setPersonDescriptor} />
+          </View>
+          <Button title="+ Add Person" variant="ghost" onPress={handleAddPerson} loading={addingPerson} fullWidth style={{ marginTop: 10 }} />
+        </GlassCard>
+
+        <GlassCard style={styles.cardMargin}>
           <Text style={styles.label}>ACCOUNT MANAGEMENT</Text>
           <Button title="Change Password" variant="ghost" fullWidth onPress={() => setPwOpen(true)} style={{ marginTop: 4 }} />
           <Button title="Send Feedback" variant="ghost" fullWidth onPress={() => setFbOpen(true)} style={{ marginTop: 8 }} />
@@ -319,6 +379,11 @@ const styles = StyleSheet.create({
   inputBox: { borderWidth: 1.5, borderColor: 'rgba(154,95,168,0.3)', borderRadius: radii.sm, padding: 12, backgroundColor: 'rgba(255,255,255,0.5)' },
   input: { fontFamily: fonts.body, fontSize: 14.5, color: colors.ink },
   chipRow: { flexDirection: 'row', gap: 8, marginBottom: 16, marginTop: 8, flexWrap: 'wrap' },
+  helperText: { fontFamily: fonts.body, fontSize: 12, color: colors.mist, marginBottom: 12, lineHeight: 18 },
+  personRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: 'rgba(154,95,168,0.12)' },
+  personName: { fontFamily: fonts.bodyMedium, fontSize: 14, fontWeight: '500', color: colors.ink },
+  personMeta: { fontFamily: fonts.body, fontSize: 11.5, color: colors.mist, marginTop: 2, textTransform: 'capitalize' },
+  personRemove: { color: colors.danger, fontSize: 15, paddingHorizontal: 6 },
   switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   errorText: { fontFamily: fonts.body, color: colors.danger, fontSize: 13, marginBottom: 10, textAlign: 'center' },
   savedText: { fontFamily: fonts.bodyMedium, color: colors.success, fontSize: 13, marginBottom: 10, textAlign: 'center', fontWeight: '600' },

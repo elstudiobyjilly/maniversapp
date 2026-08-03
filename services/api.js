@@ -715,6 +715,17 @@ export async function updateProfile(body) {
   return req('PUT', '/profile', body);
 }
 
+// People the user is manifesting around (partner, friends, family) — the AI
+// uses this list for real names in generated stories/affirmations instead of
+// inventing one. Also returned embedded as `people` on GET /profile.
+export async function addProfilePerson({ name, relationship, descriptor = '' }) {
+  return req('POST', '/profile/people', { name, relationship, descriptor });
+}
+
+export async function deleteProfilePerson(personId) {
+  return req('DELETE', `/profile/people/${personId}`);
+}
+
 // ── SUBSCRIPTIONS ─────────────────────────────────────────────────────
 export async function getSubscriptionStatus() {
   return req('GET', '/subscriptions/status');
