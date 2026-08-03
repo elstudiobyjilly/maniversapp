@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { useEffect, useState, useCallback } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { Audio } from 'expo-av';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   generateAffirmation, getAffirmations, getAffirmationAudio,
   favoriteAffirmation, pinAffirmation, deleteAffirmation, getPinnedSets,
   saveOwnAffirmationSet, getAffirmationAudioStatus, createCheckout,
+  getDailyIntention, saveDailyIntention,
 } from '../../services/api';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
@@ -17,11 +19,11 @@ import { usePlanStore } from '../../store/planStore';
 import { colors, fonts, radii } from '../../constants/theme';
 import * as Linking from 'expo-linking';
 
+const RECENT_KEY = 'mv_aff_recent_played';
+
 const STYLES = [
   { value: 'i_am', label: '💗 I Am' },
   { value: 'you_are', label: '✨ You Are' },
-  { value: 'background', label: '🎧 Background' },
-  { value: 'trance', label: '🌀 Trance' },
   { value: 'mix', label: '🎛️ Mix' },
 ];
 
@@ -31,18 +33,47 @@ const VOICES = [
   { id: 'sage', label: '🍃 Sage' },
 ];
 
+// Matches the website's "Ready To Go Affirmations" pack — 12 instant sets,
+// 5 affirmations each. First two (Ho'oponopono, Sleep Programming) always
+// show as quick rows; the full grid appears when expanded.
 const RTG_PRESETS = [
+  { ic: '💰', name: 'Abundance & Money', affs: ['I am a magnet for money and it flows to me easily', 'Wealth and abundance are my natural state', 'I make empowered decisions about my finances', 'Opportunities to earn and grow money find me constantly', 'I am worthy of financial freedom and I receive it now'] },
+  { ic: '💕', name: 'Love & Relationships', affs: ['I am deeply worthy of love, exactly as I am', 'Love flows to me freely and abundantly', 'I attract relationships that are kind, safe and true', 'I give and receive love with an open heart', 'I am surrounded by people who cherish me'] },
+  { ic: '🌿', name: 'Health & Healing', affs: ['My body is healing and growing stronger every day', 'I nourish myself with love, rest and movement', 'Every cell in my body vibrates with health', 'I trust my body and I am grateful for it', 'Vitality and energy flow through me freely'] },
+  { ic: '✨', name: 'Confidence & Self Love', affs: ['I am enough exactly as I am', 'I trust myself and my decisions', 'I love and accept myself fully', 'I walk into every room knowing my worth', 'My confidence grows stronger every single day'] },
+  { ic: '🏡', name: 'Dream Home', affs: ['My dream home is already on its way to me', 'I am worthy of a beautiful, peaceful home', 'Everything about my home fills me with joy', 'I feel safe, warm and abundant in my space', 'The perfect home finds me at the perfect time'] },
+  { ic: '🎯', name: 'Career & Success', affs: ['I am building the career of my dreams', 'Opportunities are constantly finding me', 'My work has real value and people recognise it', 'I am talented, capable and unstoppable', 'Success comes to me easily and often'] },
+  { ic: '😴', name: 'Sleep & Rest', affs: ['I release the day and welcome deep, peaceful rest', 'My body knows how to relax and restore itself', 'I sleep deeply and wake up refreshed', 'Every breath brings me closer to calm', 'Rest is safe, easy and natural for me'] },
+  { ic: '🌅', name: 'Morning Energy', affs: ['I wake up with energy, clarity and purpose', 'Today is full of possibility', 'I greet this day with gratitude and excitement', 'My mind is clear and my body feels alive', 'I am ready for everything good coming my way'] },
+  { ic: '🧘', name: 'Inner Peace & Calm', affs: ['I am calm, grounded and at peace', 'I release what I cannot control', 'Peace lives inside me no matter what surrounds me', 'I breathe in calm and breathe out tension', 'My mind is quiet and my heart is settled'] },
+  { ic: '⭐', name: 'Manifestation Power', affs: ['I am a powerful creator of my reality', 'My thoughts and feelings shape my life with ease', 'Everything I desire is already on its way', 'I trust the timing of my life completely', 'I manifest with clarity, ease and joy'] },
   { ic: '⭕', name: "Ho'oponopono", affs: ["I'm sorry. Please forgive me. Thank you. I love you.", 'I release all that no longer serves my highest good', 'I forgive myself completely and unconditionally', 'I am healed, whole and at peace with my past', 'Love flows through me, clearing all resistance now'] },
   { ic: '🌙', name: 'Sleep Programming', affs: ['As I sleep, my subconscious receives my desires', 'My body and mind regenerate beautifully overnight', 'I wake up having already manifested in my sleep', 'Abundance flows to me even as I rest and dream', 'My subconscious is now programmed for success and joy'] },
 ];
+
+const RTG_QUICK = RTG_PRESETS.slice(-2); // Ho'oponopono, Sleep Programming — always visible
 
 export default function Affirmations() {
   const { limits, loaded, hasFeature, allowedVoices, refresh } = usePlanStore();
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [upgradeMsg, setUpgradeMsg] = useState('');
 
-  // 'create' = AI-generated, 'own' = write-your-own, 'library' = saved sets
-  const [tab, setTab] = useState('create');
+  // Top-level: 'hub' (Pinned/Library) vs 'create' (AI/Write Your Own)
+  const [topTab, setTopTab] = useState('create');
+  const [hubTab, setHubTab] = useState('pinned');
+  const [createMode, setCreateMode] = useState('ai'); // 'ai' | 'own'
+
+  const [libFilter, setLibFilter] = useState('all'); // 'ai' | 'own' | 'all'
+  const [sortMode, setSortMode] = useState('newest'); // 'newest' | 'oldest' | 'recent'
+  const [multiLoad, setMultiLoad] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [recentPlayed, setRecentPlayed] = useState({});
+
+  const [rtgExpanded, setRtgExpanded] = useState(false);
+
+  const [intention, setIntention] = useState('');
+  const [intentionSaved, setIntentionSaved] = useState(false);
+
   const [desire, setDesire] = useState('');
   const [style, setStyle] = useState('');
   const [count, setCount] = useState(5);
@@ -88,10 +119,40 @@ export default function Affirmations() {
     } catch (_) {} finally { setLoadingLib(false); }
   };
 
-  useEffect(() => { refresh(); loadLibrary(); }, []);
-  useEffect(() => { if (tab === 'library') loadLibrary(); }, [tab]);
+  useEffect(() => {
+    refresh();
+    loadLibrary();
+    (async () => {
+      try {
+        const data = await getDailyIntention();
+        if (data) setIntention(data.intention || '');
+      } catch (_) {}
+      try {
+        const recent = await AsyncStorage.getItem(RECENT_KEY);
+        if (recent) setRecentPlayed(JSON.parse(recent));
+      } catch (_) {}
+    })();
+  }, []);
+
+  useEffect(() => { if (topTab === 'hub') loadLibrary(); }, [topTab]);
 
   const stopSound = async () => { if (sound) { try { await sound.unloadAsync(); } catch (_) {} } setSound(null); setPlaying(false); };
+
+  const markRecentlyPlayed = useCallback(async (id) => {
+    if (!id) return;
+    const next = { ...recentPlayed, [id]: Date.now() };
+    setRecentPlayed(next);
+    try { await AsyncStorage.setItem(RECENT_KEY, JSON.stringify(next)); } catch (_) {}
+  }, [recentPlayed]);
+
+  const handleSaveIntention = async (text) => {
+    if (!text.trim()) return;
+    try {
+      await saveDailyIntention(text.trim());
+      setIntentionSaved(true);
+      setTimeout(() => setIntentionSaved(false), 1800);
+    } catch (_) {}
+  };
 
   const handleGenerate = async () => {
     if (!canGenerateAi) {
@@ -104,8 +165,6 @@ export default function Affirmations() {
     try {
       const result = await generateAffirmation(desire.trim(), { count, repeat_count: repeatCount, style, voice_id: voice });
       setCurrent(result);
-      // Poll for background TTS completion so Play works with cached audio
-      // instead of a redundant live TTS call once it's ready.
       pollAudioStatus(result.id);
     } catch (e) {
       if (e.status === 403) { setUpgradeMsg(e.message || 'Upgrade to generate AI affirmations.'); setShowUpgrade(true); }
@@ -113,8 +172,6 @@ export default function Affirmations() {
     } finally { setGenerating(false); }
   };
 
-  // Write-your-own: counts against own_affirmations_total (free: 20 total
-  // ever) / own_affirmations_per_month (paid) -- separate pool from AI gen.
   const handleSaveOwn = async () => {
     const cleanLines = ownLines.map((l) => l.trim()).filter(Boolean);
     if (cleanLines.length === 0) { setError('Write at least one affirmation.'); return; }
@@ -141,7 +198,7 @@ export default function Affirmations() {
   };
 
   const pollAudioStatus = (affId, attempts = 0) => {
-    if (attempts > 15) return; // ~30s max -- background generation may still be running, that's fine
+    if (attempts > 15) return;
     setTimeout(async () => {
       try {
         const status = await getAffirmationAudioStatus(affId);
@@ -158,7 +215,6 @@ export default function Affirmations() {
     await stopSound();
     setPlaying(true); setError('');
     try {
-      // Prefer already-generated cached audio over a fresh live TTS call.
       let uri = cachedAudioUrl;
       if (!uri && itemId) {
         try {
@@ -172,20 +228,54 @@ export default function Affirmations() {
       const { sound: newSound } = await Audio.Sound.createAsync({ uri }, { shouldPlay: true });
       setSound(newSound);
       newSound.setOnPlaybackStatusUpdate((status) => { if (status.didJustFinish) setPlaying(false); });
+      if (itemId) markRecentlyPlayed(itemId);
     } catch (e) {
       setError(e.message || 'Could not play audio');
       setPlaying(false);
     }
   };
 
+  // RTG cards load into Write Your Own so the user can edit before saving —
+  // matches the website's "Tap to load & edit" copy.
   const loadRTG = (preset) => {
-    setCurrent({ id: 0, desire: preset.name, affirmations: preset.affs, repeat_count: 10 });
-    setDesire(preset.name);
+    setOwnTitle(preset.name);
+    setOwnLines(preset.affs);
+    setCreateMode('own');
+    setTopTab('create');
   };
 
   const handleFavorite = async (id) => { try { await favoriteAffirmation(id); loadLibrary(); } catch (_) {} };
   const handlePin = async (id) => { try { await pinAffirmation(id); loadLibrary(); } catch (_) {} };
   const handleDelete = async (id) => { try { await deleteAffirmation(id); setLibrary((l) => l.filter((a) => a.id !== id)); } catch (_) {} };
+
+  const toggleSelected = (id) => {
+    setSelectedIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  };
+
+  const handleCardLoad = (item) => {
+    if (item.locked) { setUpgradeMsg('This set is locked — upgrade to use it again.'); setShowUpgrade(true); return; }
+    if (multiLoad) { toggleSelected(item.id); return; }
+    setCurrent(item);
+    setCreateMode(item.source === 'own' ? 'own' : 'ai');
+    setTopTab('create');
+  };
+
+  const handlePlaySelected = () => {
+    const items = library.filter((i) => selectedIds.includes(i.id));
+    if (items.length === 0) return;
+    const lines = items.flatMap((i) => i.affirmations || []);
+    playLines(lines, null, null);
+  };
+
+  const visibleLibrary = library
+    .filter((item) => hubTab === 'pinned' ? pinnedIds.includes(item.id) : true)
+    .filter((item) => libFilter === 'all' ? true : (item.source || 'ai') === libFilter)
+    .slice()
+    .sort((a, b) => {
+      if (sortMode === 'recent') return (recentPlayed[b.id] || 0) - (recentPlayed[a.id] || 0);
+      if (sortMode === 'oldest') return (a.id || 0) - (b.id || 0);
+      return (b.id || 0) - (a.id || 0); // newest
+    });
 
   return (
     <GradientBackground>
@@ -193,21 +283,151 @@ export default function Affirmations() {
         <ScreenHeader lead="Your" accent="Affirmations" subtitle="Craft powerful affirmations from your desire, or speak your own." />
 
         <TabPill
-          style={{ marginBottom: 16 }}
-          value={tab}
-          onChange={setTab}
+          style={{ marginBottom: 14 }}
+          value={topTab}
+          onChange={setTopTab}
           options={[
-            { value: 'create', label: '✨ AI Create' },
-            { value: 'own', label: '✍️ Write Own' },
-            { value: 'library', label: '📚 Library' },
+            { value: 'hub', label: '🌸 Affirm Hub' },
+            { value: 'create', label: '✨ Create' },
           ]}
         />
 
-        {tab === 'create' ? (
+        {topTab === 'hub' ? (
           <>
-            {/* RTG quick cards — compact size */}
+            <TabPill
+              style={{ marginBottom: 14 }}
+              value={hubTab}
+              onChange={setHubTab}
+              options={[
+                { value: 'pinned', label: '📌 Pinned Sets' },
+                { value: 'library', label: '📚 Library' },
+              ]}
+            />
+
+            <View style={styles.chipRow}>
+              <Chip label="✨ AI" active={libFilter === 'ai'} onPress={() => setLibFilter('ai')} />
+              <Chip label="✍️ Own" active={libFilter === 'own'} onPress={() => setLibFilter('own')} />
+              <Chip label="🌍 All" active={libFilter === 'all'} onPress={() => setLibFilter('all')} />
+            </View>
+            <View style={[styles.chipRow, { marginTop: 8 }]}>
+              <Chip label="🆕 Newest" active={sortMode === 'newest'} onPress={() => setSortMode('newest')} />
+              <Chip label="🕰 Oldest" active={sortMode === 'oldest'} onPress={() => setSortMode('oldest')} />
+              <Chip label="▶ Recently Played" active={sortMode === 'recent'} onPress={() => setSortMode('recent')} />
+            </View>
+
+            <TouchableOpacity
+              style={styles.multiLoadRow}
+              onPress={() => { setMultiLoad((v) => !v); setSelectedIds([]); }}
+            >
+              <View style={[styles.checkbox, multiLoad && styles.checkboxOn]}>
+                {multiLoad ? <Text style={styles.checkboxTick}>✓</Text> : null}
+              </View>
+              <Text style={styles.multiLoadText}>Multiple Load</Text>
+            </TouchableOpacity>
+
+            {loadingLib ? (
+              <Text style={styles.muted}>Loading your library...</Text>
+            ) : visibleLibrary.length === 0 ? (
+              <Text style={styles.muted}>
+                {hubTab === 'pinned' ? 'No pinned sets yet — pin one from your Library ✨' : 'No affirmation sets yet — generate your first one ✨'}
+              </Text>
+            ) : (
+              <View style={styles.libGrid}>
+                {visibleLibrary.map((item) => {
+                  const selected = selectedIds.includes(item.id);
+                  return (
+                    <View key={item.id} style={[styles.libCard, selected && styles.libCardSelected]}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Text style={styles.libTitle} numberOfLines={1}>{item.desire || 'Affirmations'}</Text>
+                        {item.locked ? <Text style={{ fontSize: 10 }}>🔒</Text> : null}
+                      </View>
+                      <Text style={styles.libMeta}>{item.affirmations?.length || 0} affs · {item.repeat_count}× · {item.source === 'own' ? 'Own' : 'AI'}</Text>
+                      <View style={styles.libBtnRow}>
+                        <Button
+                          title={multiLoad ? (selected ? '✓ Selected' : '+ Select') : '▶ Load'}
+                          size="xs"
+                          style={{ flex: 1 }}
+                          disabled={item.locked}
+                          onPress={() => handleCardLoad(item)}
+                        />
+                        <TouchableOpacity style={styles.libIconBtn} onPress={() => handleFavorite(item.id)}>
+                          <Text style={styles.libIconText}>{item.is_favorite ? '★' : '☆'}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.libIconBtn} onPress={() => handlePin(item.id)}>
+                          <Text style={styles.libIconText}>{pinnedIds.includes(item.id) ? '📌' : '📍'}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.libIconBtn} onPress={() => handleDelete(item.id)}>
+                          <Text style={styles.libIconText}>🗑</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+
+            {multiLoad && selectedIds.length > 0 && (
+              <Button
+                title={`▶ Play ${selectedIds.length} Selected`}
+                onPress={handlePlaySelected}
+                loading={playing}
+                fullWidth
+                style={{ marginTop: 14 }}
+              />
+            )}
+          </>
+        ) : (
+          <>
+            <GlassCard style={styles.cardMargin}>
+              <Text style={styles.label}>✍️ SET YOUR INTENTION</Text>
+              <View style={styles.inputBoxSm}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Today I intend to..."
+                  placeholderTextColor="rgba(46,37,48,0.4)"
+                  value={intention}
+                  onChangeText={setIntention}
+                  onBlur={() => handleSaveIntention(intention)}
+                />
+              </View>
+              {intentionSaved ? <Text style={styles.savedHint}>Set ✨</Text> : null}
+            </GlassCard>
+
+            <View style={styles.modeRow}>
+              <TouchableOpacity style={[styles.modeCard, createMode === 'ai' && styles.modeCardOn]} onPress={() => setCreateMode('ai')}>
+                <Text style={styles.modeIcon}>✨</Text>
+                <Text style={styles.modeTitle}>AI</Text>
+                <Text style={styles.modeSub}>Generate affirmations for your desire</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modeCard, createMode === 'own' && styles.modeCardOn]} onPress={() => setCreateMode('own')}>
+                <Text style={styles.modeIcon}>✍️</Text>
+                <Text style={styles.modeTitle}>Write Your Own</Text>
+                <Text style={styles.modeSub}>Type your affirmations — we narrate them</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity style={styles.rtgHeaderRow} onPress={() => setRtgExpanded((v) => !v)}>
+              <View>
+                <Text style={styles.rtgHeading}>✨ Ready To Go Affirmations</Text>
+                <Text style={styles.rtgHeadingSub}>Tap to expand · instant sets for any mood</Text>
+              </View>
+              <Text style={styles.rtgChevron}>{rtgExpanded ? '▲' : '▼'}</Text>
+            </TouchableOpacity>
+
+            {rtgExpanded && (
+              <View style={styles.rtgGrid}>
+                {RTG_PRESETS.map((p) => (
+                  <TouchableOpacity key={p.name} style={styles.rtgGridCard} onPress={() => loadRTG(p)}>
+                    <Text style={styles.rtgGridIcon}>{p.ic}</Text>
+                    <Text style={styles.rtgGridName}>{p.name}</Text>
+                    <Text style={styles.rtgGridSub}>5 affirmations</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
             <View style={styles.rtgRow}>
-              {RTG_PRESETS.map((p) => (
+              {RTG_QUICK.map((p) => (
                 <TouchableOpacity key={p.name} style={styles.rtgCard} onPress={() => loadRTG(p)}>
                   <View style={styles.rtgCardLeft}>
                     <Text style={styles.rtgIcon}>{p.ic}</Text>
@@ -221,176 +441,142 @@ export default function Affirmations() {
               ))}
             </View>
 
-            <GlassCard style={styles.cardMargin}>
-              <Text style={styles.label}>WHAT DO YOU WANT TO MANIFEST?</Text>
-              <View style={styles.inputBox}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g. I want to attract financial abundance and feel truly free and secure..."
-                  placeholderTextColor="rgba(46,37,48,0.4)"
-                  value={desire}
-                  onChangeText={setDesire}
-                  multiline
-                />
-              </View>
-
-              <Text style={[styles.label, { marginTop: 14 }]}>STYLE (OPTIONAL)</Text>
-              <View style={styles.chipRow}>
-                {STYLES.map((s) => (
-                  <Chip key={s.value} label={s.label} active={style === s.value} onPress={() => setStyle(style === s.value ? '' : s.value)} />
-                ))}
-              </View>
-
-              <Text style={[styles.label, { marginTop: 14 }]}>NUMBER OF AFFIRMATIONS: {count}</Text>
-              <View style={styles.stepperRow}>
-                <TouchableOpacity style={styles.stepperBtn} onPress={() => setCount(Math.max(1, count - 1))}><Text style={styles.stepperText}>−</Text></TouchableOpacity>
-                <Text style={styles.stepperVal}>{count}</Text>
-                <TouchableOpacity style={styles.stepperBtn} onPress={() => setCount(Math.min(20, count + 1))}><Text style={styles.stepperText}>+</Text></TouchableOpacity>
-              </View>
-
-              <Text style={[styles.label, { marginTop: 14 }]}>REPEAT EACH: {repeatCount}×</Text>
-              <View style={styles.presetRow}>
-                {[1, 11, 33, 108, 1000].map((n) => (
-                  <Chip key={n} label={`${n}×`} active={repeatCount === n} onPress={() => setRepeatCount(n)} />
-                ))}
-              </View>
-
-              <Text style={[styles.label, { marginTop: 14 }]}>VOICE</Text>
-              <View style={styles.chipRow}>
-                {VOICES.map((v) => {
-                  const allowed = voicesAllowed.includes(v.id);
-                  return (
-                    <Chip
-                      key={v.id}
-                      label={`${v.label}${!allowed ? ' 🔒' : ''}`}
-                      active={voice === v.id}
-                      locked={!allowed}
-                      onPress={() => allowed ? setVoice(v.id) : (setUpgradeMsg(`${v.label} is available on paid plans -- upgrade to unlock every voice.`), setShowUpgrade(true))}
+            {createMode === 'ai' ? (
+              <>
+                <GlassCard style={styles.cardMargin}>
+                  <Text style={styles.label}>WHAT DO YOU WANT TO MANIFEST?</Text>
+                  <View style={styles.inputBox}>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="e.g. I want to attract financial abundance and feel truly free and secure..."
+                      placeholderTextColor="rgba(46,37,48,0.4)"
+                      value={desire}
+                      onChangeText={setDesire}
+                      multiline
                     />
-                  );
-                })}
-              </View>
-
-              {loaded && !canGenerateAi ? (
-                <Text style={styles.upsellHint}>✨ AI generation is a Basic Manifestor feature — try Write Your Own for free, or upgrade.</Text>
-              ) : null}
-              {error ? <Text style={styles.errorText}>{error}</Text> : null}
-              <Button title="Generate & Play ✨" onPress={handleGenerate} loading={generating} fullWidth style={{ marginTop: 14 }} />
-            </GlassCard>
-
-            {current && (
-              <GlassCard style={styles.cardMargin}>
-                <Text style={styles.label}>{current.desire}</Text>
-                {current.affirmations.map((line, i) => (
-                  <Text key={i} style={styles.affLine}>{line}</Text>
-                ))}
-                <Button title="Play Audio 🔊" onPress={() => playLines(current.affirmations, current.id, current.audio_url)} loading={playing} fullWidth style={{ marginTop: 14 }} />
-              </GlassCard>
-            )}
-          </>
-        ) : tab === 'own' ? (
-          <>
-            <GlassCard style={styles.cardMargin}>
-              <Text style={styles.helperText}>Write your own affirmations — no AI cost, works on every plan (up to your set limit).</Text>
-              <Text style={styles.label}>TITLE (OPTIONAL)</Text>
-              <View style={styles.inputBoxSm}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g. My Money Affirmations"
-                  placeholderTextColor="rgba(46,37,48,0.4)"
-                  value={ownTitle}
-                  onChangeText={setOwnTitle}
-                />
-              </View>
-
-              <Text style={[styles.label, { marginTop: 14 }]}>YOUR AFFIRMATIONS</Text>
-              {ownLines.map((line, i) => (
-                <View key={i} style={[styles.inputBox, { marginBottom: 8, minHeight: 44 }]}>
-                  <TextInput
-                    style={styles.input}
-                    placeholder={`Affirmation ${i + 1}...`}
-                    placeholderTextColor="rgba(46,37,48,0.4)"
-                    value={line}
-                    onChangeText={(t) => setOwnLines((prev) => prev.map((l, idx) => (idx === i ? t : l)))}
-                    multiline
-                  />
-                </View>
-              ))}
-              {ownLines.length < 10 && (
-                <TouchableOpacity style={styles.addLineBtn} onPress={() => setOwnLines((prev) => [...prev, ''])}>
-                  <Text style={styles.addLineBtnText}>+ Add Line</Text>
-                </TouchableOpacity>
-              )}
-
-              <Text style={[styles.label, { marginTop: 14 }]}>VOICE</Text>
-              <View style={styles.chipRow}>
-                {VOICES.map((v) => {
-                  const allowed = voicesAllowed.includes(v.id);
-                  return (
-                    <Chip
-                      key={v.id}
-                      label={`${v.label}${!allowed ? ' 🔒' : ''}`}
-                      active={voice === v.id}
-                      locked={!allowed}
-                      onPress={() => allowed ? setVoice(v.id) : (setUpgradeMsg(`${v.label} is available on paid plans.`), setShowUpgrade(true))}
-                    />
-                  );
-                })}
-              </View>
-
-              {ownCap != null ? (
-                <Text style={styles.upsellHint}>{ownUsedCount} / {ownCap} free own affirmations used</Text>
-              ) : null}
-              {error ? <Text style={styles.errorText}>{error}</Text> : null}
-              <Button title="💾 Save My Affirmations" onPress={handleSaveOwn} loading={savingOwn} fullWidth style={{ marginTop: 14 }} />
-            </GlassCard>
-
-            {current && (
-              <GlassCard style={styles.cardMargin}>
-                <Text style={styles.label}>{current.desire}</Text>
-                {current.affirmations.map((line, i) => (
-                  <Text key={i} style={styles.affLine}>{line}</Text>
-                ))}
-                <Button title="Play Audio 🔊" onPress={() => playLines(current.affirmations, current.id, current.audio_url)} loading={playing} fullWidth style={{ marginTop: 14 }} />
-              </GlassCard>
-            )}
-          </>
-        ) : (
-          <>
-            {loadingLib ? (
-              <Text style={styles.muted}>Loading your library...</Text>
-            ) : library.length === 0 ? (
-              <Text style={styles.muted}>No affirmation sets yet — generate your first one ✨</Text>
-            ) : (
-              <View style={styles.libGrid}>
-                {library.map((item) => (
-                  <View key={item.id} style={styles.libCard}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <Text style={styles.libTitle} numberOfLines={1}>{item.desire || 'Affirmations'}</Text>
-                      {item.locked ? <Text style={{ fontSize: 10 }}>🔒</Text> : null}
-                    </View>
-                    <Text style={styles.libMeta}>{item.affirmations?.length || 0} affs · {item.repeat_count}× · {item.source === 'own' ? 'Own' : 'AI'}</Text>
-                    <View style={styles.libBtnRow}>
-                      <Button
-                        title="▶ Load"
-                        size="xs"
-                        style={{ flex: 1 }}
-                        disabled={item.locked}
-                        onPress={() => item.locked ? (setUpgradeMsg('This set is locked — upgrade to use it again.'), setShowUpgrade(true)) : (setCurrent(item), setTab(item.source === 'own' ? 'own' : 'create'))}
-                      />
-                      <TouchableOpacity style={styles.libIconBtn} onPress={() => handleFavorite(item.id)}>
-                        <Text style={styles.libIconText}>{item.is_favorite ? '★' : '☆'}</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.libIconBtn} onPress={() => handlePin(item.id)}>
-                        <Text style={styles.libIconText}>{pinnedIds.includes(item.id) ? '📌' : '📍'}</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.libIconBtn} onPress={() => handleDelete(item.id)}>
-                        <Text style={styles.libIconText}>🗑</Text>
-                      </TouchableOpacity>
-                    </View>
                   </View>
-                ))}
-              </View>
+
+                  <Text style={[styles.label, { marginTop: 14 }]}>STYLE (OPTIONAL — LEAVE BLANK TO USE YOUR PREFERENCE)</Text>
+                  <View style={styles.chipRow}>
+                    {STYLES.map((s) => (
+                      <Chip key={s.value} label={s.label} active={style === s.value} onPress={() => setStyle(style === s.value ? '' : s.value)} />
+                    ))}
+                  </View>
+
+                  <Text style={[styles.label, { marginTop: 14 }]}>NUMBER OF AFFIRMATIONS: {count}</Text>
+                  <View style={styles.stepperRow}>
+                    <TouchableOpacity style={styles.stepperBtn} onPress={() => setCount(Math.max(1, count - 1))}><Text style={styles.stepperText}>−</Text></TouchableOpacity>
+                    <Text style={styles.stepperVal}>{count}</Text>
+                    <TouchableOpacity style={styles.stepperBtn} onPress={() => setCount(Math.min(20, count + 1))}><Text style={styles.stepperText}>+</Text></TouchableOpacity>
+                  </View>
+
+                  <Text style={[styles.label, { marginTop: 14 }]}>REPEAT EACH: {repeatCount}×</Text>
+                  <View style={styles.presetRow}>
+                    {[1, 11, 33, 108, 1000].map((n) => (
+                      <Chip key={n} label={`${n}×`} active={repeatCount === n} onPress={() => setRepeatCount(n)} />
+                    ))}
+                  </View>
+
+                  <Text style={[styles.label, { marginTop: 14 }]}>VOICE</Text>
+                  <View style={styles.chipRow}>
+                    {VOICES.map((v) => {
+                      const allowed = voicesAllowed.includes(v.id);
+                      return (
+                        <Chip
+                          key={v.id}
+                          label={`${v.label}${!allowed ? ' 🔒' : ''}`}
+                          active={voice === v.id}
+                          locked={!allowed}
+                          onPress={() => allowed ? setVoice(v.id) : (setUpgradeMsg(`${v.label} is available on paid plans -- upgrade to unlock every voice.`), setShowUpgrade(true))}
+                        />
+                      );
+                    })}
+                  </View>
+
+                  {loaded && !canGenerateAi ? (
+                    <Text style={styles.upsellHint}>✨ AI generation is a Basic Manifestor feature — try Write Your Own for free, or upgrade.</Text>
+                  ) : null}
+                  {error ? <Text style={styles.errorText}>{error}</Text> : null}
+                  <Button title="Generate & Play ✨" onPress={handleGenerate} loading={generating} fullWidth style={{ marginTop: 14 }} />
+                </GlassCard>
+
+                {current && (
+                  <GlassCard style={styles.cardMargin}>
+                    <Text style={styles.label}>{current.desire}</Text>
+                    {current.affirmations.map((line, i) => (
+                      <Text key={i} style={styles.affLine}>{line}</Text>
+                    ))}
+                    <Button title="Play Audio 🔊" onPress={() => playLines(current.affirmations, current.id, current.audio_url)} loading={playing} fullWidth style={{ marginTop: 14 }} />
+                  </GlassCard>
+                )}
+              </>
+            ) : (
+              <>
+                <GlassCard style={styles.cardMargin}>
+                  <Text style={styles.helperText}>Write your own affirmations — no AI cost, works on every plan (up to your set limit).</Text>
+                  <Text style={styles.label}>TITLE (OPTIONAL)</Text>
+                  <View style={styles.inputBoxSm}>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="e.g. My Money Affirmations"
+                      placeholderTextColor="rgba(46,37,48,0.4)"
+                      value={ownTitle}
+                      onChangeText={setOwnTitle}
+                    />
+                  </View>
+
+                  <Text style={[styles.label, { marginTop: 14 }]}>YOUR AFFIRMATIONS</Text>
+                  {ownLines.map((line, i) => (
+                    <View key={i} style={[styles.inputBox, { marginBottom: 8, minHeight: 44 }]}>
+                      <TextInput
+                        style={styles.input}
+                        placeholder={`Affirmation ${i + 1}...`}
+                        placeholderTextColor="rgba(46,37,48,0.4)"
+                        value={line}
+                        onChangeText={(t) => setOwnLines((prev) => prev.map((l, idx) => (idx === i ? t : l)))}
+                        multiline
+                      />
+                    </View>
+                  ))}
+                  {ownLines.length < 10 && (
+                    <TouchableOpacity style={styles.addLineBtn} onPress={() => setOwnLines((prev) => [...prev, ''])}>
+                      <Text style={styles.addLineBtnText}>+ Add Line</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  <Text style={[styles.label, { marginTop: 14 }]}>VOICE</Text>
+                  <View style={styles.chipRow}>
+                    {VOICES.map((v) => {
+                      const allowed = voicesAllowed.includes(v.id);
+                      return (
+                        <Chip
+                          key={v.id}
+                          label={`${v.label}${!allowed ? ' 🔒' : ''}`}
+                          active={voice === v.id}
+                          locked={!allowed}
+                          onPress={() => allowed ? setVoice(v.id) : (setUpgradeMsg(`${v.label} is available on paid plans.`), setShowUpgrade(true))}
+                        />
+                      );
+                    })}
+                  </View>
+
+                  {ownCap != null ? (
+                    <Text style={styles.upsellHint}>{ownUsedCount} / {ownCap} free own affirmations used</Text>
+                  ) : null}
+                  {error ? <Text style={styles.errorText}>{error}</Text> : null}
+                  <Button title="💾 Save My Affirmations" onPress={handleSaveOwn} loading={savingOwn} fullWidth style={{ marginTop: 14 }} />
+                </GlassCard>
+
+                {current && (
+                  <GlassCard style={styles.cardMargin}>
+                    <Text style={styles.label}>{current.desire}</Text>
+                    {current.affirmations.map((line, i) => (
+                      <Text key={i} style={styles.affLine}>{line}</Text>
+                    ))}
+                    <Button title="Play Audio 🔊" onPress={() => playLines(current.affirmations, current.id, current.audio_url)} loading={playing} fullWidth style={{ marginTop: 14 }} />
+                  </GlassCard>
+                )}
+              </>
             )}
           </>
         )}
@@ -412,6 +598,7 @@ const styles = StyleSheet.create({
   addLineBtn: { alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 4 },
   addLineBtnText: { fontFamily: fonts.bodyMedium, color: colors.purpleDark, fontSize: 12, fontWeight: '600' },
   upsellHint: { fontFamily: fonts.displayItalic, fontSize: 12.5, color: colors.purpleDark, marginTop: 10, textAlign: 'center', fontStyle: 'italic' },
+  savedHint: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.success, marginTop: 8, textAlign: 'center', fontWeight: '600' },
   cardMargin: { marginBottom: 16 },
   label: { fontFamily: fonts.bodyMedium, fontSize: 10.5, color: colors.purpleDark, fontWeight: '700', letterSpacing: 0.6, marginBottom: 8, textTransform: 'uppercase' },
   inputBox: { borderWidth: 1.5, borderColor: 'rgba(154,95,168,0.3)', borderRadius: radii.sm, padding: 12, backgroundColor: 'rgba(255,255,255,0.5)', minHeight: 60 },
@@ -420,7 +607,26 @@ const styles = StyleSheet.create({
   affLine: { fontFamily: fonts.displayItalic, color: colors.ink2, fontSize: 17, marginBottom: 10, lineHeight: 25, fontStyle: 'italic' },
   muted: { fontFamily: fonts.body, color: colors.mist, fontSize: 13, textAlign: 'center', marginTop: 10 },
 
-  /* compact RTG preset cards */
+  /* mode toggle cards (AI vs Write Your Own) */
+  modeRow: { flexDirection: 'row', gap: 10, marginBottom: 18 },
+  modeCard: { flex: 1, backgroundColor: 'rgba(255,255,255,0.55)', borderWidth: 1.5, borderColor: 'rgba(201,168,201,0.3)', borderRadius: radii.md, padding: 16, alignItems: 'center' },
+  modeCardOn: { backgroundColor: 'rgba(248,184,200,0.18)', borderColor: colors.pinkAccent },
+  modeIcon: { fontSize: 22, marginBottom: 6 },
+  modeTitle: { fontFamily: fonts.displayItalic, fontSize: 16, color: colors.ink, fontStyle: 'italic', marginBottom: 4 },
+  modeSub: { fontFamily: fonts.body, fontSize: 11, color: colors.mist, textAlign: 'center', lineHeight: 15 },
+
+  /* Ready To Go — collapsible header + full grid + quick rows */
+  rtgHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  rtgHeading: { fontFamily: fonts.displayMedium, fontSize: 15, color: colors.purpleDark, fontWeight: '600' },
+  rtgHeadingSub: { fontFamily: fonts.body, fontSize: 11, color: colors.mist2, marginTop: 2 },
+  rtgChevron: { fontSize: 12, color: colors.purpleDark },
+
+  rtgGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
+  rtgGridCard: { width: '31.5%', backgroundColor: 'rgba(255,255,255,0.55)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.25)', borderRadius: radii.sm, paddingVertical: 14, paddingHorizontal: 6, alignItems: 'center' },
+  rtgGridIcon: { fontSize: 20, marginBottom: 6 },
+  rtgGridName: { fontFamily: fonts.bodyMedium, fontSize: 11, fontWeight: '600', color: colors.purpleDark, textAlign: 'center' },
+  rtgGridSub: { fontFamily: fonts.body, fontSize: 9.5, color: colors.mist2, marginTop: 3 },
+
   rtgRow: { flexDirection: 'row', gap: 8, marginBottom: 14, flexWrap: 'wrap' },
   rtgCard: { flex: 1, minWidth: 130, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.55)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)', borderRadius: radii.sm, paddingVertical: 8, paddingHorizontal: 10 },
   rtgCardLeft: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
@@ -432,6 +638,13 @@ const styles = StyleSheet.create({
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   presetRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
 
+  /* Multiple Load checkbox */
+  multiLoadRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, marginBottom: 12 },
+  checkbox: { width: 20, height: 20, borderRadius: 5, borderWidth: 1.5, borderColor: 'rgba(201,168,201,0.5)', backgroundColor: 'rgba(255,255,255,0.6)', alignItems: 'center', justifyContent: 'center' },
+  checkboxOn: { backgroundColor: colors.purpleAccent, borderColor: colors.purpleAccent },
+  checkboxTick: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  multiLoadText: { fontFamily: fonts.bodyMedium, fontSize: 12.5, color: colors.ink2, fontWeight: '600' },
+
   stepperRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   stepperBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.65)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)', alignItems: 'center', justifyContent: 'center' },
   stepperText: { fontFamily: fonts.bodyMedium, fontSize: 18, color: colors.purpleDark, fontWeight: '700' },
@@ -439,6 +652,7 @@ const styles = StyleSheet.create({
 
   libGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   libCard: { width: '48.5%', backgroundColor: 'rgba(255,255,255,0.55)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.25)', borderRadius: radii.sm, padding: 10 },
+  libCardSelected: { borderColor: colors.pinkAccent, backgroundColor: 'rgba(248,184,200,0.18)' },
   libTitle: { fontFamily: fonts.bodyMedium, fontSize: 12, fontWeight: '600', color: colors.ink },
   libMeta: { fontFamily: fonts.body, fontSize: 10, color: colors.mist2, marginTop: 2, marginBottom: 8 },
   libBtnRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
