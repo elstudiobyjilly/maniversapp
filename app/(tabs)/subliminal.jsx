@@ -28,36 +28,46 @@ const BINAURAL_DEFAULTS = { delta: 2, alpha: 10, beta: 20, gamma: 40 };
 const DEFAULT_HZ = 528;
 const STEP_LABELS = ['Affirmations', 'Background Sound', 'Activate'];
 const DURATIONS = [5, 10, 20, 30, 60];
-const SPEEDS = [0.75, 1.0, 1.5, 2.0];
 const BG_GAIN = 0.75;
 const MAX_SESSIONS = 15;
 
-// Real ultrasonic (19kHz carrier AM) modulation and WSOLA time-stretch need
-// raw-PCM DSP the site does client-side with Web Audio's OfflineAudioContext
-// -- there's no RN equivalent without a native DSP module, so "Silent" is
-// approximated with a very low, near-inaudible playback volume instead of
-// true carrier modulation. Speed change IS real (expo-av's pitch-corrected
-// playback rate matches the site's pitch-preserving intent).
+// Real ultrasonic (19kHz carrier AM) modulation needs raw-PCM DSP the site
+// does client-side with Web Audio's OfflineAudioContext -- there's no RN
+// equivalent without a native DSP module. Instead "Silent" uses a real,
+// audible-to-the-app effect that expo-av CAN do: play the voice sped up
+// (with shouldCorrectPitch:false, so pitch rises along with rate) at FULL
+// volume. The pitch lands high enough to sit at the edge of/outside
+// comfortable adult hearing while technically playing at 100% volume --
+// same practical goal as the site's ultrasonic carrier, different mechanism.
 const PRESETS = {
   audible: {
     icon: '🔊', label: 'Audible',
     desc: 'Words play at normal pitch beneath the background. Clear and gentle — best for conscious reinforcement while you work or rest.',
-    tags: ['Normal pitch', 'Max 30% volume', 'Speed control'],
-    voicePct: 50,
+    tags: ['Normal pitch', 'Adjustable volume', 'Speed control'],
+    voicePct: 50, rate: 1.0, correctPitch: true,
   },
   subliminal: {
     icon: '🔕', label: 'Silent',
-    desc: 'Affirmations play at a level completely inaudible to your conscious mind. Pure silence — no noise you can hear — while your subconscious receives every word.',
-    tags: ['100% Volume', 'Ultrasonic Carrier', 'Pure Silence'],
-    voicePct: 12,
+    desc: 'Affirmations play at full volume, sped up until the pitch rises out of comfortable hearing range — technically playing, barely perceptible to your conscious mind.',
+    tags: ['100% Volume', 'High-pitched playback', 'Speed = pitch lift'],
+    voicePct: 100, rate: 3.0, correctPitch: false,
   },
 };
+const SILENT_SPEED_OPTIONS = [2, 3, 4, 5];
+const AUDIBLE_SPEED_OPTIONS = [0.75, 1.0, 1.5, 2.0];
 
 // Voice volume curve, ported exactly: ceiling .70, curve 1.2, floor .10
+// -- used for the Audible preset only. Silent mode intentionally bypasses
+// this curve and stays linear/full per volume_level, since the user wants
+// full volume with pitch (not quietness) doing the concealing.
 function voiceVol(pct) {
   const x = pct / 100;
   if (x <= 0) return 0;
   return Math.max(0.10, 0.70 * Math.pow(x, 1.2));
+}
+function rawVoiceVolume(presetKey, pct) {
+  if (presetKey === 'subliminal') return Math.max(0, Math.min(1, pct / 100));
+  return voiceVol(pct);
 }
 
 function sessionName(s) {
@@ -242,7 +252,7 @@ export default function Subliminal() {
     changeView('station');
     const presetDef = PRESETS[session.volume_level] || PRESETS.audible;
     setDurationMin(session.session_mins || 20);
-    setSpeed(1.0);
+    setSpeed(presetDef.rate);
     setVoicePct(presetDef.voicePct);
     setBgPct(75);
     try {
@@ -256,7 +266,11 @@ export default function Subliminal() {
       }
       const { sound: newAff } = await Audio.Sound.createAsync(
         { uri: affUrl },
-        { shouldPlay: true, isLooping: true, volume: voiceVol(presetDef.voicePct) }
+        {
+          shouldPlay: true, isLooping: true,
+          volume: rawVoiceVolume(session.volume_level, presetDef.voicePct),
+          rate: presetDef.rate, shouldCorrectPitch: presetDef.correctPitch,
+        }
       );
       affSoundRef.current = newAff;
       setPlaying(true);
@@ -289,7 +303,7 @@ export default function Subliminal() {
 
   const applyVoicePct = async (pct) => {
     setVoicePct(pct);
-    if (affSoundRef.current) await affSoundRef.current.setVolumeAsync(voiceVol(pct)).catch(() => {});
+    if (affSoundRef.current) await affSoundRef.current.setVolumeAsync(rawVoiceVolume(activeSession?.volume_level, pct)).catch(() => {});
   };
   const applyBgPct = async (pct) => {
     setBgPct(pct);
@@ -297,7 +311,8 @@ export default function Subliminal() {
   };
   const applySpeed = async (rate) => {
     setSpeed(rate);
-    if (affSoundRef.current) await affSoundRef.current.setRateAsync(rate, true).catch(() => {});
+    const correctPitch = activeSession?.volume_level !== 'subliminal';
+    if (affSoundRef.current) await affSoundRef.current.setRateAsync(rate, correctPitch).catch(() => {});
   };
   const applyDuration = (mins) => { setDurationMin(mins); setElapsed(0); };
 
@@ -665,9 +680,9 @@ export default function Subliminal() {
                       ))}
                     </View>
 
-                    <Text style={styles.controlLabel}>SPEED</Text>
+                    <Text style={styles.controlLabel}>{activeSession.volume_level === 'subliminal' ? 'PITCH LIFT (SPEED)' : 'SPEED'}</Text>
                     <View style={styles.pillRow}>
-                      {SPEEDS.map((r) => (
+                      {(activeSession.volume_level === 'subliminal' ? SILENT_SPEED_OPTIONS : AUDIBLE_SPEED_OPTIONS).map((r) => (
                         <TouchableOpacity key={r} style={[styles.durPill, speed === r && styles.durPillActive]} onPress={() => applySpeed(r)}>
                           <Text style={[styles.durPillText, speed === r && styles.durPillTextActive]}>{r}×</Text>
                         </TouchableOpacity>
