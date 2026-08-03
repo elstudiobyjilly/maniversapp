@@ -137,7 +137,7 @@ export default function Beliefs() {
                 modalTitle="Limiting Belief"
               />
               {error ? <Text style={styles.errorText}>{error}</Text> : null}
-              <Button title="+ Add Belief" onPress={handleAdd} loading={saving} style={{ marginTop: 10, alignSelf: 'flex-start' }} />
+              <Button title="+ Add Belief" size="sm" onPress={handleAdd} loading={saving} style={{ marginTop: 10, alignSelf: 'flex-start' }} />
 
               <View style={[styles.chipRow, { marginTop: 14 }]}>
                 {CATEGORY_NAMES.map((c) => (
@@ -219,7 +219,7 @@ export default function Beliefs() {
                 </View>
 
                 {error ? <Text style={styles.errorText}>{error}</Text> : null}
-                <Button title="💾 Save Reframe" onPress={handleSaveReframe} loading={savingReframe} style={{ marginTop: 14, alignSelf: 'flex-start' }} />
+                <Button title="💾 Save Reframe" size="sm" onPress={handleSaveReframe} loading={savingReframe} style={{ marginTop: 14, alignSelf: 'flex-start' }} />
               </>
             )}
           </GlassCard>

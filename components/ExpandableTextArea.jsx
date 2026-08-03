@@ -9,20 +9,23 @@ export default function ExpandableTextArea({
   value,
   onChangeText,
   placeholder,
-  minHeight = 90,
+  minHeight = 100,
   modalTitle = 'Write',
   style,
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [focused, setFocused] = useState(false);
 
   return (
-    <View style={[styles.box, { minHeight }, style]}>
+    <View style={[styles.box, { minHeight }, focused && styles.boxFocused, style]}>
       <TextInput
         style={styles.input}
         placeholder={placeholder}
         placeholderTextColor="rgba(46,37,48,0.4)"
         value={value}
         onChangeText={onChangeText}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
         multiline
         textAlignVertical="top"
       />
@@ -56,10 +59,18 @@ export default function ExpandableTextArea({
 
 const styles = StyleSheet.create({
   box: {
-    borderWidth: 1.5, borderColor: 'rgba(154,95,168,0.3)', borderRadius: radii.sm,
-    padding: 12, paddingRight: 34, backgroundColor: 'rgba(255,255,255,0.5)',
+    borderWidth: 1.5, borderColor: 'rgba(248,184,200,0.35)', borderRadius: radii.md,
+    paddingVertical: 14, paddingHorizontal: 18, paddingRight: 36, backgroundColor: 'rgba(255,255,255,0.9)',
   },
-  input: { fontFamily: fonts.body, fontSize: 14, color: colors.ink, flex: 1 },
+  boxFocused: {
+    borderColor: colors.pinkMid,
+    shadowColor: colors.pinkAccent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  input: { fontFamily: fonts.body, fontSize: 14, color: colors.ink, flex: 1, lineHeight: 22 },
   expandBtn: { position: 'absolute', top: 8, right: 8, padding: 4 },
   expandIcon: { fontSize: 13, color: colors.mist2 },
 

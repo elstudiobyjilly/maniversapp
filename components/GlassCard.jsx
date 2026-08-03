@@ -21,12 +21,12 @@ const styles = StyleSheet.create({
     borderRadius: radii.lg,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.72)',
+    borderColor: 'rgba(248,184,200,0.22)',
     ...shadows.card,
   },
   tintOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255,255,255,0.35)',
+    backgroundColor: 'rgba(255,255,255,0.65)',
   },
   content: {
     padding: 20,

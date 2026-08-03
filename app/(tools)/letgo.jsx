@@ -114,7 +114,7 @@ export default function LetGo() {
               />
               {!!error && <Text style={styles.errorText}>{error}</Text>}
               {logged && <Text style={styles.loggedText}>Logged ✨</Text>}
-              <Button title="+ Log This Moment" onPress={handleLog} loading={saving} style={{ marginTop: 4, alignSelf: 'flex-start' }} />
+              <Button title="+ Log This Moment" size="sm" onPress={handleLog} loading={saving} style={{ marginTop: 4, alignSelf: 'flex-start' }} />
             </GlassCard>
 
             <GlassCard>
