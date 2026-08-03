@@ -23,8 +23,11 @@ export default function TabsLayout() {
       <Tabs.Screen name="dashboard" options={{ title: 'Home', tabBarIcon: ({ color, size }) => <Ionicons name="home" color={color} size={size} /> }} />
       <Tabs.Screen name="affirmations" options={{ title: 'Affirm', tabBarIcon: ({ color, size }) => <Ionicons name="sparkles" color={color} size={size} /> }} />
       <Tabs.Screen name="stories" options={{ title: 'Stories', tabBarIcon: ({ color, size }) => <Ionicons name="book" color={color} size={size} /> }} />
-      <Tabs.Screen name="mindmovie" options={{ title: 'Movie', tabBarIcon: ({ color, size }) => <Ionicons name="film" color={color} size={size} /> }} />
-      <Tabs.Screen name="subliminal" options={{ title: 'Sub', tabBarIcon: ({ color, size }) => <Ionicons name="moon" color={color} size={size} /> }} />
+      {/* Mind Movie & Subliminal moved off the bottom tab bar to cut phone-nav
+          clutter — still fully reachable as screens via the More tab's tile/
+          list, href:null just removes their tab bar button. */}
+      <Tabs.Screen name="mindmovie" options={{ href: null }} />
+      <Tabs.Screen name="subliminal" options={{ href: null }} />
       <Tabs.Screen name="vision-board" options={{ title: 'Vision', tabBarIcon: ({ color, size }) => <Ionicons name="images" color={color} size={size} /> }} />
       <Tabs.Screen name="more" options={{ title: 'More', tabBarIcon: ({ color, size }) => <Ionicons name="grid" color={color} size={size} /> }} />
       <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarIcon: ({ color, size }) => <Ionicons name="person" color={color} size={size} /> }} />
