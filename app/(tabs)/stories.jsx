@@ -7,6 +7,7 @@ import {
   getStoryAudioStatus, getStoryPlaysToday, addStoryPlay, createCheckout,
   updateStoryTitle, updateStoryContent, regenerateStoryAudio, getStoryUsage,
 } from '../../services/api';
+import LinkDesireButton from '../../components/LinkDesireButton';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import UpgradeModal from '../../components/UpgradeModal';
@@ -360,6 +361,7 @@ export default function Stories() {
                 </View>
               </View>
               <Text style={styles.storyPreview} numberOfLines={2}>{story.content}</Text>
+              <LinkDesireButton contentType="story" contentId={story.id} contentTitle={story.title} style={{ marginBottom: 8 }} />
               <Button
                 title="▶ Play"
                 size="sm"

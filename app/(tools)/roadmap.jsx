@@ -11,6 +11,7 @@ import {
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import { getRoadmaps, createRoadmap, checkRoadmapAction, noteRoadmap, deleteRoadmap, createCheckout } from '../../services/api';
+import LinkDesireButton from '../../components/LinkDesireButton';
 import UpgradeModal from '../../components/UpgradeModal';
 import ScreenHeader from '../../components/ScreenHeader';
 import Button from '../../components/Button';
@@ -95,6 +96,8 @@ function RoadmapCard({ rm, onToggle, onDelete, onSaveNote }) {
         onBlur={() => onSaveNote(rm, note)}
         multiline
       />
+
+      <LinkDesireButton contentType="roadmap" contentId={rm.id} contentTitle={rm.desire} style={{ marginTop: 12 }} />
     </GlassCard>
   );
 }

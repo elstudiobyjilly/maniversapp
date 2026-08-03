@@ -7,6 +7,7 @@ import {
   saveOwnAffirmationSet, getAffirmationAudioStatus, createCheckout,
   renameAffirmationSet, regenerateAffirmationAudio,
 } from '../../services/api';
+import LinkDesireButton from '../../components/LinkDesireButton';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import UpgradeModal from '../../components/UpgradeModal';
@@ -411,6 +412,7 @@ export default function Affirmations() {
                       {item.locked ? <Text style={{ fontSize: 10 }}>🔒</Text> : null}
                     </View>
                     <Text style={styles.libMeta}>{item.affirmations?.length || 0} affs · {item.repeat_count}× · {item.source === 'own' ? 'Own' : 'AI'}</Text>
+                    <LinkDesireButton contentType="affirmation" contentId={item.id} contentTitle={item.desire} style={{ marginBottom: 8 }} />
                     <View style={styles.libBtnRow}>
                       <Button
                         title="▶ Load"

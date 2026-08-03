@@ -15,6 +15,7 @@ import ScreenHeader from '../../components/ScreenHeader';
 import Button from '../../components/Button';
 import { colors, fonts, radii } from '../../constants/theme';
 import { addGratitude, getGratitudeList, deleteGratitude } from '../../services/api';
+import LinkDesireButton from '../../components/LinkDesireButton';
 
 // ─── Single entry with close animation ───────────────────────────────────────
 function GratitudeEntry({ item, onRemoved }) {
@@ -48,6 +49,7 @@ function GratitudeEntry({ item, onRemoved }) {
             <Text style={styles.removeBtnIcon}>✕</Text>
           </TouchableOpacity>
         </View>
+        <LinkDesireButton contentType="gratitude" contentId={item.id} contentTitle={item.content} style={{ marginTop: 8 }} />
       </GlassCard>
     </Animated.View>
   );
