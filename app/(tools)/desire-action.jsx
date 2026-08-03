@@ -5,6 +5,7 @@ import GradientBackground from '../../components/GradientBackground';
 import GlassCard from '../../components/GlassCard';
 import ScreenHeader from '../../components/ScreenHeader';
 import Button from '../../components/Button';
+import ExpandableTextArea from '../../components/ExpandableTextArea';
 import { colors, fonts, radii } from '../../constants/theme';
 import { getKv, saveKv, createDesire, deleteDesire, getDesires, createCheckout } from '../../services/api';
 import UpgradeModal from '../../components/UpgradeModal';
@@ -436,17 +437,14 @@ export default function DesireActionTool() {
                 )}
 
                 <Text style={styles.noteLbl}>ACTION / NOTE</Text>
-                <View style={styles.inputBordered}>
-                  <TextInput
-                    style={styles.noteInput}
-                    multiline
-                    placeholder="What action did you take? How did you feel?..."
-                    placeholderTextColor="rgba(46,37,48,0.4)"
-                    value={noteText}
-                    onChangeText={setNoteText}
-                    onBlur={handleSaveNote}
-                  />
-                </View>
+                <ExpandableTextArea
+                  value={noteText}
+                  onChangeText={setNoteText}
+                  onBlur={handleSaveNote}
+                  placeholder="What action did you take? How did you feel?..."
+                  modalTitle="Action / Note"
+                  minHeight={70}
+                />
               </GlassCard>
             )}
 
@@ -514,16 +512,13 @@ export default function DesireActionTool() {
               </View>
 
               <Text style={styles.fieldLbl}>Custom Practices <Text style={styles.fieldLblHint}>(one per line)</Text></Text>
-              <View style={styles.inputBordered}>
-                <TextInput
-                  style={[styles.modalInput, { minHeight: 56 }]}
-                  multiline
-                  placeholder={'e.g. Gratitude walk\nCold shower intention'}
-                  placeholderTextColor="rgba(46,37,48,0.4)"
-                  value={addCustom}
-                  onChangeText={setAddCustom}
-                />
-              </View>
+              <ExpandableTextArea
+                value={addCustom}
+                onChangeText={setAddCustom}
+                placeholder={'e.g. Gratitude walk\nCold shower intention'}
+                modalTitle="Custom Practices"
+                minHeight={56}
+              />
 
               <View style={styles.modalBtnRow}>
                 <Button title="✨ Start Tracking" onPress={handleSaveNewDesire} fullWidth />

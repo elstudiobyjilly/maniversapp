@@ -12,6 +12,7 @@ export default function ExpandableTextArea({
   minHeight = 100,
   modalTitle = 'Write',
   style,
+  onBlur,
 }) {
   const [expanded, setExpanded] = useState(false);
   const [focused, setFocused] = useState(false);
@@ -25,7 +26,7 @@ export default function ExpandableTextArea({
         value={value}
         onChangeText={onChangeText}
         onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
+        onBlur={() => { setFocused(false); onBlur?.(); }}
         multiline
         textAlignVertical="top"
       />

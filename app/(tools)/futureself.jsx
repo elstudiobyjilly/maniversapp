@@ -8,9 +8,11 @@ import {
   ScrollView,
   ActivityIndicator,
   Modal,
+  Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
+import * as Speech from 'expo-speech';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import ScreenHeader from '../../components/ScreenHeader';
@@ -21,6 +23,8 @@ import {
   getKv, saveKv,
   getItemAudio,
 } from '../../services/api';
+import { usePlanStore } from '../../store/planStore';
+import ExpandableTextArea from '../../components/ExpandableTextArea';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -40,6 +44,24 @@ const BRIDGE_TOPICS = [
   { value: 'health',    label: 'Health' },
   { value: 'career',    label: 'Career' },
   { value: 'becoming',  label: 'Becoming' },
+];
+
+// Ported exactly (verbatim strings) from the website's cards.js "Choose a topic" row.
+const LETTER_TOPICS = [
+  'A letter about my money story',
+  'A letter about love and relationships',
+  'A letter about my health journey',
+  'A letter about my career and purpose',
+  'A letter about who I am becoming',
+  'A letter from my future self',
+];
+// "Writing Prompts" quick-start row -- seeds the letter body with a starter.
+const LETTER_PROMPTS = [
+  { label: 'Future Me', text: "Dear present self, I'm writing to you from the life you always dreamed of. Everything you've been working toward has unfolded, and I want you to know..." },
+  { label: 'The Day', text: 'Dear future me, today I want to remember how it felt to hope for this. I am choosing to trust the process, even on the days it feels slow...' },
+  { label: 'Worth It', text: "Dear future me, I need you to know that all of it was worth it — every early morning, every moment of doubt, every time I chose to keep going. Here's what I want you to remember..." },
+  { label: 'Past Me', text: "Dear past me, I know you're scared and unsure right now. I'm writing from the other side to tell you it works out, and here's what I learned along the way..." },
+  { label: '+Already Here', text: 'Dear present self, some of what you asked for is already here — you just haven\'t noticed yet. Let me remind you...' },
 ];
 
 const FS_ACTIONS = {
@@ -107,94 +129,174 @@ function ReadModal({ visible, title, body, onClose }) {
   );
 }
 
+// Free plan allows up to 10 identity statements total across every area
+// (built-in + custom combined) -- ported exactly from the website's
+// MAX_STMTS_TOTAL constant in cards.js.
+const MAX_IDENTITY_STMTS = 10;
+
 // ─── TAB 1 — Identity ─────────────────────────────────────────────────────────
 function IdentityTab() {
+  const isPaid = usePlanStore((s) => s.isPaid);
   const EMPTY = Object.fromEntries(IDENTITY_AREAS.map(a => [a.id, []]));
   const [areas, setAreas] = useState({ ...EMPTY, _custom: [] });
   const [drafts, setDrafts] = useState({});
-  const [expanded, setExpanded] = useState({});
+  const [addingTo, setAddingTo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [addingArea, setAddingArea] = useState(false);
+  const [newAreaIc, setNewAreaIc] = useState('');
+  const [newAreaLabel, setNewAreaLabel] = useState('');
 
   useEffect(() => {
     getIdentity()
       .then(data => {
-        // Backend stores flat: { money: [...], love: [...], ... }
+        // Backend stores flat: { money: [...], love: [...], ..., _custom: [{id,ic,label}] }
         setAreas(prev => ({ ...prev, ...data }));
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
-  const toggle = (id) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
+  const customAreas = (areas._custom || []).filter(a => a && a.id && a.label);
+  const allAreas = [...IDENTITY_AREAS, ...customAreas];
+  const totalStmts = Object.keys(areas).reduce((sum, k) => (k === '_custom' ? sum : sum + (Array.isArray(areas[k]) ? areas[k].length : 0)), 0);
 
-  const addStatement = async (areaId) => {
-    const text = (drafts[areaId] || '').trim();
-    if (!text) return;
-    const next = { ...areas, [areaId]: [...(areas[areaId] || []), text] };
+  const persist = async (next) => {
     setAreas(next);
-    setDrafts(prev => ({ ...prev, [areaId]: '' }));
     setSaving(true);
     try { await saveIdentity(next); } catch (_) {}
     finally { setSaving(false); }
   };
 
+  const addStatement = async (areaId) => {
+    const text = (drafts[areaId] || '').trim();
+    if (!text) return;
+    if (!isPaid() && totalStmts >= MAX_IDENTITY_STMTS) {
+      setError(`Free plan allows up to ${MAX_IDENTITY_STMTS} identity statements — upgrade for unlimited ✨`);
+      return;
+    }
+    setError('');
+    const next = { ...areas, [areaId]: [...(areas[areaId] || []), text] };
+    setDrafts(prev => ({ ...prev, [areaId]: '' }));
+    setAddingTo(null);
+    await persist(next);
+  };
+
   const removeStatement = async (areaId, idx) => {
     const next = { ...areas, [areaId]: areas[areaId].filter((_, i) => i !== idx) };
-    setAreas(next);
-    try { await saveIdentity(next); } catch (_) {}
+    await persist(next);
+  };
+
+  const clearArea = (areaId) => {
+    Alert.alert('Clear all statements in this area?', null, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Clear', style: 'destructive', onPress: () => persist({ ...areas, [areaId]: [] }) },
+    ]);
+  };
+
+  const removeCustomArea = (areaId) => {
+    Alert.alert('Remove this area?', null, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: () => {
+        const next = { ...areas };
+        next._custom = (next._custom || []).filter(a => a.id !== areaId);
+        delete next[areaId];
+        persist(next);
+      } },
+    ]);
+  };
+
+  const confirmNewArea = () => {
+    const label = newAreaLabel.trim();
+    if (!label) return;
+    const ic = newAreaIc.trim() || '✨';
+    const id = 'custom_' + Date.now();
+    const next = { ...areas, _custom: [...(areas._custom || []), { id, ic, label }], [id]: [] };
+    setAddingArea(false); setNewAreaIc(''); setNewAreaLabel('');
+    persist(next);
   };
 
   if (loading) return <ActivityIndicator color="#c9a8c9" style={{ marginTop: 40 }} />;
 
   return (
     <View>
-      <Text style={styles.tabIntro}>Define who you are becoming ✨</Text>
-      {IDENTITY_AREAS.map(area => {
-        const stmts = areas[area.id] || [];
-        const open = !!expanded[area.id];
-        return (
-          <GlassCard key={area.id} style={styles.mb12}>
-            <TouchableOpacity style={styles.accordionHeader} onPress={() => toggle(area.id)} activeOpacity={0.7}>
-              <Text style={styles.accordionIcon}>{area.ic}</Text>
-              <Text style={styles.accordionLabel}>{area.label}</Text>
-              <View style={styles.accordionBadge}>
-                <Text style={styles.accordionBadgeText}>{stmts.length}</Text>
-              </View>
-              <Text style={styles.accordionChevron}>{open ? '▴' : '▾'}</Text>
-            </TouchableOpacity>
+      <Text style={styles.tabIntro}>Write identity statements for each area of life. "I am someone who..." — be honest, be bold, be expansive.</Text>
 
-            {open && (
-              <View style={styles.accordionBody}>
-                {stmts.map((s, i) => (
+      {addingArea ? (
+        <View style={styles.newAreaBox}>
+          <Text style={styles.newAreaLabel}>NEW LIFE AREA</Text>
+          <View style={styles.newAreaRow}>
+            <TextInput style={styles.newAreaIcInput} placeholder="🎨" maxLength={2} value={newAreaIc} onChangeText={setNewAreaIc} />
+            <TextInput style={styles.newAreaNameInput} placeholder="e.g. Creativity, Travel, Family..." placeholderTextColor="#9a8896" value={newAreaLabel} onChangeText={setNewAreaLabel} />
+            <TouchableOpacity style={styles.newAreaAddBtn} onPress={confirmNewArea}><Text style={styles.newAreaAddBtnText}>✓ Add</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => { setAddingArea(false); setNewAreaIc(''); setNewAreaLabel(''); }}><Text style={styles.newAreaCancelText}>✕</Text></TouchableOpacity>
+          </View>
+        </View>
+      ) : null}
+
+      {allAreas.map(area => {
+        const stmts = areas[area.id] || [];
+        const isCustom = customAreas.some(c => c.id === area.id);
+        return (
+          <View key={area.id} style={styles.identityBlock}>
+            <View style={styles.identityBlockHeader}>
+              <Text style={styles.accordionIcon}>{area.ic}</Text>
+              <Text style={styles.accordionLabel} numberOfLines={1}>{area.label}</Text>
+              {stmts.length > 0 && (
+                <View style={styles.accordionBadge}>
+                  <Text style={styles.accordionBadgeText}>{stmts.length}</Text>
+                </View>
+              )}
+              <TouchableOpacity onPress={() => setAddingTo(addingTo === area.id ? null : area.id)} style={styles.identityAddPill}>
+                <Text style={styles.identityAddPillText}>+ Add</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => isCustom ? removeCustomArea(area.id) : clearArea(area.id)} style={styles.identityRemoveBtn}>
+                <Text style={styles.identityRemoveBtnText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.identityBlockBody}>
+              {stmts.length === 0 ? (
+                <Text style={styles.identityEmptyText}>Tap + Add to define your identity here...</Text>
+              ) : (
+                stmts.map((s, i) => (
                   <View key={i} style={styles.stmtRow}>
-                    <Text style={styles.stmtText}>I am {s}</Text>
+                    <Text style={styles.stmtText}>{s}</Text>
                     <TouchableOpacity onPress={() => removeStatement(area.id, i)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
                       <Text style={styles.stmtRemove}>✕</Text>
                     </TouchableOpacity>
                   </View>
-                ))}
+                ))
+              )}
+              {addingTo === area.id && (
                 <View style={styles.addRow}>
-                  <Text style={styles.addPrefix}>I am</Text>
                   <TextInput
-                    style={styles.addInput}
-                    placeholder="..."
+                    style={styles.addInputFull}
+                    placeholder="I am someone who..."
                     placeholderTextColor="#9a8896"
                     value={drafts[area.id] || ''}
                     onChangeText={t => setDrafts(prev => ({ ...prev, [area.id]: t }))}
                     onSubmitEditing={() => addStatement(area.id)}
                     returnKeyType="done"
+                    autoFocus
                   />
                   <TouchableOpacity onPress={() => addStatement(area.id)} style={styles.addBtn}>
-                    <Text style={styles.addBtnText}>Add</Text>
+                    <Text style={styles.addBtnText}>✓ Add</Text>
                   </TouchableOpacity>
                 </View>
-              </View>
-            )}
-          </GlassCard>
+              )}
+            </View>
+          </View>
         );
       })}
+
+      {!addingArea && (
+        <TouchableOpacity style={styles.addCustomAreaBtn} onPress={() => setAddingArea(true)}>
+          <Text style={styles.addCustomAreaBtnText}>+ Add Custom Area</Text>
+        </TouchableOpacity>
+      )}
+
       {saving && <ActivityIndicator color="#c9a8c9" style={{ marginTop: 8 }} />}
       {!!error && <Text style={styles.errorText}>{error}</Text>}
     </View>
@@ -271,13 +373,12 @@ function PortraitTab() {
               </TouchableOpacity>
             </View>
           )}
-          <TextInput
-            style={[styles.input, { minHeight: 160, textAlignVertical: 'top' }]}
-            placeholder="I am confident, abundant and at peace. I wake up each morning knowing that..."
-            placeholderTextColor="#9a8896"
+          <ExpandableTextArea
             value={draft}
             onChangeText={setDraft}
-            multiline
+            placeholder="I am confident, abundant and at peace. I wake up each morning knowing that..."
+            modalTitle="Future Self Portrait"
+            minHeight={160}
           />
           {!!error && <Text style={styles.errorText}>{error}</Text>}
           {saved && <Text style={styles.confirmedText}>Saved ✨</Text>}
@@ -383,22 +484,22 @@ function BridgeTab() {
           </View>
         )}
         <Text style={styles.bridgeFieldLabel}>I am now...</Text>
-        <TextInput
-          style={[styles.input, { minHeight: 72, textAlignVertical: 'top', marginBottom: 10 }]}
-          placeholder="Where you genuinely are right now"
-          placeholderTextColor="#9a8896"
+        <ExpandableTextArea
           value={current}
           onChangeText={setCurrent}
-          multiline
+          placeholder="Be honest. Where I truly am today..."
+          modalTitle="I am now"
+          minHeight={72}
+          style={{ marginBottom: 10 }}
         />
         <Text style={styles.bridgeFieldLabel}>I am becoming...</Text>
-        <TextInput
-          style={[styles.input, { minHeight: 72, textAlignVertical: 'top', marginBottom: 10 }]}
-          placeholder="Who you're stepping into"
-          placeholderTextColor="#9a8896"
+        <ExpandableTextArea
           value={future}
           onChangeText={setFuture}
-          multiline
+          placeholder="Write as if it is already true. I am..."
+          modalTitle="I am becoming"
+          minHeight={72}
+          style={{ marginBottom: 10 }}
         />
         <Dropdown
           label="Topic"
@@ -456,6 +557,8 @@ function LetterTab() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [readModal, setReadModal] = useState(null); // { heading, body }
+  const [activeTopic, setActiveTopic] = useState(null);
+  const [speaking, setSpeaking] = useState(false);
 
   useEffect(() => {
     getKv('letters_list')
@@ -499,6 +602,25 @@ function LetterTab() {
     await persist(next).catch(() => {});
   };
 
+  const handleClear = () => { setHeading(''); setBody(''); setActiveTopic(null); setEditId(null); Speech.stop(); setSpeaking(false); };
+
+  const handleSelectTopic = (topic) => { setActiveTopic(topic); setHeading(topic); };
+
+  const handleApplyPrompt = (prompt) => { setBody(prompt.text); };
+
+  const handleReadCompose = () => {
+    if (!body.trim()) { setError('Write your letter first.'); return; }
+    setReadModal({ heading: heading || 'My Letter', body: body.trim() });
+  };
+
+  const handleReadAloudCompose = () => {
+    if (speaking) { Speech.stop(); setSpeaking(false); return; }
+    if (!body.trim()) return;
+    Speech.stop();
+    Speech.speak(body.trim(), { rate: 0.9, onDone: () => setSpeaking(false), onStopped: () => setSpeaking(false) });
+    setSpeaking(true);
+  };
+
   const formatDate = (ts) => new Date(ts).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
   if (loading) return <ActivityIndicator color="#c9a8c9" style={{ marginTop: 40 }} />;
@@ -506,6 +628,15 @@ function LetterTab() {
   return (
     <View>
       <Text style={styles.tabIntro}>Letters to and from your future self ✨</Text>
+
+      <Text style={styles.letterPromptsLabel}>WRITING PROMPTS</Text>
+      <View style={[styles.chipRowWrap, { marginBottom: 14 }]}>
+        {LETTER_PROMPTS.map((p) => (
+          <TouchableOpacity key={p.label} style={styles.letterPromptChip} onPress={() => handleApplyPrompt(p)}>
+            <Text style={styles.letterPromptChipText}>{p.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
 
       <GlassCard style={styles.mb16}>
         {editId !== null && (
@@ -516,30 +647,46 @@ function LetterTab() {
             </TouchableOpacity>
           </View>
         )}
+
+        <Text style={styles.letterTopicLabel}>CHOOSE A TOPIC</Text>
+        <View style={styles.chipRowWrap}>
+          {LETTER_TOPICS.map((t) => (
+            <TouchableOpacity key={t} style={[styles.letterTopicChip, activeTopic === t && styles.letterTopicChipActive]} onPress={() => handleSelectTopic(t)}>
+              <Text style={[styles.letterTopicChipText, activeTopic === t && styles.letterTopicChipTextActive]}>{t}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
         <TextInput
-          style={[styles.input, { marginBottom: 10 }]}
-          placeholder="Heading (optional)"
+          style={[styles.input, { marginBottom: 10, marginTop: 10 }]}
+          placeholder="Add your own heading (optional)..."
           placeholderTextColor="#9a8896"
           value={heading}
           onChangeText={setHeading}
         />
-        <TextInput
-          style={[styles.input, { minHeight: 140, textAlignVertical: 'top' }]}
-          placeholder="Dear future me..."
-          placeholderTextColor="#9a8896"
+        <ExpandableTextArea
           value={body}
           onChangeText={setBody}
-          multiline
+          placeholder="Dear present self, I'm writing to you from the life you always dreamed of..."
+          modalTitle="Letter"
+          minHeight={200}
         />
         {!!error && <Text style={styles.errorText}>{error}</Text>}
-        <TouchableOpacity style={[styles.primaryBtn, { marginTop: 4 }]} onPress={handleSave} disabled={saving}>
-          {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>{editId !== null ? 'Update Letter ✨' : 'Save Letter ✨'}</Text>}
-        </TouchableOpacity>
+        <View style={styles.letterActionsRow}>
+          <TouchableOpacity style={styles.primaryBtnSm} onPress={handleSave} disabled={saving}>
+            {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnSmText}>💾 {editId !== null ? 'Update Letter' : 'Save Letter'}</Text>}
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.smallActionBtn} onPress={handleReadCompose}><Text style={styles.smallActionBtnText}>📖 Read</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.smallActionBtn} onPress={handleReadAloudCompose}><Text style={styles.smallActionBtnText}>{speaking ? '⏹ Stop' : '🔊 Read Aloud'}</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.smallActionBtn} onPress={handleClear}><Text style={styles.smallActionBtnText}>🗑️ Clear</Text></TouchableOpacity>
+        </View>
       </GlassCard>
 
-      {letters.length > 0 && (
+      <Text style={[styles.sectionHeading, { marginTop: 4 }]}>💌 Saved Letters</Text>
+      {letters.length === 0 ? (
+        <Text style={styles.identityEmptyText}>No letters saved yet ✨</Text>
+      ) : (
         <>
-          <Text style={styles.sectionHeading}>Saved letters</Text>
           {letters.map(letter => {
             const isOpen = expandedId === letter.id;
             const preview = letter.body.length > 80 ? letter.body.slice(0, 80) + '…' : letter.body;
@@ -808,6 +955,36 @@ const styles = StyleSheet.create({
     borderRadius: 10, borderWidth: 1, borderColor: 'rgba(154,95,168,0.2)',
   },
   addBtnText: { color: '#9a5fa8', fontWeight: '600', fontSize: 13 },
+  addInputFull: {
+    flex: 1, backgroundColor: '#fff', borderRadius: 10,
+    paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#2e2530', fontStyle: 'italic',
+    borderWidth: 1, borderColor: 'rgba(201,168,201,0.35)',
+  },
+
+  // Identity — always-open blocks (matches the website's identity-area-block)
+  identityBlock: { backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(201,168,201,0.25)', marginBottom: 10, overflow: 'hidden' },
+  identityBlockHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 12,
+    backgroundColor: 'rgba(201,168,201,0.12)',
+  },
+  identityAddPill: { backgroundColor: 'rgba(201,168,201,0.2)', borderWidth: 1, borderColor: 'rgba(154,95,168,0.25)', borderRadius: 50, paddingVertical: 5, paddingHorizontal: 12 },
+  identityAddPillText: { fontSize: 11.5, color: '#9a5fa8', fontWeight: '700' },
+  identityRemoveBtn: { width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(220,80,80,0.08)', borderWidth: 1, borderColor: 'rgba(220,80,80,0.18)', alignItems: 'center', justifyContent: 'center' },
+  identityRemoveBtnText: { fontSize: 11, color: '#c06868' },
+  identityBlockBody: { padding: 12 },
+  identityEmptyText: { fontSize: 12.5, color: '#9a8896', fontStyle: 'italic' },
+
+  // Add custom life area
+  newAreaBox: { backgroundColor: '#fff', borderWidth: 1.5, borderColor: 'rgba(201,168,201,0.4)', borderStyle: 'dashed', borderRadius: 14, padding: 12, marginBottom: 12 },
+  newAreaLabel: { fontSize: 10.5, color: '#9a5fa8', fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8 },
+  newAreaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  newAreaIcInput: { width: 42, textAlign: 'center', backgroundColor: '#fafafa', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(201,168,201,0.35)', paddingVertical: 8, fontSize: 15 },
+  newAreaNameInput: { flex: 1, backgroundColor: '#fafafa', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(201,168,201,0.35)', paddingVertical: 8, paddingHorizontal: 10, fontSize: 13, color: '#2e2530' },
+  newAreaAddBtn: { backgroundColor: '#9a5fa8', borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12 },
+  newAreaAddBtnText: { color: '#fff', fontSize: 12.5, fontWeight: '600' },
+  newAreaCancelText: { fontSize: 16, color: '#9a8896', paddingHorizontal: 4 },
+  addCustomAreaBtn: { alignSelf: 'center', marginTop: 4, marginBottom: 8 },
+  addCustomAreaBtnText: { fontSize: 13, color: '#9a5fa8', fontWeight: '600' },
 
   // Portrait
   portraitText: { color: '#2e2530', fontSize: 15, fontStyle: 'italic', lineHeight: 24, marginBottom: 16 },
@@ -840,6 +1017,19 @@ const styles = StyleSheet.create({
   letterDate: { fontSize: 11, color: '#9a8896' },
   letterPreview: { color: '#6b5c66', fontSize: 13, lineHeight: 18 },
   letterBody: { color: '#2e2530', fontSize: 14, lineHeight: 22, fontStyle: 'italic', marginVertical: 10 },
+
+  chipRowWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  letterPromptsLabel: { fontSize: 10.5, color: '#9a5fa8', fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8 },
+  letterPromptChip: { backgroundColor: 'rgba(255,255,255,0.7)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.35)', borderRadius: 50, paddingVertical: 7, paddingHorizontal: 13 },
+  letterPromptChipText: { fontSize: 12, color: '#9a5fa8', fontWeight: '600' },
+  letterTopicLabel: { fontSize: 10.5, color: '#9a5fa8', fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8 },
+  letterTopicChip: { backgroundColor: 'rgba(255,255,255,0.8)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.35)', borderRadius: 50, paddingVertical: 5, paddingHorizontal: 11 },
+  letterTopicChipActive: { backgroundColor: '#9a5fa8', borderColor: '#9a5fa8' },
+  letterTopicChipText: { fontSize: 11, color: '#9a5fa8' },
+  letterTopicChipTextActive: { color: '#fff', fontWeight: '600' },
+  letterActionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12, alignItems: 'center' },
+  primaryBtnSm: { backgroundColor: '#c9a8c9', borderRadius: 50, paddingVertical: 10, paddingHorizontal: 16, alignItems: 'center' },
+  primaryBtnSmText: { color: '#fff', fontSize: 12.5, fontWeight: '600' },
 
   // Entry action row (edit/delete)
   entryActionsRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
