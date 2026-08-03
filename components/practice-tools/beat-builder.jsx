@@ -1,8 +1,12 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
 import GlassCard from '../GlassCard';
 import { generateToneFile } from '../../services/toneGenerator';
+import { getFunToolData, saveFunToolData } from '../../services/api';
+
+const PREFS_KEY = 'mv_beat_prefs_local';
 
 const TEMPOS = [
   { id: 'calm', label: '🕊️ Calm (60 BPM)', bpm: 60 },
@@ -57,10 +61,28 @@ export default function BeatBuilderTool() {
 
   useEffect(() => {
     Audio.setAudioModeAsync({ playsInSilentModeIOS: true }).catch(() => {});
+    (async () => {
+      let prefs = null;
+      try {
+        const local = await AsyncStorage.getItem(PREFS_KEY);
+        if (local) prefs = JSON.parse(local);
+      } catch (e) {}
+      try {
+        const remote = await getFunToolData('fun_beat');
+        if (remote) prefs = remote;
+      } catch (e) {}
+      if (prefs?.tempo) setTempo(prefs.tempo);
+      if (prefs?.category) setCategory(prefs.category);
+    })();
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (clickSoundRef.current) clickSoundRef.current.unloadAsync().catch(() => {});
     };
+  }, []);
+
+  const persistPrefs = useCallback(async (prefs) => {
+    try { await AsyncStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch (e) {}
+    try { await saveFunToolData('fun_beat', prefs); } catch (e) {}
   }, []);
 
   const ensureClickSound = async () => {
@@ -115,6 +137,7 @@ export default function BeatBuilderTool() {
     const set = (BEAT_SETS[category] || BEAT_SETS.general)[tempo] || [];
     setLines(set);
     setCurrentLine(0);
+    persistPrefs({ tempo, category });
   };
   const handleToggle = () => {
     if (playing) stopBeat();

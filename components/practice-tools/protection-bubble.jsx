@@ -1,5 +1,9 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Animated, Easing } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getFunToolData, saveFunToolData } from '../../services/api';
+
+const STATS_KEY = 'mv_bubble_stats_local';
 
 const BUBBLE_MODES = {
   shield: {
@@ -28,11 +32,30 @@ export default function ProtectionBubbleTool() {
   const [mode, setMode] = useState('shield');
   const [step, setStep] = useState(-1); // -1 = intro, steps.length = complete
   const [secsLeft, setSecsLeft] = useState(0);
+  const [stats, setStats] = useState({});
   const intervalRef = useRef(null);
   const pulse = useRef(new Animated.Value(0)).current;
 
   const modeData = BUBBLE_MODES[mode];
   const steps = modeData.steps;
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const local = await AsyncStorage.getItem(STATS_KEY);
+        if (local) setStats(JSON.parse(local));
+      } catch (e) {}
+      try {
+        const remote = await getFunToolData('fun_bubble');
+        if (remote && typeof remote === 'object') setStats(remote);
+      } catch (e) {}
+    })();
+  }, []);
+
+  const persistStats = useCallback(async (next) => {
+    try { await AsyncStorage.setItem(STATS_KEY, JSON.stringify(next)); } catch (e) {}
+    try { await saveFunToolData('fun_bubble', next); } catch (e) {}
+  }, []);
 
   useEffect(() => {
     const anim = Animated.loop(
@@ -48,6 +71,15 @@ export default function ProtectionBubbleTool() {
   useEffect(() => {
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, []);
+
+  useEffect(() => {
+    if (step === steps.length && steps.length > 0) {
+      const next = { ...stats, [mode]: (stats[mode] || 0) + 1 };
+      setStats(next);
+      persistStats(next);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
   const stopTimer = () => {
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
@@ -191,6 +223,9 @@ export default function ProtectionBubbleTool() {
                   ? 'Your protection bubble is set.\nYou are shielded, grounded, and ready.\nCarry this energy with you today.'
                   : 'Your energy is clear and restored.\nTonight you rest as purely yourself.\nSleep deeply. You are whole.'}
               </Text>
+              {stats[mode] > 0 && (
+                <Text style={styles.completeStat}>Completed {stats[mode]}x</Text>
+              )}
             </View>
             <TouchableOpacity style={styles.secondaryBtn} onPress={handleReset}>
               <Text style={styles.secondaryBtnText}>↩ Begin Again</Text>
@@ -242,4 +277,5 @@ const styles = StyleSheet.create({
   completeWrap: { alignItems: 'center', padding: 24, marginBottom: 16 },
   completeIc: { fontSize: 44, marginBottom: 10 },
   completeMsg: { fontSize: 17, fontStyle: 'italic', color: '#2e2530', textAlign: 'center', lineHeight: 28 },
+  completeStat: { fontSize: 12.5, color: '#9a5fa8', fontWeight: '600', marginTop: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
 });

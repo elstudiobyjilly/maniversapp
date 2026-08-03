@@ -1,6 +1,10 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Animated, Easing, Dimensions } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import GlassCard from '../GlassCard';
+import { getFunToolData, saveFunToolData } from '../../services/api';
+
+const HISTORY_KEY = 'mv_roulette_history_local';
 
 const SEGMENTS = [
   { label: '369 Method', ic: '3️⃣', color: '#fdeaf4', mins: 10, prompt: 'Write your desire 3 times in the morning, 6 times in the afternoon, 9 times at night. Feel it each time.', action: 'Grab your journal. Write your desire right now — start with the 3x morning round. Keep it short, present tense, fully felt.' },
@@ -21,8 +25,27 @@ const RADIUS = WHEEL_SIZE / 2;
 export default function RouletteTool() {
   const [spinning, setSpinning] = useState(false);
   const [result, setResult] = useState(null);
+  const [history, setHistory] = useState([]);
   const rotation = useRef(new Animated.Value(0)).current;
   const currentDeg = useRef(0);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const local = await AsyncStorage.getItem(HISTORY_KEY);
+        if (local) setHistory(JSON.parse(local));
+      } catch (e) {}
+      try {
+        const remote = await getFunToolData('fun_roulette');
+        if (Array.isArray(remote)) setHistory(remote);
+      } catch (e) {}
+    })();
+  }, []);
+
+  const persist = useCallback(async (next) => {
+    try { await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(next)); } catch (e) {}
+    try { await saveFunToolData('fun_roulette', next); } catch (e) {}
+  }, []);
 
   const spin = () => {
     if (spinning) return;
@@ -45,8 +68,12 @@ export default function RouletteTool() {
       // original center angle equals -currentDeg (mod 360).
       const normalized = ((-currentDeg.current % 360) + 360) % 360;
       const idx = Math.round(normalized / ARC) % N;
-      setResult(SEGMENTS[idx]);
+      const landed = SEGMENTS[idx];
+      setResult(landed);
       setSpinning(false);
+      const nextHistory = [...history, { label: landed.label, date: new Date().toISOString() }].slice(-20);
+      setHistory(nextHistory);
+      persist(nextHistory);
     });
   };
 
@@ -104,6 +131,19 @@ export default function RouletteTool() {
             </View>
           </GlassCard>
         )}
+
+        {history.length > 0 && (
+          <>
+            <Text style={styles.historyHd}>Recent Spins</Text>
+            <View style={styles.historyRow}>
+              {history.slice().reverse().slice(0, 8).map((h, i) => (
+                <View key={i} style={styles.historyChip}>
+                  <Text style={styles.historyChipText}>{h.label}</Text>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
       </ScrollView>
   );
 }
@@ -152,4 +192,9 @@ const styles = StyleSheet.create({
   resultPrompt: { fontSize: 14, fontStyle: 'italic', color: '#2e2530', lineHeight: 22, marginBottom: 14, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(160,80,230,0.15)' },
   resultActionWrap: { borderLeftWidth: 3, borderLeftColor: '#c9a8c9', paddingLeft: 12 },
   resultAction: { fontSize: 13, color: '#6b5c66', lineHeight: 20 },
+
+  historyHd: { fontSize: 11, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', color: '#9a5fa8', marginTop: 20, marginBottom: 10 },
+  historyRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  historyChip: { paddingVertical: 7, paddingHorizontal: 12, borderRadius: 50, backgroundColor: 'rgba(255,255,255,0.7)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)' },
+  historyChipText: { fontSize: 11.5, color: '#6b5c66', fontWeight: '500' },
 });

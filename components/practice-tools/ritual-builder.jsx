@@ -1,6 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import GlassCard from '../GlassCard';
+import { getFunToolData, saveFunToolData } from '../../services/api';
+
+const HISTORY_KEY = 'mv_ritual_history_local';
 
 const MOODS = [
   { id: 'doubtful', label: '😟 Doubtful' },
@@ -91,11 +95,47 @@ const RITUALS = {
 export default function RitualBuilderTool() {
   const [mood, setMood] = useState(null);
   const [area, setArea] = useState(null);
+  const [history, setHistory] = useState([]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const local = await AsyncStorage.getItem(HISTORY_KEY);
+        if (local) setHistory(JSON.parse(local));
+      } catch (e) {}
+      try {
+        const remote = await getFunToolData('fun_ritual');
+        if (Array.isArray(remote)) setHistory(remote);
+      } catch (e) {}
+    })();
+  }, []);
+
+  const persist = useCallback(async (next) => {
+    try { await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(next)); } catch (e) {}
+    try { await saveFunToolData('fun_ritual', next); } catch (e) {}
+  }, []);
 
   const steps = mood && area ? (RITUALS[mood]?.[area] || RITUALS[mood]?.general || []) : null;
   const totalMins = steps ? steps.reduce((s, st) => s + (parseInt(st.time, 10) || 0), 0) : 0;
   const moodLabel = MOODS.find((m) => m.id === mood)?.label || '';
   const areaLabel = AREAS.find((a) => a.id === area)?.label || '';
+
+  const handleSelectMood = (id) => {
+    setMood(id);
+    if (id && area) {
+      const next = [...history, { mood: id, area, date: new Date().toISOString() }].slice(-20);
+      setHistory(next);
+      persist(next);
+    }
+  };
+  const handleSelectArea = (id) => {
+    setArea(id);
+    if (mood && id) {
+      const next = [...history, { mood, area: id, date: new Date().toISOString() }].slice(-20);
+      setHistory(next);
+      persist(next);
+    }
+  };
 
   return (
       <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 50, paddingBottom: 40 }}>
@@ -105,7 +145,7 @@ export default function RitualBuilderTool() {
         <Text style={styles.stepLbl}>How are you feeling right now?</Text>
         <View style={styles.chipsRow}>
           {MOODS.map((m) => (
-            <TouchableOpacity key={m.id} style={[styles.chip, mood === m.id && styles.chipOn]} onPress={() => setMood(m.id)}>
+            <TouchableOpacity key={m.id} style={[styles.chip, mood === m.id && styles.chipOn]} onPress={() => handleSelectMood(m.id)}>
               <Text style={[styles.chipText, mood === m.id && styles.chipTextOn]}>{m.label}</Text>
             </TouchableOpacity>
           ))}
@@ -114,7 +154,7 @@ export default function RitualBuilderTool() {
         <Text style={styles.stepLbl}>What area are you focusing on?</Text>
         <View style={styles.chipsRow}>
           {AREAS.map((a) => (
-            <TouchableOpacity key={a.id} style={[styles.chip, area === a.id && styles.chipOn]} onPress={() => setArea(a.id)}>
+            <TouchableOpacity key={a.id} style={[styles.chip, area === a.id && styles.chipOn]} onPress={() => handleSelectArea(a.id)}>
               <Text style={[styles.chipText, area === a.id && styles.chipTextOn]}>{a.label}</Text>
             </TouchableOpacity>
           ))}
@@ -135,6 +175,21 @@ export default function RitualBuilderTool() {
               </View>
             ))}
           </GlassCard>
+        )}
+
+        {history.length > 0 && (
+          <>
+            <Text style={styles.historyHd}>Recent Rituals</Text>
+            <View style={styles.chipsRow}>
+              {history.slice().reverse().slice(0, 8).map((h, i) => (
+                <View key={i} style={styles.historyChip}>
+                  <Text style={styles.historyChipText}>
+                    {MOODS.find((m) => m.id === h.mood)?.label || h.mood} · {AREAS.find((a) => a.id === h.area)?.label || h.area}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </>
         )}
       </ScrollView>
   );
@@ -160,4 +215,8 @@ const styles = StyleSheet.create({
   stepTitle: { fontSize: 14, fontWeight: '600', color: '#2e2530', marginBottom: 4 },
   stepDesc: { fontSize: 13, color: '#6b5c66', lineHeight: 19 },
   stepTime: { fontSize: 11, color: '#9a5fa8', fontWeight: '600', marginTop: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
+
+  historyHd: { fontSize: 11, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', color: '#9a5fa8', marginTop: 20, marginBottom: 10 },
+  historyChip: { paddingVertical: 7, paddingHorizontal: 12, borderRadius: 50, backgroundColor: 'rgba(255,255,255,0.7)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)' },
+  historyChipText: { fontSize: 11.5, color: '#6b5c66', fontWeight: '500' },
 });

@@ -1,6 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import GlassCard from '../GlassCard';
+import { getFunToolData, saveFunToolData } from '../../services/api';
+
+const SAVED_KEY = 'mv_spell_saved_local';
 
 const SPELL_TRANSFORMS = [
   { test: /\b(want|wish|hope|need|trying|working|would like)\b/i, fn: (d) => d.replace(/\b(want|wish|hope|need|trying|working|would like)\b/gi, 'have') },
@@ -61,6 +65,25 @@ export default function SpellItTool() {
   const [desire, setDesire] = useState('');
   const [spell, setSpell] = useState(null);
   const [reads, setReads] = useState(0);
+  const [saved, setSaved] = useState([]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const local = await AsyncStorage.getItem(SAVED_KEY);
+        if (local) setSaved(JSON.parse(local));
+      } catch (e) {}
+      try {
+        const remote = await getFunToolData('fun_spell');
+        if (Array.isArray(remote)) setSaved(remote);
+      } catch (e) {}
+    })();
+  }, []);
+
+  const persist = useCallback(async (next) => {
+    try { await AsyncStorage.setItem(SAVED_KEY, JSON.stringify(next)); } catch (e) {}
+    try { await saveFunToolData('fun_spell', next); } catch (e) {}
+  }, []);
 
   const handleCast = () => {
     if (!desire.trim()) { Alert.alert('Write your desire first ✨'); return; }
@@ -70,7 +93,22 @@ export default function SpellItTool() {
   };
 
   const handleRead = () => {
-    setReads((r) => Math.min(r + 1, 3));
+    setReads((r) => {
+      const next = Math.min(r + 1, 3);
+      if (next >= 3 && r < 3 && spell) {
+        const nextSaved = [...saved, { desire: desire.trim(), ...spell }].slice(-20);
+        setSaved(nextSaved);
+        persist(nextSaved);
+      }
+      return next;
+    });
+  };
+
+  const handleClearSaved = () => {
+    Alert.alert('Clear your spell book?', null, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Clear', style: 'destructive', onPress: () => { setSaved([]); persist([]); } },
+    ]);
   };
 
   return (
@@ -121,6 +159,20 @@ export default function SpellItTool() {
             </TouchableOpacity>
           </>
         )}
+
+        {saved.length > 0 && (
+          <>
+            <View style={styles.savedHeaderRow}>
+              <Text style={styles.savedHd}>Your Spell Book</Text>
+              <TouchableOpacity onPress={handleClearSaved}><Text style={styles.savedClear}>Clear</Text></TouchableOpacity>
+            </View>
+            {saved.slice().reverse().slice(0, 6).map((s, i) => (
+              <View key={i} style={styles.savedItem}>
+                <Text style={styles.savedText}>{s.opener}{s.core}{s.closer}</Text>
+              </View>
+            ))}
+          </>
+        )}
       </ScrollView>
   );
 }
@@ -153,4 +205,10 @@ const styles = StyleSheet.create({
   readBtnText: { fontSize: 13, fontWeight: '600', color: '#c9a020' },
   readBtnDone: { backgroundColor: 'rgba(90,171,124,0.15)', borderColor: 'rgba(90,171,124,0.4)' },
   readBtnTextDone: { color: '#3d8a5c' },
+
+  savedHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, marginTop: 20 },
+  savedHd: { fontSize: 15, color: '#2e2530', fontWeight: '600' },
+  savedClear: { fontSize: 12, color: '#6b5c66' },
+  savedItem: { backgroundColor: 'rgba(255,255,255,0.6)', borderWidth: 1, borderColor: 'rgba(154,95,168,0.15)', borderRadius: 10, padding: 11, marginBottom: 6 },
+  savedText: { fontSize: 13, fontStyle: 'italic', color: '#2e2530', lineHeight: 19 },
 });
