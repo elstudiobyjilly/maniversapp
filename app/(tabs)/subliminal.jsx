@@ -31,14 +31,12 @@ const DURATIONS = [5, 10, 20, 30, 60];
 const BG_GAIN = 0.75;
 const MAX_SESSIONS = 15;
 
-// Real ultrasonic (19kHz carrier AM) modulation needs raw-PCM DSP the site
-// does client-side with Web Audio's OfflineAudioContext -- there's no RN
-// equivalent without a native DSP module. Instead "Silent" uses a real,
-// audible-to-the-app effect that expo-av CAN do: play the voice sped up
-// (with shouldCorrectPitch:false, so pitch rises along with rate) at FULL
-// volume. The pitch lands high enough to sit at the edge of/outside
-// comfortable adult hearing while technically playing at 100% volume --
-// same practical goal as the site's ultrasonic carrier, different mechanism.
+// "Silent"/ultrasonic mode is on hold -- true inaudibility needs either a
+// native audio-DSP module + dev build (client-side), or a pre-modulated
+// audio file from the backend (server-side, no app changes needed at all).
+// Both are bigger, separate pieces of work; for now Subliminal only offers
+// the plain Audible mode, with the affirmation voice looping simultaneously
+// (overlapping) with the background track.
 const PRESETS = {
   audible: {
     icon: '🔊', label: 'Audible',
@@ -46,28 +44,14 @@ const PRESETS = {
     tags: ['Normal pitch', 'Adjustable volume', 'Speed control'],
     voicePct: 50, rate: 1.0, correctPitch: true,
   },
-  subliminal: {
-    icon: '🔕', label: 'Silent',
-    desc: 'Affirmations play at full volume, sped up until the pitch rises out of comfortable hearing range — technically playing, barely perceptible to your conscious mind.',
-    tags: ['100% Volume', 'High-pitched playback', 'Speed = pitch lift'],
-    voicePct: 100, rate: 3.0, correctPitch: false,
-  },
 };
-const SILENT_SPEED_OPTIONS = [2, 3, 4, 5];
 const AUDIBLE_SPEED_OPTIONS = [0.75, 1.0, 1.5, 2.0];
 
-// Voice volume curve, ported exactly: ceiling .70, curve 1.2, floor .10
-// -- used for the Audible preset only. Silent mode intentionally bypasses
-// this curve and stays linear/full per volume_level, since the user wants
-// full volume with pitch (not quietness) doing the concealing.
+// Voice volume curve, ported exactly from the site: ceiling .70, curve 1.2, floor .10
 function voiceVol(pct) {
   const x = pct / 100;
   if (x <= 0) return 0;
   return Math.max(0.10, 0.70 * Math.pow(x, 1.2));
-}
-function rawVoiceVolume(presetKey, pct) {
-  if (presetKey === 'subliminal') return Math.max(0, Math.min(1, pct / 100));
-  return voiceVol(pct);
 }
 
 function sessionName(s) {
@@ -96,7 +80,7 @@ export default function Subliminal() {
   const [selectedSetId, setSelectedSetId] = useState(null);
   const [bgType, setBgType] = useState(null);
   const [selectedTrack, setSelectedTrack] = useState(null);
-  const [preset, setPreset] = useState(null);
+  const [preset, setPreset] = useState('audible');
   const [label, setLabel] = useState('');
   const [creating, setCreating] = useState(false);
   const [previewingId, setPreviewingId] = useState(null);
@@ -268,7 +252,7 @@ export default function Subliminal() {
         { uri: affUrl },
         {
           shouldPlay: true, isLooping: true,
-          volume: rawVoiceVolume(session.volume_level, presetDef.voicePct),
+          volume: voiceVol(presetDef.voicePct),
           rate: presetDef.rate, shouldCorrectPitch: presetDef.correctPitch,
         }
       );
@@ -303,7 +287,7 @@ export default function Subliminal() {
 
   const applyVoicePct = async (pct) => {
     setVoicePct(pct);
-    if (affSoundRef.current) await affSoundRef.current.setVolumeAsync(rawVoiceVolume(activeSession?.volume_level, pct)).catch(() => {});
+    if (affSoundRef.current) await affSoundRef.current.setVolumeAsync(voiceVol(pct)).catch(() => {});
   };
   const applyBgPct = async (pct) => {
     setBgPct(pct);
@@ -311,8 +295,7 @@ export default function Subliminal() {
   };
   const applySpeed = async (rate) => {
     setSpeed(rate);
-    const correctPitch = activeSession?.volume_level !== 'subliminal';
-    if (affSoundRef.current) await affSoundRef.current.setRateAsync(rate, correctPitch).catch(() => {});
+    if (affSoundRef.current) await affSoundRef.current.setRateAsync(rate, true).catch(() => {});
   };
   const applyDuration = (mins) => { setDurationMin(mins); setElapsed(0); };
 
@@ -342,7 +325,7 @@ export default function Subliminal() {
   const ownCount = affSets.filter((s) => s.source === 'own').length;
 
   const resetWizard = () => {
-    setStep(1); setSelectedSetId(null); setBgType(null); setSelectedTrack(null); setPreset(null); setLabel('');
+    setStep(1); setSelectedSetId(null); setBgType(null); setSelectedTrack(null); setPreset('audible'); setLabel('');
   };
 
   const handleSave = async () => {
@@ -454,9 +437,9 @@ export default function Subliminal() {
             <Text style={styles.upsellIcon}>🎧</Text>
             <Text style={styles.upsellTitle}>Subliminal Audio</Text>
             <Text style={styles.upsellSubtitle}>
-              Real subliminals — your own voice frequency-shifted beneath binaural beats. Try our free samples above, or upgrade for unlimited sessions with your own affirmations.
+              Layer your own affirmations beneath calming music or binaural beats. Try our free samples above, or upgrade for unlimited sessions with your own affirmations.
             </Text>
-            {['🌙 Sleep mode — ultrasonic, near-inaudible', '🧘 Meditate mode — binaural beats for focus', '☀️ Passive mode — faster playback, works while you live your life', '🎵 Background music or solfeggio frequencies', '✨ Your own affirmations, unlimited sessions'].map((line) => (
+            {['🎧 Your affirmations looped under music, binaural beats or solfeggio tones', '🎵 Background music or solfeggio frequencies', '✨ Your own affirmations, unlimited sessions'].map((line) => (
               <Text key={line} style={styles.perkLine}>{line}</Text>
             ))}
             <Button title="Upgrade to Manifestor ✨" onPress={() => setShowUpgrade(true)} fullWidth style={{ marginTop: 12 }} />
@@ -587,7 +570,7 @@ export default function Subliminal() {
                 {step === 3 && (
                   <GlassCard style={styles.cardMargin}>
                     <Text style={styles.stepHeading}>Activate Subliminal</Text>
-                    <Text style={styles.stepSub}>Choose your transmission output level.</Text>
+                    <Text style={styles.stepSub}>Your affirmations will loop under the background track you picked.</Text>
 
                     {Object.entries(PRESETS).map(([key, p]) => (
                       <TouchableOpacity key={key} style={[styles.presetCard, preset === key && styles.presetCardActive]} onPress={() => setPreset(key)}>
@@ -680,9 +663,9 @@ export default function Subliminal() {
                       ))}
                     </View>
 
-                    <Text style={styles.controlLabel}>{activeSession.volume_level === 'subliminal' ? 'PITCH LIFT (SPEED)' : 'SPEED'}</Text>
+                    <Text style={styles.controlLabel}>SPEED</Text>
                     <View style={styles.pillRow}>
-                      {(activeSession.volume_level === 'subliminal' ? SILENT_SPEED_OPTIONS : AUDIBLE_SPEED_OPTIONS).map((r) => (
+                      {AUDIBLE_SPEED_OPTIONS.map((r) => (
                         <TouchableOpacity key={r} style={[styles.durPill, speed === r && styles.durPillActive]} onPress={() => applySpeed(r)}>
                           <Text style={[styles.durPillText, speed === r && styles.durPillTextActive]}>{r}×</Text>
                         </TouchableOpacity>
