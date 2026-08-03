@@ -542,7 +542,7 @@ export default function AuraCard() {
                     numberOfLines={1}
                     style={[styles.nameText, { color: activeStyle.text.name, fontSize: CARD_SIZE * 0.085 }]}
                   >
-                    Your Aura Card
+                    Your <Text style={styles.nameTextAccent}>Aura Card</Text>
                   </Text>
                   <Text style={[styles.subtitleText, { color: activeStyle.text.subtitle, fontSize: CARD_SIZE * 0.032 }]}>
                     {activeStyle.label}
@@ -555,7 +555,8 @@ export default function AuraCard() {
                     "{quote}"
                   </Text>
                   <View style={{ flex: 0.8 }} />
-                  <Text style={[styles.watermark, { fontSize: CARD_SIZE * 0.03 }]}>manivers.com</Text>
+                  <Text style={[styles.watermark, { fontSize: CARD_SIZE * 0.03, color: activeStyle.text.subtitle }]}>manivers.com</Text>
+                  <Text style={[styles.tagline, { fontSize: CARD_SIZE * 0.024, color: activeStyle.text.affirmation }]}>Believe · Receive · Become</Text>
                   <View style={{ flex: 0.5 }} />
                 </View>
               </View>
@@ -633,12 +634,14 @@ const styles = StyleSheet.create({
   cardCapture: { borderRadius: 24, overflow: 'hidden' },
   overlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', paddingHorizontal: '8%', paddingTop: '6%' },
 
-  brandText: { fontWeight: '500', letterSpacing: 2, textAlign: 'center' },
-  dateText: { fontStyle: 'italic', marginTop: 4, textAlign: 'center' },
-  nameText: { fontWeight: '300', letterSpacing: 1, textAlign: 'center' },
-  subtitleText: { fontStyle: 'italic', marginTop: 6, textAlign: 'center' },
-  affirmationText: { textAlign: 'center', lineHeight: 20, fontStyle: 'italic' },
-  watermark: { color: 'rgba(155,109,255,0.55)', letterSpacing: 1 },
+  brandText: { fontFamily: fonts.displayMedium, letterSpacing: 2, textAlign: 'center' },
+  dateText: { fontFamily: fonts.displayItalic, marginTop: 4, textAlign: 'center' },
+  nameText: { fontFamily: fonts.display, fontWeight: '400', letterSpacing: 0.5, textAlign: 'center' },
+  nameTextAccent: { fontFamily: fonts.displayItalic },
+  subtitleText: { fontFamily: fonts.displayItalic, marginTop: 6, textAlign: 'center' },
+  affirmationText: { fontFamily: fonts.displayItalic, textAlign: 'center', lineHeight: 20 },
+  watermark: { fontFamily: fonts.body, letterSpacing: 1 },
+  tagline: { fontFamily: fonts.displayItalic, marginTop: 2, textAlign: 'center', opacity: 0.7 },
 
   actionRow: { flexDirection: 'row', gap: 10, justifyContent: 'center' },
   actionBtn: {
