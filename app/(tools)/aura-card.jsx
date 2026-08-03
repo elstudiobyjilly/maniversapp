@@ -365,7 +365,12 @@ export default function AuraCard() {
   const [manualStyle, setManualStyle] = useState(null); // null = Auto
   const [pattern, setPattern] = useState('radial');
   const [colours, setColours] = useState({ purple: true, pink: true, blue: true, gold: true });
-  const [card, setCard] = useState(null);
+  // The preview is always live — it reacts to Style/Colours/Pattern as you
+  // pick them, it doesn't wait for a "Generate" tap. Generate Card just
+  // (re)rolls the footer quote; Clear Card hides the preview until you
+  // touch a control again.
+  const [quote, setQuote] = useState(AURA_AFFIRMATIONS[0]);
+  const [cardHidden, setCardHidden] = useState(false);
   const [error, setError] = useState('');
   const [downloading, setDownloading] = useState(false);
   const [sharing, setSharing] = useState(false);
@@ -373,6 +378,7 @@ export default function AuraCard() {
 
   const cardRef = useRef(null);
   const activeStyleKey = manualStyle || detectStyle(wordsText || 'aura');
+  const activeStyle = AURA_STYLES[activeStyleKey];
 
   const handleQuickAdd = (word) => {
     setWordsText((prev) => {
@@ -385,18 +391,19 @@ export default function AuraCard() {
   const handleGenerate = () => {
     const lines = wordsText.split('\n').map((l) => l.trim()).filter(Boolean);
     const joined = lines.join(' ') || 'aura';
-    const styleKey = manualStyle || detectStyle(joined);
-    const hash = hashStr(joined.toLowerCase());
+    const hash = hashStr(joined.toLowerCase() + Date.now());
     // Prefer the user's own last line as the footer quote; fall back to the
-    // curated affirmation bank so there's always something to show.
-    const quote = lines.length ? lines[lines.length - 1] : AURA_AFFIRMATIONS[hash % AURA_AFFIRMATIONS.length];
-    setCard({ styleKey, pattern, colours: { ...colours }, quote });
+    // curated affirmation bank (re-rolled each tap) so there's always
+    // something fresh to show.
+    const nextQuote = lines.length ? lines[lines.length - 1] : AURA_AFFIRMATIONS[hash % AURA_AFFIRMATIONS.length];
+    setQuote(nextQuote);
+    setCardHidden(false);
     setError('');
   };
 
   const handlePickStyle = (key) => {
     setManualStyle(key); // null when 'Auto' is tapped
-    if (card) setCard((c) => ({ ...c, styleKey: key || detectStyle(wordsText) }));
+    setCardHidden(false);
   };
 
   const handleShuffle = () => {
@@ -404,13 +411,13 @@ export default function AuraCard() {
     const nextPattern = PATTERNS[Math.floor(Math.random() * PATTERNS.length)];
     setManualStyle(nextStyle);
     setPattern(nextPattern);
-    if (card) setCard((c) => ({ ...c, styleKey: nextStyle, pattern: nextPattern }));
+    setCardHidden(false);
   };
 
-  const handleClearCard = () => setCard(null);
+  const handleClearCard = () => setCardHidden(true);
 
-  const toggleColour = (key) => setColours((prev) => ({ ...prev, [key]: !prev[key] }));
-  const handleResetColours = () => setColours({ purple: true, pink: true, blue: true, gold: true });
+  const toggleColour = (key) => { setColours((prev) => ({ ...prev, [key]: !prev[key] })); setCardHidden(false); };
+  const handleResetColours = () => { setColours({ purple: true, pink: true, blue: true, gold: true }); setCardHidden(false); };
 
   const handleDownload = async () => {
     setError(''); setInfo(''); setDownloading(true);
@@ -437,8 +444,6 @@ export default function AuraCard() {
       setError(e.message || 'Could not share your aura card');
     } finally { setSharing(false); }
   };
-
-  const activeStyle = card ? AURA_STYLES[card.styleKey] : null;
 
   return (
     <GradientBackground>
@@ -514,18 +519,18 @@ export default function AuraCard() {
           <Text style={[styles.label, { marginTop: 16 }]}>PATTERN</Text>
           <View style={styles.chipRow}>
             {PATTERNS.map((p) => (
-              <TouchableOpacity key={p} style={[styles.chip, pattern === p && styles.chipActive]} onPress={() => { setPattern(p); if (card) setCard((c) => ({ ...c, pattern: p })); }}>
+              <TouchableOpacity key={p} style={[styles.chip, pattern === p && styles.chipActive]} onPress={() => { setPattern(p); setCardHidden(false); }}>
                 <Text style={[styles.chipText, pattern === p && styles.chipTextActive]}>{PATTERN_LABELS[p]}</Text>
               </TouchableOpacity>
             ))}
           </View>
         </GlassCard>
 
-        {card && activeStyle && (
+        {!cardHidden && (
           <>
             <View style={styles.cardOuter}>
               <View ref={cardRef} collapsable={false} style={[styles.cardCapture, { width: CARD_SIZE, height: CARD_SIZE }]}>
-                <AuraCardSvg styleKey={card.styleKey} size={CARD_SIZE} pattern={card.pattern} colours={card.colours} />
+                <AuraCardSvg styleKey={activeStyleKey} size={CARD_SIZE} pattern={pattern} colours={colours} />
                 <View style={styles.overlay}>
                   <Text style={[styles.brandText, { color: activeStyle.text.name, fontSize: CARD_SIZE * 0.045 }]}>MANIVERS</Text>
                   <Text style={[styles.dateText, { color: activeStyle.text.subtitle, fontSize: CARD_SIZE * 0.026 }]}>
@@ -547,7 +552,7 @@ export default function AuraCard() {
                     numberOfLines={3}
                     style={[styles.affirmationText, { color: activeStyle.text.affirmation, fontSize: CARD_SIZE * 0.038 }]}
                   >
-                    "{card.quote}"
+                    "{quote}"
                   </Text>
                   <View style={{ flex: 0.8 }} />
                   <Text style={[styles.watermark, { fontSize: CARD_SIZE * 0.03 }]}>manivers.com</Text>
