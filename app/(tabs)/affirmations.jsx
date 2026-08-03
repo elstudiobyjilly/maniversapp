@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Modal, Alert } from 'react-native';
 import { Audio } from 'expo-av';
 import {
   generateAffirmation, getAffirmations, getAffirmationAudio,
   favoriteAffirmation, pinAffirmation, deleteAffirmation, getPinnedSets,
   saveOwnAffirmationSet, getAffirmationAudioStatus, createCheckout,
+  renameAffirmationSet, regenerateAffirmationAudio,
 } from '../../services/api';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
@@ -62,6 +63,12 @@ export default function Affirmations() {
   const [library, setLibrary] = useState([]);
   const [loadingLib, setLoadingLib] = useState(false);
   const [pinnedIds, setPinnedIds] = useState([]);
+
+  const [editing, setEditing] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editVoice, setEditVoice] = useState('luna');
+  const [editSaving, setEditSaving] = useState(false);
+  const [regenAudioLoading, setRegenAudioLoading] = useState(false);
 
   const canGenerateAi = hasFeature('ai_affirmations'); // false (0) on free
   const ownCap = limits?.own_affirmations_total; // free: 20 total ever
@@ -186,6 +193,40 @@ export default function Affirmations() {
   const handleFavorite = async (id) => { try { await favoriteAffirmation(id); loadLibrary(); } catch (_) {} };
   const handlePin = async (id) => { try { await pinAffirmation(id); loadLibrary(); } catch (_) {} };
   const handleDelete = async (id) => { try { await deleteAffirmation(id); setLibrary((l) => l.filter((a) => a.id !== id)); } catch (_) {} };
+
+  const openEdit = (item) => {
+    setEditing(item);
+    setEditTitle(item.desire || '');
+    setEditVoice(item.voice_id || 'luna');
+  };
+
+  const handleSaveRename = async () => {
+    if (!editing) return;
+    if (!editTitle.trim()) { Alert.alert('Enter a title ✨'); return; }
+    setEditSaving(true);
+    try {
+      await renameAffirmationSet(editing.id, editTitle.trim());
+      setLibrary((prev) => prev.map((a) => (a.id === editing.id ? { ...a, desire: editTitle.trim() } : a)));
+      setEditing((prev) => (prev ? { ...prev, desire: editTitle.trim() } : prev));
+      Alert.alert('Renamed ✨');
+    } catch (e) {
+      Alert.alert('Could not rename', e.message || 'Please try again.');
+    } finally { setEditSaving(false); }
+  };
+
+  const handleRegenerateVoice = async () => {
+    if (!editing) return;
+    const allowed = voicesAllowed.includes(editVoice);
+    if (!allowed) { setUpgradeMsg(`${VOICES.find((v) => v.id === editVoice)?.label || 'This voice'} is available on paid plans.`); setShowUpgrade(true); return; }
+    setRegenAudioLoading(true);
+    try {
+      await regenerateAffirmationAudio(editing.id, editVoice);
+      setLibrary((prev) => prev.map((a) => (a.id === editing.id ? { ...a, voice_id: editVoice, audio_url: null } : a)));
+      Alert.alert('Voice changed — audio is regenerating ✨');
+    } catch (e) {
+      Alert.alert('Could not change voice', e.message || 'Please try again.');
+    } finally { setRegenAudioLoading(false); }
+  };
 
   return (
     <GradientBackground>
@@ -384,6 +425,9 @@ export default function Affirmations() {
                       <TouchableOpacity style={styles.libIconBtn} onPress={() => handlePin(item.id)}>
                         <Text style={styles.libIconText}>{pinnedIds.includes(item.id) ? '📌' : '📍'}</Text>
                       </TouchableOpacity>
+                      <TouchableOpacity style={styles.libIconBtn} onPress={() => openEdit(item)}>
+                        <Text style={styles.libIconText}>✏️</Text>
+                      </TouchableOpacity>
                       <TouchableOpacity style={styles.libIconBtn} onPress={() => handleDelete(item.id)}>
                         <Text style={styles.libIconText}>🗑</Text>
                       </TouchableOpacity>
@@ -402,6 +446,42 @@ export default function Affirmations() {
         onClose={() => setShowUpgrade(false)}
         onSelectPlan={handleSelectPlan}
       />
+
+      <Modal visible={!!editing} animationType="slide" transparent onRequestClose={() => setEditing(null)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <Text style={styles.modalTitle}>Edit Affirmation Set</Text>
+
+            <Text style={styles.label}>TITLE</Text>
+            <View style={styles.inputBoxSm}>
+              <TextInput style={styles.input} value={editTitle} onChangeText={setEditTitle} placeholder="Set title" placeholderTextColor="rgba(46,37,48,0.4)" />
+            </View>
+            <Button title="Save Title" variant="ghost" size="sm" onPress={handleSaveRename} loading={editSaving} style={{ marginTop: 8, alignSelf: 'flex-start' }} />
+
+            <Text style={[styles.label, { marginTop: 16 }]}>VOICE</Text>
+            <View style={styles.chipRow}>
+              {VOICES.map((v) => {
+                const allowed = voicesAllowed.includes(v.id);
+                return (
+                  <Chip
+                    key={v.id}
+                    label={`${v.label}${!allowed ? ' 🔒' : ''}`}
+                    active={editVoice === v.id}
+                    locked={!allowed}
+                    onPress={() => setEditVoice(v.id)}
+                  />
+                );
+              })}
+            </View>
+
+            <Button title="🎙️ Regenerate Audio in This Voice" variant="ghost" onPress={handleRegenerateVoice} loading={regenAudioLoading} fullWidth style={{ marginTop: 14 }} />
+
+            <TouchableOpacity onPress={() => setEditing(null)} style={{ marginTop: 12, alignItems: 'center' }}>
+              <Text style={styles.cancelText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </GradientBackground>
   );
 }
@@ -444,4 +524,9 @@ const styles = StyleSheet.create({
   libBtnRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   libIconBtn: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center' },
   libIconText: { fontSize: 13 },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(46,37,48,0.4)', justifyContent: 'flex-end' },
+  modalSheet: { backgroundColor: '#fffaf3', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 36 },
+  modalTitle: { fontFamily: fonts.displayMedium, fontSize: 19, fontWeight: '400', color: colors.ink, marginBottom: 16 },
+  cancelText: { fontFamily: fonts.body, color: colors.mist, fontSize: 13.5, fontWeight: '500' },
 });
