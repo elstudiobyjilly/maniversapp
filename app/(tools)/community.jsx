@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { useEffect, useState, useRef } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { getCommunityPosts, createCommunityPost, loveCommunityPost, deleteCommunityPost, createCheckout } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
 import GlassCard from '../../components/GlassCard';
@@ -12,37 +12,70 @@ import { usePlanStore } from '../../store/planStore';
 import { colors, fonts, radii } from '../../constants/theme';
 import * as Linking from 'expo-linking';
 
+// Ported exactly from the website's compose selects (explore.js / features.html).
 const TYPE_OPTIONS = [
-  { value: 'intentions', label: 'Intentions' },
-  { value: 'success', label: 'Success Story' },
-  { value: 'technique', label: 'Techniques' },
+  { value: 'intention', label: '🌱 Intention' },
+  { value: 'success', label: '🎉 Success Story' },
+  { value: 'technique', label: '🌟 Technique' },
 ];
 const CATEGORY_OPTIONS = [
-  { value: 'general', label: 'General' },
-  { value: 'love', label: 'Love' },
-  { value: 'money', label: 'Money' },
-  { value: 'health', label: 'Health' },
-  { value: 'career', label: 'Career' },
+  { value: 'general', label: '🌸 General' },
+  { value: 'love', label: '💕 Love' },
+  { value: 'money', label: '💰 Money' },
+  { value: 'health', label: '🌿 Health' },
+  { value: 'career', label: '✨ Career' },
 ];
-const TYPE_FILTER_OPTIONS = [{ value: 'all', label: 'All Types' }, ...TYPE_OPTIONS];
-const CATEGORY_FILTER_OPTIONS = [{ value: 'all', label: 'All Categories' }, ...CATEGORY_OPTIONS];
+// The filter dropdowns use slightly different emoji from the compose ones on
+// the site itself — kept as-is for fidelity rather than "fixed" to match.
+const TYPE_FILTER_OPTIONS = [
+  { value: 'all', label: '🌟 Type' },
+  { value: 'intention', label: '🌱 Intentions' },
+  { value: 'success', label: '🎉 Success' },
+  { value: 'technique', label: '✨ Technique' },
+];
+const CATEGORY_FILTER_OPTIONS = [
+  { value: 'all', label: '🌸 Category' },
+  { value: 'general', label: '✨ General' },
+  { value: 'love', label: '💕 Love' },
+  { value: 'money', label: '💰 Money' },
+  { value: 'career', label: '🚀 Career' },
+  { value: 'health', label: '🌿 Health' },
+];
 const TRUNCATE_AT = 220;
+
+// Anonymous posts get a "Soul {emoji} {N}" pseudonym, generated once per
+// post id and stable only within this screen's lifetime — matches the
+// website's in-memory _communityAnonMap (resets every page load).
+const ANON_EMOJIS = ['🌸', '✨', '🌙', '💫', '🦋', '🌿', '💕', '🔮', '🌺', '⭐'];
 
 export default function Community() {
   const { hasFeature, refresh } = usePlanStore();
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [posts, setPosts] = useState([]);
   const [content, setContent] = useState('');
-  const [postType, setPostType] = useState('intentions');
+  const [postType, setPostType] = useState('intention');
   const [category, setCategory] = useState('general');
   const [typeFilter, setTypeFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [mineOnly, setMineOnly] = useState(false);
   const [expanded, setExpanded] = useState(new Set());
-  const myUsername = useAuthStore((s) => s.user?.username);
+  const user = useAuthStore((s) => s.user);
+  const myUsername = user?.username;
   const [loading, setLoading] = useState(true);
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState('');
+
+  const anonMap = useRef({});
+  const anonCount = useRef(0);
+  const getPostLabel = (p) => {
+    if (p.username === myUsername) return 'You ✨';
+    if (p.show_name && p.display_name) return `${p.display_name.split(' ')[0]} 🌸`;
+    if (!anonMap.current[p.id]) {
+      anonMap.current[p.id] = `Soul ${ANON_EMOJIS[anonCount.current % ANON_EMOJIS.length]} ${anonCount.current + 1}`;
+      anonCount.current += 1;
+    }
+    return anonMap.current[p.id];
+  };
 
   const load = async () => {
     try { setPosts(await getCommunityPosts()); } catch (e) { setError(e.message || 'Could not load feed'); }
@@ -50,7 +83,7 @@ export default function Community() {
 
   useEffect(() => { refresh(); load().finally(() => setLoading(false)); }, []);
 
-  const handlePost = async (showName) => {
+  const submitPost = async (showName) => {
     if (!hasFeature('community_post')) {
       setShowUpgrade(true);
       return;
@@ -65,6 +98,16 @@ export default function Community() {
       if (e.status === 403) setShowUpgrade(true);
       else setError(e.message || 'Could not post');
     } finally { setPosting(false); }
+  };
+
+  const handlePost = (showName) => {
+    if (!showName) { submitPost(false); return; }
+    const firstName = (user?.full_name || user?.username || '').split(' ')[0] || 'Your name';
+    Alert.alert(
+      'Share with your name?',
+      `Your first name "${firstName}" will be visible to everyone in the community.`,
+      [{ text: 'Cancel', style: 'cancel' }, { text: 'Share', onPress: () => submitPost(true) }]
+    );
   };
 
   const handleLove = async (postId) => {
@@ -122,7 +165,7 @@ export default function Community() {
               maxLength={500}
             />
           </View>
-          <Text style={styles.charCount}>{content.length}/500</Text>
+          <Text style={styles.charCount}>{content.length} / 500</Text>
 
           <View style={{ gap: 8, marginTop: 12 }}>
             <Dropdown label="Type" value={postType} options={TYPE_OPTIONS} onSelect={setPostType} fullWidth />
@@ -160,7 +203,7 @@ export default function Community() {
             return (
               <GlassCard key={p.id} style={styles.feedCard}>
                 <View style={styles.feedHead}>
-                  <Text style={styles.feedName}>{p.display_name || p.username} 🌸</Text>
+                  <Text style={styles.feedName}>{getPostLabel(p)}</Text>
                   <View style={styles.feedHeadRight}>
                     <TouchableOpacity onPress={() => handleLove(p.id)} style={styles.lovePill}>
                       <Text style={styles.lovePillText}>{p.i_loved ? '💕' : '🤍'} {p.love_count}</Text>
