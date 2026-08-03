@@ -6,6 +6,7 @@ import ScreenHeader from '../../components/ScreenHeader';
 import TabPill from '../../components/TabPill';
 import Dropdown from '../../components/Dropdown';
 import Button from '../../components/Button';
+import ExpandableTextArea from '../../components/ExpandableTextArea';
 import { colors, fonts, radii } from '../../constants/theme';
 import { getBeliefs, addBelief, updateBelief, deleteBelief } from '../../services/api';
 
@@ -129,16 +130,12 @@ export default function Beliefs() {
           <>
             <GlassCard style={styles.mb16}>
               <Text style={styles.label}>ADD A LIMITING BELIEF</Text>
-              <View style={styles.inputBox}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g. I am not enough"
-                  placeholderTextColor="rgba(46,37,48,0.4)"
-                  value={belief}
-                  onChangeText={setBelief}
-                  multiline
-                />
-              </View>
+              <ExpandableTextArea
+                value={belief}
+                onChangeText={setBelief}
+                placeholder="e.g. I am not enough"
+                modalTitle="Limiting Belief"
+              />
               {error ? <Text style={styles.errorText}>{error}</Text> : null}
               <Button title="+ Add Belief" onPress={handleAdd} loading={saving} style={{ marginTop: 10, alignSelf: 'flex-start' }} />
 
@@ -206,16 +203,12 @@ export default function Beliefs() {
                 <Text style={styles.reframeQuote}>"{reframeBelief?.belief}"</Text>
 
                 <Text style={[styles.label, { marginTop: 14 }]}>BUT NOW I KNOW...</Text>
-                <View style={styles.inputBox}>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Write your new truth..."
-                    placeholderTextColor="rgba(46,37,48,0.4)"
-                    value={reframeText}
-                    onChangeText={setReframeText}
-                    multiline
-                  />
-                </View>
+                <ExpandableTextArea
+                  value={reframeText}
+                  onChangeText={setReframeText}
+                  placeholder="Write your new truth..."
+                  modalTitle="Reframe"
+                />
 
                 <View style={[styles.chipRow, { marginTop: 10 }]}>
                   {REFRAME_STARTERS.map((s) => (

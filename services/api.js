@@ -578,6 +578,18 @@ export async function deleteScript(entryId) {
   return req('DELETE', `/scripting/${entryId}`);
 }
 
+// "Daily Script" is a separate resource from the Dream Life Script above —
+// one upsert-by-date entry per day, matching the website's script-my-day
+// endpoints (no delete endpoint exists server-side; the site only clears
+// its local cache, so we mirror that instead of inventing one).
+export async function getScriptMyDay() {
+  return req('GET', '/practice/script-my-day');
+}
+
+export async function saveScriptMyDay(content, scriptDate) {
+  return req('POST', '/practice/script-my-day', { content, script_date: scriptDate });
+}
+
 // ── REPS ──────────────────────────────────────────────────────────────
 export async function getRepsToday() {
   return req('GET', '/reps/today');

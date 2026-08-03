@@ -8,6 +8,7 @@ import GradientBackground from '../../components/GradientBackground';
 import ScreenHeader from '../../components/ScreenHeader';
 import Dropdown from '../../components/Dropdown';
 import Button from '../../components/Button';
+import ExpandableTextArea from '../../components/ExpandableTextArea';
 import { colors, fonts, radii } from '../../constants/theme';
 import { getManifested, addManifested, deleteManifested } from '../../services/api';
 
@@ -192,16 +193,13 @@ export default function Manifested() {
           </View>
 
           <Text style={[styles.label, { marginTop: 12 }]}>YOUR STORY (OPTIONAL)</Text>
-          <View style={[styles.inputBox, { minHeight: 80 }]}>
-            <TextInput
-              style={styles.input}
-              placeholder="How did it happen? How did you feel?..."
-              placeholderTextColor="rgba(46,37,48,0.4)"
-              value={story}
-              onChangeText={setStory}
-              multiline
-            />
-          </View>
+          <ExpandableTextArea
+            value={story}
+            onChangeText={setStory}
+            placeholder="How did it happen? How did you feel?..."
+            modalTitle="Your Story"
+            minHeight={80}
+          />
 
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
 

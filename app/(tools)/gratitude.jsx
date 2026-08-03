@@ -5,6 +5,7 @@ import GradientBackground from '../../components/GradientBackground';
 import ScreenHeader from '../../components/ScreenHeader';
 import Dropdown from '../../components/Dropdown';
 import Button from '../../components/Button';
+import ExpandableTextArea from '../../components/ExpandableTextArea';
 import { colors, fonts, radii } from '../../constants/theme';
 import { addGratitude, getGratitudeList, deleteGratitude } from '../../services/api';
 
@@ -177,16 +178,13 @@ export default function Gratitude() {
 
         <GlassCard style={styles.mb16}>
           <Text style={styles.label}>I AM GRATEFUL FOR...</Text>
-          <View style={[styles.inputBox, { minHeight: 90 }]}>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g. I am grateful for the warmth of sunlight, my health, the love in my life..."
-              placeholderTextColor="rgba(46,37,48,0.4)"
-              value={entry}
-              onChangeText={setEntry}
-              multiline
-            />
-          </View>
+          <ExpandableTextArea
+            value={entry}
+            onChangeText={setEntry}
+            placeholder="e.g. I am grateful for the warmth of sunlight, my health, the love in my life..."
+            modalTitle="Gratitude"
+            minHeight={90}
+          />
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
           <View style={styles.btnRow}>
