@@ -25,7 +25,7 @@ const SECTIONS = [
   {
     title: 'Daily Practice',
     tools: [
-      { key: 'methods', label: 'Practice Methods', icon: 'flower-outline', desc: '369, scripting, mirror work & more' },
+      { key: 'practice', label: 'Practice', icon: 'flower-outline', desc: 'Methods to try & manifestation tools' },
       { key: 'meditate', label: 'Meditate', icon: 'leaf-outline', desc: 'Breath timer, med timer, guided sessions' },
       { key: 'daily-intention', label: 'Daily Intention', icon: 'sunny-outline', desc: 'Set your focus for today' },
       { key: 'scripting', label: 'Scripting', icon: 'create-outline', desc: 'Script your day as it happens' },
@@ -73,12 +73,6 @@ const SECTIONS = [
     title: 'Create & Share',
     tools: [
       { key: 'aura-card', label: 'Aura Card', icon: 'color-palette-outline', desc: 'Generate a shareable aura card' },
-    ],
-  },
-  {
-    title: 'Fun Tools',
-    tools: [
-      { key: 'practice-tools', label: 'Practice Tools', icon: 'sparkles-outline', desc: 'All 10 manifestation tools, one page' },
     ],
   },
 ];

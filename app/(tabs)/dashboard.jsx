@@ -127,7 +127,7 @@ export default function Dashboard() {
           <ShortcutRow router={router} items={[
             { icon: '💫', label: 'Feel It', route: '/feelit' },
             { icon: '🧘', label: 'Meditate', route: '/meditate' },
-            { icon: '🧰', label: 'Tools', route: '/practice-tools' },
+            { icon: '🧰', label: 'Practice', route: '/practice' },
           ]} />
           <ShortcutRow router={router} items={[
             { icon: '☀️', label: 'Daily', route: '/daily' },
