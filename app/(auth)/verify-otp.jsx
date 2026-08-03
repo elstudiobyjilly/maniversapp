@@ -3,6 +3,7 @@ import { View, Text, TextInput } from 'react-native';
 import { StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuthStore } from '../../store/authStore';
+import { getProfile } from '../../services/api';
 import Button from '../../components/Button';
 import { colors, fonts, radii, shadows } from '../../constants/theme';
 
@@ -19,7 +20,9 @@ export default function VerifyOtp() {
     setError(''); setLoading(true);
     try {
       await confirmOtp(email, code.trim());
-      router.replace('/(tabs)/dashboard');
+      let onboardingDone = false;
+      try { onboardingDone = !!(await getProfile()).onboarding_done; } catch (_) {}
+      router.replace(onboardingDone ? '/(tabs)/dashboard' : '/(auth)/onboarding');
     } catch (e) {
       setError(e.message || 'Verification failed');
     } finally { setLoading(false); }

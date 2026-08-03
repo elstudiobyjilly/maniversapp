@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { useAuthStore } from '../../store/authStore';
+import { getProfile } from '../../services/api';
 import Button from '../../components/Button';
 import { colors, fonts, radii, shadows } from '../../constants/theme';
 
@@ -18,7 +19,9 @@ export default function Login() {
     setError(''); setLoading(true);
     try {
       await login(username.trim(), password);
-      router.replace('/(tabs)/dashboard');
+      let onboardingDone = true;
+      try { onboardingDone = !!(await getProfile()).onboarding_done; } catch (_) {}
+      router.replace(onboardingDone ? '/(tabs)/dashboard' : '/(auth)/onboarding');
     } catch (e) {
       setError(e.message || 'Login failed');
     } finally { setLoading(false); }
