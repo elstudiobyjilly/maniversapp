@@ -7,14 +7,21 @@ import ScreenHeader from '../../components/ScreenHeader';
 import Button from '../../components/Button';
 import ExpandableTextArea from '../../components/ExpandableTextArea';
 import { colors, fonts, radii } from '../../constants/theme';
-import { getKv, saveKv, createDesire, deleteDesire, getDesires, createCheckout } from '../../services/api';
+import {
+  createCheckout,
+  getRoadmaps, createRoadmap, deleteRoadmap,
+  getRoadmapDayLogs, createRoadmapDayLog, deleteRoadmapDayLog,
+} from '../../services/api';
 import UpgradeModal from '../../components/UpgradeModal';
 import { usePlanStore } from '../../store/planStore';
 import * as Linking from 'expo-linking';
 
-const DESIRES_KEY = 'mv_dt_desires';
+// Roadmap (the desire + duration + practice list) and its day logs live on
+// the real /roadmap + /roadmap/log backend, matching the website. The
+// backend has no "start date" field for a roadmap, so we anchor each one's
+// calendar grid locally -- this is the only thing still stored on-device.
 const CURRENT_KEY = 'mv_dt_current';
-const LOG_KEY_PREFIX = 'mv_dt_logs_';
+const START_KEY_PREFIX = 'mv_dt_start_';
 
 const DURATIONS = [7, 21, 30, 40, 66];
 const PRACTICE_OPTIONS = [
@@ -43,20 +50,36 @@ function fmtShort(d) {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
+// Map { [dateKey]: {id, practices:{name:true}, note} } derived from the raw
+// /roadmap/log/ list, keeping only logs whose `desire` text matches the
+// given roadmap's title (the backend has no roadmap_id FK, so text is the
+// only association it stores).
+function buildLogsMap(rawLogs, desireTitle) {
+  const map = {};
+  for (const log of rawLogs) {
+    if (log.desire !== desireTitle) continue;
+    const dateKey = (log.log_date || '').slice(0, 10);
+    if (!dateKey) continue;
+    const practices = {};
+    (log.practices || []).forEach((p) => { practices[p] = true; });
+    map[dateKey] = { id: log.id, practices, note: log.action || '' };
+  }
+  return map;
+}
+
+function dayNumberFor(dateKey, startDate) {
+  const diff = Math.round((startOfDay(new Date(dateKey)) - startOfDay(new Date(startDate))) / 86400000) + 1;
+  return Math.max(1, Math.min(40, diff)); // backend day logs are capped 1-40
+}
+
 export default function DesireActionTool() {
-  const { limits, loaded, refresh } = usePlanStore();
+  const { refresh } = usePlanStore();
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [upgradeMsg, setUpgradeMsg] = useState('');
-  // Real desire count from the backend (/desires), used purely to enforce
-  // the shared 2-total-ever free cap -- this tracker's local desires still
-  // live in KV (dt_desires) but each NEW one now also creates a real
-  // /desires row so it counts against the same cap as the website's
-  // Desires panel, per plan-gate.js (both storage keys share one limit).
-  const [backendDesireCount, setBackendDesireCount] = useState(null);
 
   const [desires, setDesires] = useState([]);
+  const [rawLogs, setRawLogs] = useState([]); // full /roadmap/log/ list, all desires
   const [currentId, setCurrentId] = useState(null);
-  const [logs, setLogs] = useState({}); // logs for current desire
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDay, setSelectedDay] = useState(null);
   const [noteText, setNoteText] = useState('');
@@ -74,82 +97,38 @@ export default function DesireActionTool() {
   const [editPracs, setEditPracs] = useState([]);
 
   // ── Load ──────────────────────────────────────────────────────────────
-  useEffect(() => {
+  const loadAll = useCallback(async (preferId) => {
     refresh();
-    getDesires().then((d) => setBackendDesireCount(d.length)).catch(() => {});
-    (async () => {
-      try {
-        const localD = await AsyncStorage.getItem(DESIRES_KEY);
-        const localCur = await AsyncStorage.getItem(CURRENT_KEY);
-        let d = localD ? JSON.parse(localD) : [];
-        setDesires(d);
-        if (d.length) {
-          const cur = localCur || d[0].id;
-          setCurrentId(cur);
-          const localLogs = await AsyncStorage.getItem(LOG_KEY_PREFIX + cur);
-          if (localLogs) setLogs(JSON.parse(localLogs));
-        }
-      } catch (e) {}
-      setLoaded(true);
+    try {
+      const [roadmaps, logsList] = await Promise.all([getRoadmaps(), getRoadmapDayLogs()]);
+      const withStart = await Promise.all(roadmaps.map(async (r) => {
+        let startDate = null;
+        try { startDate = await AsyncStorage.getItem(START_KEY_PREFIX + r.id); } catch (e) {}
+        if (!startDate) startDate = (r.created_at || '').slice(0, 10) || toDateKey(new Date());
+        const endDate = toDateKey(addDays(new Date(startDate), (r.days || 21) - 1));
+        return { id: r.id, title: r.desire, days: r.days, practices: r.practices || [], startDate, endDate };
+      }));
+      setDesires(withStart);
+      setRawLogs(logsList);
+      const localCur = await AsyncStorage.getItem(CURRENT_KEY).catch(() => null);
+      const cur = preferId ?? (withStart.find((d) => d.id === localCur * 1) ? localCur * 1 : withStart[0]?.id) ?? null;
+      setCurrentId(cur);
+    } catch (e) {}
+  }, [refresh]);
 
-      // background refresh from backend
-      try {
-        const remoteDesiresRaw = await getKv('dt_desires');
-        if (remoteDesiresRaw) {
-          const remoteDesires = JSON.parse(remoteDesiresRaw);
-          if (Array.isArray(remoteDesires) && remoteDesires.length) {
-            await AsyncStorage.setItem(DESIRES_KEY, JSON.stringify(remoteDesires));
-            setDesires(remoteDesires);
-          }
-        }
-        const remoteLogsRaw = await getKv('dt_logs');
-        if (remoteLogsRaw) {
-          const remoteLogs = JSON.parse(remoteLogsRaw); // { [desireId]: logs }
-          for (const k of Object.keys(remoteLogs)) {
-            const existing = await AsyncStorage.getItem(LOG_KEY_PREFIX + k);
-            if (!existing) await AsyncStorage.setItem(LOG_KEY_PREFIX + k, JSON.stringify(remoteLogs[k]));
-          }
-        }
-      } catch (e) {}
-    })();
-  }, []);
+  useEffect(() => { loadAll(); }, []);
 
-  // when currentId changes, load its logs + reset view state
   useEffect(() => {
-    if (!currentId) return;
-    (async () => {
-      try {
-        const l = await AsyncStorage.getItem(LOG_KEY_PREFIX + currentId);
-        setLogs(l ? JSON.parse(l) : {});
-      } catch (e) { setLogs({}); }
-      setWeekOffset(0);
-      setSelectedDay(null);
-    })();
+    if (currentId != null) { AsyncStorage.setItem(CURRENT_KEY, String(currentId)).catch(() => {}); }
+    setWeekOffset(0);
+    setSelectedDay(null);
   }, [currentId]);
 
   const currentDesire = desires.find((d) => d.id === currentId) || null;
-
-  // ── Persistence helpers ──────────────────────────────────────────────
-  const persistDesires = useCallback(async (next) => {
-    setDesires(next);
-    try { await AsyncStorage.setItem(DESIRES_KEY, JSON.stringify(next)); } catch (e) {}
-    try { await saveKv('dt_desires', JSON.stringify(next)); } catch (e) {}
-  }, []);
-
-  const persistLogs = useCallback(async (desireId, nextLogs) => {
-    setLogs(nextLogs);
-    try { await AsyncStorage.setItem(LOG_KEY_PREFIX + desireId, JSON.stringify(nextLogs)); } catch (e) {}
-    try {
-      // sync ALL logs map to backend, matching website behaviour
-      const allLogsRaw = {};
-      for (const d of desires) {
-        if (d.id === desireId) { allLogsRaw[d.id] = nextLogs; continue; }
-        const l = await AsyncStorage.getItem(LOG_KEY_PREFIX + d.id);
-        allLogsRaw[d.id] = l ? JSON.parse(l) : {};
-      }
-      await saveKv('dt_logs', JSON.stringify(allLogsRaw));
-    } catch (e) {}
-  }, [desires]);
+  const logs = useMemo(
+    () => (currentDesire ? buildLogsMap(rawLogs, currentDesire.title) : {}),
+    [rawLogs, currentDesire]
+  );
 
   // ── Derived: progress ────────────────────────────────────────────────
   const progress = useMemo(() => {
@@ -223,22 +202,37 @@ export default function DesireActionTool() {
     setNoteText((logs[dateKey] || {}).note || '');
   };
 
+  // A day's log has no PATCH on the backend -- editing means delete the
+  // existing row (if any) and create a fresh one with the merged fields.
+  const saveDayLog = useCallback(async (dateKey, { practices, note }) => {
+    if (!currentDesire) return;
+    const existing = logs[dateKey];
+    const day = dayNumberFor(dateKey, currentDesire.startDate);
+    const completedNames = Object.keys(practices).filter((p) => practices[p]);
+    try {
+      if (existing?.id) { try { await deleteRoadmapDayLog(existing.id); } catch (e) {} }
+      const created = await createRoadmapDayLog({
+        day, desire: currentDesire.title, practices: completedNames, action: note || '', date: dateKey,
+      });
+      setRawLogs((cur) => [
+        ...cur.filter((l) => !(existing?.id && l.id === existing.id)),
+        created,
+      ]);
+    } catch (e) {
+      Alert.alert('Could not save', e.message || 'Please try again.');
+    }
+  }, [currentDesire, logs]);
+
   const handleTogglePractice = (practice) => {
-    if (!selectedDay || !currentId) return;
-    const nextLogs = { ...logs };
-    if (!nextLogs[selectedDay]) nextLogs[selectedDay] = {};
-    if (!nextLogs[selectedDay].practices) nextLogs[selectedDay] = { ...nextLogs[selectedDay], practices: {} };
-    nextLogs[selectedDay] = {
-      ...nextLogs[selectedDay],
-      practices: { ...nextLogs[selectedDay].practices, [practice]: !nextLogs[selectedDay].practices?.[practice] },
-    };
-    persistLogs(currentId, nextLogs);
+    if (!selectedDay || !currentDesire) return;
+    const cur = logs[selectedDay]?.practices || {};
+    const nextPractices = { ...cur, [practice]: !cur[practice] };
+    saveDayLog(selectedDay, { practices: nextPractices, note: logs[selectedDay]?.note || noteText });
   };
 
   const handleSaveNote = () => {
-    if (!selectedDay || !currentId) return;
-    const nextLogs = { ...logs, [selectedDay]: { ...(logs[selectedDay] || {}), note: noteText } };
-    persistLogs(currentId, nextLogs);
+    if (!selectedDay || !currentDesire) return;
+    saveDayLog(selectedDay, { practices: logs[selectedDay]?.practices || {}, note: noteText });
   };
 
   // ── Handlers: add desire ────────────────────────────────────────────
@@ -258,45 +252,24 @@ export default function DesireActionTool() {
   const handleSaveNewDesire = async () => {
     if (!addTitle.trim()) { Alert.alert('Enter your desire ✨'); return; }
 
-    // Enforce the SHARED free cap (desires_total: 2) before creating --
-    // this mirrors website's plan-gate.js, which counts mv_desires_cache +
-    // mv_dt_desires together against one limit.
-    const cap = limits?.desires_total;
-    if (cap != null && backendDesireCount != null && backendDesireCount >= cap) {
-      setUpgradeMsg(`You've reached your ${cap} free desires -- upgrade to track more at once.`);
-      setShowUpgrade(true);
-      return;
-    }
-
     const customList = addCustom.split('\n').map((s) => s.trim()).filter(Boolean);
-    const desire = {
-      id: 'dt_' + Date.now(),
-      title: addTitle.trim(),
-      startDate: addStart,
-      endDate: addEndDate,
-      practices: [...addPracs, ...customList],
-      createdAt: new Date().toISOString(),
-    };
+    const title = addTitle.trim();
+    const practices = [...addPracs, ...customList];
 
-    // Create the REAL backend desire too, so it counts against the shared
-    // cap and can be linked from other features (Vision Board, etc).
     try {
-      await createDesire({ title: addTitle.trim(), target_date: addEndDate });
-      setBackendDesireCount((c) => (c == null ? 1 : c + 1));
+      const created = await createRoadmap({ desire: title, days: addDur, weeks: [], practices });
+      try { await AsyncStorage.setItem(START_KEY_PREFIX + created.id, addStart); } catch (e) {}
+      await loadAll(created.id);
+      setAddOpen(false);
+      Alert.alert('Desire tracker started ✨');
     } catch (e) {
       if (e.status === 403) {
         setUpgradeMsg(e.message || 'Upgrade to track more desires.');
         setShowUpgrade(true);
-        return; // don't save locally either -- keep both systems in sync
+      } else {
+        Alert.alert('Could not start tracker', e.message || 'Please try again.');
       }
-      // Non-plan errors (network, etc) -- still let the local tracker work
     }
-
-    const next = [...desires, desire];
-    persistDesires(next);
-    setAddOpen(false);
-    setCurrentId(desire.id);
-    Alert.alert('Desire tracker started ✨');
   };
 
   // ── Handlers: edit desire ───────────────────────────────────────────
@@ -314,24 +287,55 @@ export default function DesireActionTool() {
   };
   const editEndDate = useMemo(() => toDateKey(addDays(new Date(editStart || new Date()), editDur - 1)), [editStart, editDur]);
 
-  const handleSaveEditDesire = () => {
+  // The backend has no update endpoint for a roadmap's desire/days/practices
+  // (only /check and /note, which belong to the unrelated week-checklist
+  // flow) -- so "editing" recreates the roadmap and migrates its day logs.
+  const handleSaveEditDesire = async () => {
     if (!currentDesire) return;
     if (!editTitle.trim()) { Alert.alert('Enter your desire ✨'); return; }
-    const next = desires.map((d) => (d.id === currentId ? { ...d, title: editTitle.trim(), startDate: editStart, endDate: editEndDate, practices: editPracs } : d));
-    persistDesires(next);
-    setEditOpen(false);
-    Alert.alert('Desire updated ✨');
+    const title = editTitle.trim();
+    const oldId = currentDesire.id;
+    const oldTitle = currentDesire.title;
+    const oldLogs = rawLogs.filter((l) => l.desire === oldTitle);
+
+    try {
+      const created = await createRoadmap({ desire: title, days: editDur, weeks: [], practices: editPracs });
+      try { await AsyncStorage.setItem(START_KEY_PREFIX + created.id, editStart); } catch (e) {}
+
+      for (const l of oldLogs) {
+        try {
+          await deleteRoadmapDayLog(l.id);
+          await createRoadmapDayLog({
+            day: dayNumberFor((l.log_date || '').slice(0, 10), editStart),
+            desire: title, practices: l.practices || [], action: l.action || '', date: (l.log_date || '').slice(0, 10),
+          });
+        } catch (e) {}
+      }
+
+      try { await deleteRoadmap(oldId); } catch (e) {}
+      try { await AsyncStorage.removeItem(START_KEY_PREFIX + oldId); } catch (e) {}
+
+      await loadAll(created.id);
+      setEditOpen(false);
+      Alert.alert('Desire updated ✨');
+    } catch (e) {
+      Alert.alert('Could not update', e.message || 'Please try again.');
+    }
   };
 
   const handleDeleteDesire = () => {
-    if (!currentId) return;
+    if (!currentDesire) return;
+    const id = currentDesire.id;
+    const title = currentDesire.title;
     Alert.alert('Delete this desire and all its logs?', null, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
-        try { await AsyncStorage.removeItem(LOG_KEY_PREFIX + currentId); } catch (e) {}
-        const next = desires.filter((d) => d.id !== currentId);
-        persistDesires(next);
-        setCurrentId(next.length ? next[0].id : null);
+        const toRemove = rawLogs.filter((l) => l.desire === title);
+        for (const l of toRemove) { try { await deleteRoadmapDayLog(l.id); } catch (e) {} }
+        try { await deleteRoadmap(id); } catch (e) {}
+        try { await AsyncStorage.removeItem(START_KEY_PREFIX + id); } catch (e) {}
+        const remaining = desires.filter((d) => d.id !== id);
+        await loadAll(remaining.length ? remaining[0].id : null);
         Alert.alert('Desire removed');
       } },
     ]);

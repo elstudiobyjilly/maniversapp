@@ -121,7 +121,7 @@ function FeelGridCard({ card, index, onOpen, onEdit, onDelete }) {
 }
 
 // ─── Full-screen swipeable reader — matches the website's mv-feel-fs-ov.
-function FeelFullScreen({ cards, index, onIndexChange, onClose, onEdit, onDelete }) {
+function FeelFullScreen({ cards, index, onIndexChange, onClose, onEdit, onDelete, onAdd }) {
   const card = cards[index];
   const [speaking, setSpeaking] = useState(false);
   const pal = card ? paletteFor(card, index) : FEEL_COLOR_PALETTE[0];
@@ -177,6 +177,22 @@ function FeelFullScreen({ cards, index, onIndexChange, onClose, onEdit, onDelete
             <Text style={styles.fsNavBtnText}>Next ›</Text>
           </TouchableOpacity>
         </View>
+
+        <View style={styles.fsPager}>
+          <TouchableOpacity style={styles.fsNavBtn} onPress={() => onIndexChange((index - 1 + cards.length) % cards.length)}>
+            <Text style={styles.fsNavBtnText}>‹</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onClose}>
+            <Text style={[styles.fsCounter, { color: tc.accent }]}>{index + 1} of {cards.length}  ✕</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.fsNavBtn} onPress={() => onIndexChange((index + 1) % cards.length)}>
+            <Text style={styles.fsNavBtnText}>›</Text>
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity style={styles.fsAddBtn} onPress={onAdd}>
+          <Text style={styles.fsAddBtnText}>＋ Add desire card</Text>
+        </TouchableOpacity>
       </LinearGradient>
     </Modal>
   );
@@ -268,7 +284,9 @@ export default function FeelIt() {
   // My Feel Cards state
   const [myCards, setMyCards] = useState([]);
   const [loadingCards, setLoadingCards] = useState(true);
-  const [feelView, setFeelView] = useState('grid'); // 'grid' | 'fullscreen'
+  // Default view is the full-screen swipeable single-card reader (matches
+  // the website) -- the grid is only reached via the X/"view all" action.
+  const [feelView, setFeelView] = useState('fullscreen'); // 'grid' | 'fullscreen'
   const [stackIndex, setStackIndex] = useState(0);
   const [editingCard, setEditingCard] = useState(null); // card object, or {} for new
   const [editVisible, setEditVisible] = useState(false);
@@ -474,6 +492,7 @@ export default function FeelIt() {
           onClose={closeToGrid}
           onEdit={() => startEdit(myCards[stackIndex])}
           onDelete={() => handleDeleteCard(myCards[stackIndex])}
+          onAdd={startAdd}
         />
       )}
 
@@ -565,7 +584,10 @@ const styles = StyleSheet.create({
   fsBody: { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 40, flexGrow: 1, justifyContent: 'center' },
   fsDesire: { fontFamily: fonts.bodyMedium, fontSize: 11, fontWeight: '700', letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: 20 },
   fsText: { fontFamily: fonts.displayItalic, fontSize: 20, fontStyle: 'italic', fontWeight: '300', lineHeight: 32 },
-  fsBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, paddingBottom: 30, backgroundColor: 'rgba(255,255,255,0.25)' },
+  fsBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, backgroundColor: 'rgba(255,255,255,0.25)' },
+  fsPager: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 14, paddingVertical: 12, backgroundColor: 'rgba(255,255,255,0.25)' },
+  fsAddBtn: { alignSelf: 'center', marginTop: 10, marginBottom: 30, paddingVertical: 10, paddingHorizontal: 20, borderRadius: radii.pill, borderWidth: 1.5, borderStyle: 'dashed', borderColor: 'rgba(255,255,255,0.6)' },
+  fsAddBtnText: { fontFamily: fonts.bodyMedium, fontSize: 13, fontWeight: '600', color: colors.purpleDark },
 
   // Edit modal
   editScroll: { padding: 20, paddingTop: 24, paddingBottom: 60 },

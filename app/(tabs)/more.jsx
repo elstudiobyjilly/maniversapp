@@ -56,7 +56,6 @@ const SECTIONS = [
     title: 'Planning & Wins',
     tools: [
       { key: 'desire-action', label: 'Desire Action', icon: 'footsteps-outline', desc: 'Daily practice tracker per desire' },
-      { key: 'roadmap', label: 'Roadmap', icon: 'map-outline', desc: 'Plan your manifestation journey' },
       { key: 'manifested', label: 'Manifested', icon: 'trophy-outline', desc: 'Celebrate your wins' },
       { key: 'abundance-cheque', label: 'Abundance Cheque', icon: 'cash-outline', desc: 'Visualize receiving' },
     ],

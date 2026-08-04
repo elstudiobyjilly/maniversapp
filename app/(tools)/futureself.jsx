@@ -17,6 +17,7 @@ import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import ScreenHeader from '../../components/ScreenHeader';
 import Dropdown from '../../components/Dropdown';
+import TabPill from '../../components/TabPill';
 import {
   getIdentity, saveIdentity,
   getFutureSelf, saveFutureSelf,
@@ -840,23 +841,12 @@ export default function FutureSelf() {
 
         <ScreenHeader lead="Future" accent="Self" subtitle="Identity, portrait, bridge & letters from who you're becoming" />
 
-        {/* 5-tab horizontal pill row */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
+        <TabPill
+          options={TABS.map(t => ({ value: t.id, label: t.label }))}
+          value={tab}
+          onChange={setTab}
           style={styles.tabScrollWrap}
-          contentContainerStyle={styles.tabScrollContent}
-        >
-          {TABS.map(t => (
-            <TouchableOpacity
-              key={t.id}
-              style={[styles.tabPill, tab === t.id && styles.tabPillActive]}
-              onPress={() => setTab(t.id)}
-            >
-              <Text style={[styles.tabPillText, tab === t.id && styles.tabPillTextActive]}>{t.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        />
 
         {/* Tab content */}
         {tab === 'identity' && <IdentityTab />}
@@ -878,20 +868,7 @@ const styles = StyleSheet.create({
   titleAccent: { color: '#9a5fa8', fontStyle: 'italic' },
   screenSubtitle: { fontSize: 13, color: '#6b5c66', fontWeight: '500', marginBottom: 16 },
 
-  // Horizontal tab pills
   tabScrollWrap: { marginBottom: 20 },
-  tabScrollContent: { gap: 8, paddingRight: 4 },
-  tabPill: {
-    paddingVertical: 9,
-    paddingHorizontal: 18,
-    borderRadius: 50,
-    backgroundColor: 'rgba(255,255,255,0.5)',
-    borderWidth: 1,
-    borderColor: 'rgba(154,95,168,0.2)',
-  },
-  tabPillActive: { backgroundColor: '#c9a8c9', borderColor: '#c9a8c9' },
-  tabPillText: { fontSize: 13, fontWeight: '600', color: '#6b5c66' },
-  tabPillTextActive: { color: '#fff' },
 
   tabIntro: { fontSize: 13, color: '#6b5c66', fontWeight: '500', marginBottom: 16, textAlign: 'center' },
 

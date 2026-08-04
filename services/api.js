@@ -572,6 +572,19 @@ export async function deleteRoadmap(rmId) {
   return req('DELETE', `/roadmap/${rmId}`);
 }
 
+// ── ROADMAP DAY LOGS ─────────────────────────────────────────────────
+export async function getRoadmapDayLogs() {
+  return req('GET', '/roadmap/log/');
+}
+
+export async function createRoadmapDayLog({ day, desire, practices = [], action = '', date }) {
+  return req('POST', '/roadmap/log/', { day, desire, practices, action, date });
+}
+
+export async function deleteRoadmapDayLog(logId) {
+  return req('DELETE', `/roadmap/log/${logId}`);
+}
+
 // ── SCRIPTING ─────────────────────────────────────────────────────────
 export async function getScripts() {
   return req('GET', '/scripting/');
