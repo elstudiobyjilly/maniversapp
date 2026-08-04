@@ -728,6 +728,11 @@ export async function updateProfile(body) {
   return req('PUT', '/profile', body);
 }
 
+// ── SESSIONS / TRACKER ───────────────────────────────────────────────
+export async function getSessionStats() {
+  return req('GET', '/sessions/stats');
+}
+
 // ── SUBSCRIPTIONS ─────────────────────────────────────────────────────
 export async function getSubscriptionStatus() {
   return req('GET', '/subscriptions/status');

@@ -45,6 +45,7 @@ const SECTIONS = [
     title: 'Insights',
     tools: [
       { key: 'daily', label: 'Daily Energy', icon: 'sparkles-outline', desc: "Today's message, oracle pull & horoscope" },
+      { key: 'tracker', label: 'Tracker', icon: 'stats-chart-outline', desc: 'Your practice stats & plan usage' },
     ],
   },
   {

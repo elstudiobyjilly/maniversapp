@@ -136,6 +136,7 @@ export default function Dashboard() {
           <ShortcutRow router={router} items={[
             { icon: '🌸', label: 'Community', route: '/community' },
             { icon: '📖', label: 'Read', route: '/discover' },
+            { icon: '📊', label: 'Tracker', route: '/tracker' },
           ]} />
           <ShortcutRow router={router} items={[
             { icon: '🎴', label: 'Aura Card', route: '/aura-card' },
