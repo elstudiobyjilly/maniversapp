@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Modal } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getDiscoverPosts, getDiscoverGuides } from '../../services/api';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
@@ -177,6 +178,7 @@ const TECHNIQUES = [
 ];
 
 export default function Discover() {
+  const insets = useSafeAreaInsets();
   const [tab, setTab] = useState('knowledge');
   const [posts, setPosts] = useState([]);
   const [guides, setGuides] = useState(PAPER_GUIDES);
@@ -202,7 +204,7 @@ export default function Discover() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 50, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 60, paddingBottom: 40 }}>
         <ScreenHeader lead="Dis" accent="cover" subtitle="Manifesting knowledge, wisdom & guides — curated with love." />
 
         <TabPill

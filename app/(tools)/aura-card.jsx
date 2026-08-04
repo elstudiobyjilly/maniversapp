@@ -306,17 +306,22 @@ function AuraCardSvg({ styleKey, size, pattern, colours }) {
               ))}
             </LinearGradient>
           )}
+          {/* Each ribbon spans the full canvas as a soft diagonal streak
+              (fades to transparent at both ends) instead of a hard-edged
+              horizontal band, so overlapping ribbons blend instead of
+              showing visible rectangle seams. */}
           {stopColors.map((c, i) => (
-            <LinearGradient key={i} id={`aur-${styleKey}-${i}`} x1="0%" y1={`${i * 15}%`} x2="100%" y2={`${40 + i * 20}%`}>
+            <LinearGradient key={i} id={`aur-${styleKey}-${i}`} x1="0%" y1={`${i * 22}%`} x2="100%" y2={`${45 + i * 20}%`}>
               <Stop offset="0%" stopColor={c} stopOpacity={0} />
-              <Stop offset="50%" stopColor={c} stopOpacity={0.45} />
+              <Stop offset="45%" stopColor={c} stopOpacity={0.5} />
+              <Stop offset="55%" stopColor={c} stopOpacity={0.5} />
               <Stop offset="100%" stopColor={c} stopOpacity={0} />
             </LinearGradient>
           ))}
         </Defs>
         <Rect x="0" y="0" width={size} height={size} fill={s.bg.type === 'solid' ? s.bg.colors[0] : `url(#bg-${styleKey})`} />
         {stopColors.map((c, i) => (
-          <Rect key={i} x="0" y={size * (0.15 + i * 0.22)} width={size} height={size * 0.35} fill={`url(#aur-${styleKey}-${i})`} />
+          <Rect key={i} x="0" y="0" width={size} height={size} fill={`url(#aur-${styleKey}-${i})`} />
         ))}
       </Svg>
     );
@@ -380,6 +385,15 @@ export default function AuraCard() {
   const cardRef = useRef(null);
   const activeStyleKey = manualStyle || detectStyle(wordsText || 'aura');
   const activeStyle = AURA_STYLES[activeStyleKey];
+
+  // Style picker: fixed 2 rows, N scrollable columns (pairs of chips) instead
+  // of wrapping every chip across many rows.
+  const styleOptions = [
+    { key: null, label: '✨ Auto' },
+    ...STYLE_KEYS.map((key) => ({ key, label: AURA_STYLES[key].label })),
+  ];
+  const styleColumns = [];
+  for (let i = 0; i < styleOptions.length; i += 2) styleColumns.push(styleOptions.slice(i, i + 2));
 
   const handleQuickAdd = (word) => {
     setWordsText((prev) => {
@@ -485,20 +499,23 @@ export default function AuraCard() {
               </TouchableOpacity>
             </View>
           </View>
-          <View style={styles.chipRow}>
-            <TouchableOpacity style={[styles.chip, !manualStyle && styles.chipActive]} onPress={() => handlePickStyle(null)}>
-              <Text style={[styles.chipText, !manualStyle && styles.chipTextActive]}>✨ Auto</Text>
-            </TouchableOpacity>
-            {STYLE_KEYS.map((key) => (
-              <TouchableOpacity
-                key={key}
-                style={[styles.chip, manualStyle === key && styles.chipActive]}
-                onPress={() => handlePickStyle(key)}
-              >
-                <Text style={[styles.chipText, manualStyle === key && styles.chipTextActive]}>{AURA_STYLES[key].label}</Text>
-              </TouchableOpacity>
+          {/* Two fixed rows, scrolling horizontally in columns, instead of
+              wrapping the 18 style chips across many rows. */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.styleGridScroll}>
+            {styleColumns.map((col, ci) => (
+              <View key={ci} style={styles.styleGridCol}>
+                {col.map((opt) => (
+                  <TouchableOpacity
+                    key={opt.key ?? 'auto'}
+                    style={[styles.chip, manualStyle === opt.key && styles.chipActive]}
+                    onPress={() => handlePickStyle(opt.key)}
+                  >
+                    <Text style={[styles.chipText, manualStyle === opt.key && styles.chipTextActive]}>{opt.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             ))}
-          </View>
+          </ScrollView>
 
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.label}>COLOURS</Text>
@@ -619,6 +636,9 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: '#c9a8c9', borderColor: '#c9a8c9' },
   chipText: { color: '#2e2530', fontSize: 12 },
   chipTextActive: { color: '#fff', fontWeight: '600' },
+
+  styleGridScroll: { gap: 8, paddingBottom: 4, paddingRight: 4 },
+  styleGridCol: { gap: 8 },
 
   coloursRow: { flexDirection: 'row', gap: 18, marginBottom: 4 },
   colourItem: { alignItems: 'center', gap: 6 },

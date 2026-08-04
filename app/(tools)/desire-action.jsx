@@ -344,7 +344,7 @@ export default function DesireActionTool() {
   // ── Render ───────────────────────────────────────────────────────────
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 50, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 24, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
         <ScreenHeader lead="🗺️ Desire" accent="Action" subtitle="Track your daily practices. Watch your desires unfold. ✨" />
 
         <GlassCard style={{ marginBottom: 16 }}>

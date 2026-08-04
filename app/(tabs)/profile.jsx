@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -39,6 +40,7 @@ const THEMES = [
 const PREFS_KEY = 'mv_settings_prefs';
 
 export default function Profile() {
+  const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const router = useRouter();
@@ -202,7 +204,7 @@ export default function Profile() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 50, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 14, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
         <Text style={styles.eyebrow}>⚙ ACCOUNT</Text>
         <ScreenHeader lead="Your" accent="Settings" subtitle="Everything about your account, in one place ✨" />
 

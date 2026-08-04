@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet, ActivityIndicator, Dimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useSharedValue, useAnimatedStyle, useAnimatedReaction, runOnJS, withTiming } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { captureRef } from 'react-native-view-shot';
@@ -141,6 +142,7 @@ function DraggableImage({ item, index, isLocked, selectMode, selected, onMove, o
 }
 
 export default function VisionBoard() {
+  const insets = useSafeAreaInsets();
   const { limits, loaded, hasFeature, refresh } = usePlanStore();
   const [checkingPlan, setCheckingPlan] = useState(true);
   const [showUpgrade, setShowUpgrade] = useState(false);
@@ -535,7 +537,7 @@ export default function VisionBoard() {
   return (
     <GradientBackground>
       {!fullscreen && (
-        <View style={{ paddingTop: 50, paddingHorizontal: 16 }}>
+        <View style={{ paddingTop: insets.top + 14, paddingHorizontal: 16 }}>
           <ScreenHeader lead="Your" accent="Vision Board" subtitle="Pin your dreams. See them. Feel them. Receive them." />
 
           <View style={styles.controlRow}>

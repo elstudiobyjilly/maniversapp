@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, Image, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Modal, Switch } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { Audio } from 'expo-av';
 import {
@@ -37,6 +38,7 @@ const DURATION_OPTIONS = [
 ];
 
 export default function MindMovie() {
+  const insets = useSafeAreaInsets();
   const { limits, loaded, hasFeature, refresh } = usePlanStore();
   const [checkingPlan, setCheckingPlan] = useState(true);
   const [showUpgrade, setShowUpgrade] = useState(false);
@@ -273,7 +275,7 @@ export default function MindMovie() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 50, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 14, paddingBottom: 40 }}>
         <ScreenHeader lead="Mind" accent="Movie" subtitle="Write your dream life. Watch it. Feel it. Become it. 🎬" />
 
         <TabPill

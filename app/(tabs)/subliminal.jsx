@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
 import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import {
@@ -69,6 +70,7 @@ function sessionName(s) {
 }
 
 export default function Subliminal() {
+  const insets = useSafeAreaInsets();
   const { limits, hasFeature, refresh } = usePlanStore();
   const [checkingPlan, setCheckingPlan] = useState(true);
   const [showUpgrade, setShowUpgrade] = useState(false);
@@ -433,7 +435,7 @@ export default function Subliminal() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 50, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 14, paddingBottom: 40 }}>
         <ScreenHeader lead="Sublimin" accent="al" subtitle="Affirmations layered silently beneath sound — your subconscious listens while you rest. 🎧" />
 
         {/* Preloaded samples — always visible, free on every plan */}

@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -54,6 +55,7 @@ const RTG_PRESETS = [
 const RTG_QUICK = RTG_PRESETS.slice(-2); // Ho'oponopono, Sleep Programming — always visible
 
 export default function Affirmations() {
+  const insets = useSafeAreaInsets();
   const { limits, loaded, hasFeature, allowedVoices, refresh } = usePlanStore();
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [upgradeMsg, setUpgradeMsg] = useState('');
@@ -279,7 +281,7 @@ export default function Affirmations() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 50, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 14, paddingBottom: 40 }}>
         <ScreenHeader lead="Your" accent="Affirmations" subtitle="Craft powerful affirmations from your desire, or speak your own." />
 
         <TabPill

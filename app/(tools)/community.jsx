@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getCommunityPosts, createCommunityPost, loveCommunityPost, deleteCommunityPost, createCheckout } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
 import GlassCard from '../../components/GlassCard';
@@ -50,6 +51,7 @@ const TRUNCATE_AT = 220;
 const ANON_EMOJIS = ['🌸', '✨', '🌙', '💫', '🦋', '🌿', '💕', '🔮', '🌺', '⭐'];
 
 export default function Community() {
+  const insets = useSafeAreaInsets();
   const { hasFeature, refresh } = usePlanStore();
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [posts, setPosts] = useState([]);
@@ -151,7 +153,7 @@ export default function Community() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 50, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 60, paddingBottom: 40 }}>
         <ScreenHeader lead="Community" accent="Wall" subtitle="Share your manifestations. Send love. Rise together. 🌸" />
 
         <GlassCard style={{ marginTop: 16, marginBottom: 18 }}>

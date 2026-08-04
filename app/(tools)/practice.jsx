@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getPracticeChecks, savePracticeChecks, logPracticeSession } from '../../services/api';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
@@ -189,11 +190,12 @@ function ToolsPane() {
 }
 
 export default function Practice() {
+  const insets = useSafeAreaInsets();
   const [tab, setTab] = useState('methods');
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 60 }]}>
         <ScreenHeader lead="Practice" accent="Methods" subtitle="Don't just read about techniques — actually do them. Track your practice. 🌟" />
 
         <TabPill

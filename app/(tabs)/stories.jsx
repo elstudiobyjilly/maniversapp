@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -58,6 +59,7 @@ const RTG_STORIES = [
 const RTG_CATEGORIES = ['All', ...Array.from(new Set(RTG_STORIES.map((s) => s.category)))];
 
 export default function Stories() {
+  const insets = useSafeAreaInsets();
   const { limits, loaded, hasFeature, refresh } = usePlanStore();
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [upgradeMsg, setUpgradeMsg] = useState('');
@@ -278,7 +280,7 @@ export default function Stories() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 50, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 14, paddingBottom: 40 }}>
         <ScreenHeader lead="Manifest" accent="Stories" subtitle="Generate, write or play stories as if your desire has already arrived. ✨" />
 
         <TabPill

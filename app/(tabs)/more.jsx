@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -130,6 +131,7 @@ function ReorderableRow({ tool, index, total, isLast, onPress, onDragEnd, onDrag
 }
 
 export default function More() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const [viewMode, setViewMode] = useState('tile'); // 'tile' | 'list'
   const [order, setOrder] = useState(DEFAULT_ORDER);
@@ -175,7 +177,7 @@ export default function More() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 50, paddingBottom: 40 }} scrollEnabled={!dragging}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 14, paddingBottom: 40 }} scrollEnabled={!dragging}>
         <ScreenHeader lead="More T" accent="ools" subtitle="Every practice, all in one place ✨" />
 
         <View style={styles.modeRow}>

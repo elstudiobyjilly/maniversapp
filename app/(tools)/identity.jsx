@@ -59,7 +59,7 @@ export default function Identity() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 50, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 24, paddingBottom: 40 }}>
         <ScreenHeader lead="My" accent="Identity" subtitle={'"I am..." statements for each area of your life ✨'} />
 
         {CATEGORIES.map((cat) => (

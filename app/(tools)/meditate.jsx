@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Animated } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
@@ -18,12 +19,13 @@ const GUIDED_MEDITATIONS = [
 ];
 
 export default function Meditate() {
+  const insets = useSafeAreaInsets();
   const [tool, setTool] = useState('breath');
   const [mode, setMode] = useState('guided');
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 50, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 60, paddingBottom: 40 }}>
         <ScreenHeader lead="Guided" accent="Meditations" subtitle="Settle in. Breathe. Let your mind become still. ✨" />
 
         <View style={styles.toolRow}>
