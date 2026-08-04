@@ -21,6 +21,7 @@ export default function ToolsLayout() {
         headerLeft: () => <BackButton />,
       }}
     >
+      <Stack.Screen name="daily" options={{ title: 'Daily' }} />
       <Stack.Screen name="oracle" options={{ title: 'Oracle' }} />
       <Stack.Screen name="gratitude" options={{ title: 'Gratitude' }} />
       <Stack.Screen name="beliefs" options={{ title: 'Limiting Beliefs' }} />

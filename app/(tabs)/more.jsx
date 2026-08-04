@@ -33,8 +33,7 @@ const SECTIONS = [
   {
     title: 'Insights',
     tools: [
-      { key: 'oracle', label: 'Oracle Cards', icon: 'sparkles-outline', desc: 'Pull your monthly message' },
-      { key: 'horoscope', label: 'Horoscope', icon: 'planet-outline', desc: 'Daily manifestation reading' },
+      { key: 'daily', label: 'Daily Energy', icon: 'sparkles-outline', desc: 'Your message, oracle pull & horoscope' },
       { key: 'synclog', label: 'Synchronicity Log', icon: 'flash-outline', desc: 'Track signs from the universe' },
     ],
   },
