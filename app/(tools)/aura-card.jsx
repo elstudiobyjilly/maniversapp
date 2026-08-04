@@ -472,7 +472,7 @@ export default function AuraCard() {
             onChangeText={setWordsText}
             placeholder={'Abundant\nI am magnetic and loved\nI am grateful for everything flowing to me\nMoney comes easily and effortlessly\nI attract all that I desire...'}
             modalTitle="Your Words"
-            minHeight={110}
+            minHeight={140}
             style={{ marginBottom: 12 }}
           />
 

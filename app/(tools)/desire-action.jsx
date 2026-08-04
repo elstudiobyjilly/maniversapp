@@ -447,7 +447,7 @@ export default function DesireActionTool() {
                   onBlur={handleSaveNote}
                   placeholder="What action did you take? How did you feel?..."
                   modalTitle="Action / Note"
-                  minHeight={70}
+                  minHeight={110}
                 />
               </GlassCard>
             )}
@@ -521,7 +521,7 @@ export default function DesireActionTool() {
                 onChangeText={setAddCustom}
                 placeholder={'e.g. Gratitude walk\nCold shower intention'}
                 modalTitle="Custom Practices"
-                minHeight={56}
+                minHeight={90}
               />
 
               <View style={styles.modalBtnRow}>

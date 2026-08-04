@@ -48,6 +48,7 @@ export default function Profile() {
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
   const [tab, setTab] = useState('profile');
+  const [focusedField, setFocusedField] = useState(null);
 
   // Profile
   const [firstName, setFirstName] = useState('');
@@ -235,11 +236,19 @@ export default function Profile() {
 
             <Text style={styles.sectionLabel}>EDIT PROFILE</Text>
             <GlassCard style={styles.cardMargin}>
-              <View style={styles.inputBox}>
-                <TextInput style={styles.input} placeholder="Name" placeholderTextColor="rgba(46,37,48,0.4)" value={firstName} onChangeText={setFirstName} />
+              <View style={[styles.inputBox, focusedField === 'firstName' && styles.inputBoxFocused]}>
+                <TextInput
+                  style={styles.input} placeholder="Name" placeholderTextColor="rgba(46,37,48,0.4)"
+                  value={firstName} onChangeText={setFirstName}
+                  onFocus={() => setFocusedField('firstName')} onBlur={() => setFocusedField(null)}
+                />
               </View>
-              <View style={[styles.inputBox, { marginTop: 10 }]}>
-                <TextInput style={styles.input} placeholder="Primary desire" placeholderTextColor="rgba(46,37,48,0.4)" value={primaryDesire} onChangeText={setPrimaryDesire} />
+              <View style={[styles.inputBox, { marginTop: 10 }, focusedField === 'primaryDesire' && styles.inputBoxFocused]}>
+                <TextInput
+                  style={styles.input} placeholder="Primary desire" placeholderTextColor="rgba(46,37,48,0.4)"
+                  value={primaryDesire} onChangeText={setPrimaryDesire}
+                  onFocus={() => setFocusedField('primaryDesire')} onBlur={() => setFocusedField(null)}
+                />
               </View>
               {error ? <Text style={styles.errorText}>{error}</Text> : null}
               {saved ? <Text style={styles.savedText}>Saved ✨</Text> : null}
@@ -378,14 +387,26 @@ export default function Profile() {
           <>
             <Text style={styles.sectionLabel}>CHANGE PASSWORD</Text>
             <GlassCard style={styles.cardMargin}>
-              <View style={styles.inputBox}>
-                <TextInput style={styles.input} placeholder="Current password" placeholderTextColor="rgba(46,37,48,0.4)" secureTextEntry value={currentPw} onChangeText={setCurrentPw} />
+              <View style={[styles.inputBox, focusedField === 'curPw' && styles.inputBoxFocused]}>
+                <TextInput
+                  style={styles.input} placeholder="Current password" placeholderTextColor="rgba(46,37,48,0.4)" secureTextEntry
+                  value={currentPw} onChangeText={setCurrentPw}
+                  onFocus={() => setFocusedField('curPw')} onBlur={() => setFocusedField(null)}
+                />
               </View>
-              <View style={[styles.inputBox, { marginTop: 10 }]}>
-                <TextInput style={styles.input} placeholder="New password (min 8 chars)" placeholderTextColor="rgba(46,37,48,0.4)" secureTextEntry value={newPw} onChangeText={setNewPw} />
+              <View style={[styles.inputBox, { marginTop: 10 }, focusedField === 'newPw' && styles.inputBoxFocused]}>
+                <TextInput
+                  style={styles.input} placeholder="New password (min 8 chars)" placeholderTextColor="rgba(46,37,48,0.4)" secureTextEntry
+                  value={newPw} onChangeText={setNewPw}
+                  onFocus={() => setFocusedField('newPw')} onBlur={() => setFocusedField(null)}
+                />
               </View>
-              <View style={[styles.inputBox, { marginTop: 10 }]}>
-                <TextInput style={styles.input} placeholder="Confirm new password" placeholderTextColor="rgba(46,37,48,0.4)" secureTextEntry value={confirmPw} onChangeText={setConfirmPw} />
+              <View style={[styles.inputBox, { marginTop: 10 }, focusedField === 'confirmPw' && styles.inputBoxFocused]}>
+                <TextInput
+                  style={styles.input} placeholder="Confirm new password" placeholderTextColor="rgba(46,37,48,0.4)" secureTextEntry
+                  value={confirmPw} onChangeText={setConfirmPw}
+                  onFocus={() => setFocusedField('confirmPw')} onBlur={() => setFocusedField(null)}
+                />
               </View>
               {pwMsg ? <Text style={styles.errorText}>{pwMsg}</Text> : null}
               <Button title="🔑 Update Password" size="sm" onPress={handleUpdatePassword} loading={pwSaving} style={{ marginTop: 10, alignSelf: 'flex-start' }} />
@@ -400,13 +421,14 @@ export default function Profile() {
                   </TouchableOpacity>
                 ))}
               </View>
-              <View style={[styles.inputBox, { minHeight: 90 }]}>
+              <View style={[styles.inputBox, { minHeight: 140 }, focusedField === 'feedback' && styles.inputBoxFocused]}>
                 <TextInput
                   style={[styles.input, { textAlignVertical: 'top' }]}
                   placeholder="What do you love? What could be better? ✨"
                   placeholderTextColor="rgba(46,37,48,0.4)"
                   value={feedbackText}
                   onChangeText={setFeedbackText}
+                  onFocus={() => setFocusedField('feedback')} onBlur={() => setFocusedField(null)}
                   multiline
                 />
               </View>
@@ -452,7 +474,18 @@ const styles = StyleSheet.create({
   planBadge: { alignSelf: 'center', backgroundColor: 'rgba(201,168,201,0.2)', borderRadius: radii.pill, paddingVertical: 4, paddingHorizontal: 12, marginTop: 10 },
   planBadgeText: { fontFamily: fonts.bodyMedium, fontSize: 11, color: colors.purpleDark, fontWeight: '700' },
 
-  inputBox: { borderWidth: 1.5, borderColor: 'rgba(154,95,168,0.3)', borderRadius: radii.sm, padding: 12, backgroundColor: 'rgba(255,255,255,0.5)' },
+  inputBox: { borderWidth: 1.5, borderColor: 'rgba(154,95,168,0.3)', borderRadius: radii.sm, paddingVertical: 16, paddingHorizontal: 16, backgroundColor: 'rgba(255,255,255,0.5)' },
+  // Same neon glow as ExpandableTextArea's focus state, for parity across
+  // every writing box in the app.
+  inputBoxFocused: {
+    borderWidth: 2,
+    borderColor: colors.pinkAccent,
+    shadowColor: colors.pinkAccent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 10,
+    elevation: 6,
+  },
   input: { fontFamily: fonts.body, fontSize: 14.5, color: colors.ink },
   chipRow: { flexDirection: 'row', gap: 8, marginBottom: 4, marginTop: 4, flexWrap: 'wrap' },
   errorText: { fontFamily: fonts.body, color: colors.danger, fontSize: 12.5, marginTop: 8, textAlign: 'center' },

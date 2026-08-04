@@ -183,7 +183,7 @@ export default function Gratitude() {
             onChangeText={setEntry}
             placeholder="e.g. I am grateful for the warmth of sunlight, my health, the love in my life..."
             modalTitle="Gratitude"
-            minHeight={90}
+            minHeight={130}
           />
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
 

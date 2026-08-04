@@ -162,7 +162,7 @@ export default function Community() {
             onChangeText={(t) => setContent(t.slice(0, 500))}
             placeholder="I am manifesting my dream... / I just manifested... 🌸"
             modalTitle="Share with the Community"
-            minHeight={70}
+            minHeight={110}
           />
           <Text style={styles.charCount}>{content.length} / 500</Text>
 

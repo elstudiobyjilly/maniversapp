@@ -9,7 +9,7 @@ export default function ExpandableTextArea({
   value,
   onChangeText,
   placeholder,
-  minHeight = 100,
+  minHeight = 140,
   modalTitle = 'Write',
   style,
   onBlur,
@@ -63,13 +63,18 @@ const styles = StyleSheet.create({
     borderWidth: 1.5, borderColor: 'rgba(248,184,200,0.35)', borderRadius: radii.md,
     paddingVertical: 14, paddingHorizontal: 18, paddingRight: 36, backgroundColor: 'rgba(255,255,255,0.9)',
   },
+  // Neon glow ring on focus -- matches the website's .inp:focus (mauve
+  // border + soft pink halo). RN shadow doesn't render a crisp uniform
+  // ring like CSS box-shadow, so this leans on a thicker vivid border
+  // plus a wide, saturated shadow to read as a glow on both platforms.
   boxFocused: {
-    borderColor: colors.pinkMid,
+    borderWidth: 2,
+    borderColor: colors.pinkAccent,
     shadowColor: colors.pinkAccent,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.35,
-    shadowRadius: 6,
-    elevation: 3,
+    shadowOpacity: 0.6,
+    shadowRadius: 10,
+    elevation: 6,
   },
   input: { fontFamily: fonts.body, fontSize: 14, color: colors.ink, flex: 1, lineHeight: 22 },
   expandBtn: { position: 'absolute', top: 8, right: 8, padding: 4 },

@@ -15,10 +15,14 @@ const VIEW_MODE_KEY = 'mv_more_view_mode';
 const ORDER_KEY = 'mv_more_tool_order';
 const ROW_HEIGHT = 74;
 
+// Order follows the website's own nav bar sequence (index.html), grouped
+// into readable categories -- Affirm / Stories / Vision Board / Settings
+// are left out here since they're already bottom tabs on the app.
 const SECTIONS = [
   {
     title: 'Watch & Listen',
     tools: [
+      { key: 'meditate', label: 'Meditate', icon: 'leaf-outline', desc: 'Breath timer, med timer, guided sessions' },
       { key: 'mindmovie', label: 'Mind Movie', icon: 'film-outline', desc: 'Cinematic scenes of your future' },
       { key: 'subliminal', label: 'Subliminal', icon: 'moon-outline', desc: 'Background reprogramming audio' },
     ],
@@ -26,47 +30,41 @@ const SECTIONS = [
   {
     title: 'Daily Practice',
     tools: [
-      { key: 'practice', label: 'Practice', icon: 'flower-outline', desc: 'Methods to try & manifestation tools' },
-      { key: 'meditate', label: 'Meditate', icon: 'leaf-outline', desc: 'Breath timer, med timer, guided sessions' },
       { key: 'scripting', label: 'Scripting', icon: 'create-outline', desc: 'Script your day as it happens' },
       { key: 'gratitude', label: 'Gratitude', icon: 'heart-outline', desc: 'Daily gratitude journal' },
+      { key: 'practice', label: 'Practice', icon: 'flower-outline', desc: 'Methods to try & manifestation tools' },
     ],
   },
   {
-    title: 'Mindset & Healing',
+    title: 'Desires & Wins',
     tools: [
+      { key: 'desire-action', label: 'Desire Action', icon: 'footsteps-outline', desc: 'Daily practice tracker per desire' },
       { key: 'feelit', label: 'Feel It', icon: 'pulse-outline', desc: 'Move through any feeling' },
+      { key: 'manifested', label: 'Manifested', icon: 'trophy-outline', desc: 'Celebrate your wins' },
+    ],
+  },
+  {
+    title: 'Mindset & Self',
+    tools: [
+      { key: 'futureself', label: 'Self', icon: 'person-outline', desc: 'Identity, portrait, bridge & letters from who you\'re becoming' },
       { key: 'beliefs', label: 'Limiting Beliefs', icon: 'bulb-outline', desc: 'Reframe what holds you back' },
       { key: 'letgo', label: 'Let Go', icon: 'leaf-outline', desc: 'Release what no longer serves you' },
-      { key: 'futureself', label: 'Self', icon: 'person-outline', desc: 'Identity, portrait, bridge & letters from who you\'re becoming' },
     ],
   },
   {
     title: 'Insights',
     tools: [
+      { key: 'desire-hub', label: 'Desires', icon: 'planet-outline', desc: 'Your full desire hub' },
       { key: 'daily', label: 'Daily Energy', icon: 'sparkles-outline', desc: "Today's message, oracle pull & horoscope" },
       { key: 'tracker', label: 'Tracker', icon: 'stats-chart-outline', desc: 'Your practice stats & plan usage' },
     ],
   },
   {
-    title: 'Planning & Wins',
-    tools: [
-      { key: 'desire-hub', label: 'Desires', icon: 'planet-outline', desc: 'Your full desire hub' },
-      { key: 'desire-action', label: 'Desire Action', icon: 'footsteps-outline', desc: 'Daily practice tracker per desire' },
-      { key: 'manifested', label: 'Manifested', icon: 'trophy-outline', desc: 'Celebrate your wins' },
-    ],
-  },
-  {
-    title: 'Community',
-    tools: [
-      { key: 'community', label: 'Community Feed', icon: 'people-outline', desc: 'Share intentions with others' },
-      { key: 'discover', label: 'Discover', icon: 'compass-outline', desc: 'Posts, guides & all 17 techniques' },
-    ],
-  },
-  {
-    title: 'Create & Share',
+    title: 'Create & Community',
     tools: [
       { key: 'aura-card', label: 'Aura Card', icon: 'color-palette-outline', desc: 'Generate a shareable aura card' },
+      { key: 'discover', label: 'Discover', icon: 'compass-outline', desc: 'Posts, guides & all 17 techniques' },
+      { key: 'community', label: 'Community Feed', icon: 'people-outline', desc: 'Share intentions with others' },
     ],
   },
 ];

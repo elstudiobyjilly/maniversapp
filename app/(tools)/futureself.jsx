@@ -490,7 +490,7 @@ function BridgeTab() {
           onChangeText={setCurrent}
           placeholder="Be honest. Where I truly am today..."
           modalTitle="I am now"
-          minHeight={72}
+          minHeight={110}
           style={{ marginBottom: 10 }}
         />
         <Text style={styles.bridgeFieldLabel}>I am becoming...</Text>
@@ -499,7 +499,7 @@ function BridgeTab() {
           onChangeText={setFuture}
           placeholder="Write as if it is already true. I am..."
           modalTitle="I am becoming"
-          minHeight={72}
+          minHeight={110}
           style={{ marginBottom: 10 }}
         />
         <Dropdown

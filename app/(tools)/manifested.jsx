@@ -198,7 +198,7 @@ export default function Manifested() {
             onChangeText={setStory}
             placeholder="How did it happen? How did you feel?..."
             modalTitle="Your Story"
-            minHeight={80}
+            minHeight={120}
           />
 
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
