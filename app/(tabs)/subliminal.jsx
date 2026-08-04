@@ -4,7 +4,7 @@ import { Audio } from 'expo-av';
 import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import {
   getSubPreloaded, getSubBackgrounds, getSubAffirmationSets, saveSubSession,
-  getSubSessions, deleteSubSession, resolveMusicUrl, createCheckout,
+  getSubSessions, deleteSubSession, resolveMusicUrl, createCheckout, getSilentAudioSource,
 } from '../../services/api';
 import { generateToneFile } from '../../services/toneGenerator';
 import GlassCard from '../../components/GlassCard';
@@ -31,12 +31,10 @@ const DURATIONS = [5, 10, 20, 30, 60];
 const BG_GAIN = 0.75;
 const MAX_SESSIONS = 15;
 
-// "Silent"/ultrasonic mode is on hold -- true inaudibility needs either a
-// native audio-DSP module + dev build (client-side), or a pre-modulated
-// audio file from the backend (server-side, no app changes needed at all).
-// Both are bigger, separate pieces of work; for now Subliminal only offers
-// the plain Audible mode, with the affirmation voice looping simultaneously
-// (overlapping) with the background track.
+// "Silent" now uses the real server-side DSB-SC ultrasonic modulation
+// (GET /subliminal/silent-audio) instead of the earlier pitch-lift
+// approximation -- the backend generates a genuinely near-inaudible,
+// full-volume version of the voice track on the fly.
 const PRESETS = {
   audible: {
     icon: '🔊', label: 'Audible',
@@ -44,14 +42,26 @@ const PRESETS = {
     tags: ['Normal pitch', 'Adjustable volume', 'Speed control'],
     voicePct: 50, rate: 1.0, correctPitch: true,
   },
+  subliminal: {
+    icon: '🔕', label: 'Silent',
+    desc: 'Affirmations play at full volume, shifted to a frequency at the edge of conscious hearing — your subconscious receives every word.',
+    tags: ['100% Volume', 'Ultrasonic Shift', 'Server-generated'],
+    voicePct: 100, rate: 1.0, correctPitch: true,
+  },
 };
 const AUDIBLE_SPEED_OPTIONS = [0.75, 1.0, 1.5, 2.0];
 
 // Voice volume curve, ported exactly from the site: ceiling .70, curve 1.2, floor .10
+// -- Audible only. Silent bypasses this and goes linear/full, since the
+// server-side ultrasonic shift (not quietness) is what does the concealing.
 function voiceVol(pct) {
   const x = pct / 100;
   if (x <= 0) return 0;
   return Math.max(0.10, 0.70 * Math.pow(x, 1.2));
+}
+function rawVoiceVolume(presetKey, pct) {
+  if (presetKey === 'subliminal') return Math.max(0, Math.min(1, pct / 100));
+  return voiceVol(pct);
 }
 
 function sessionName(s) {
@@ -240,19 +250,30 @@ export default function Subliminal() {
     setVoicePct(presetDef.voicePct);
     setBgPct(75);
     try {
+      const affirmationId = session.audio_items?.[0]?.set_id;
       const affUrl = session.audio_items?.[0]?.audio_url || session.audio_urls?.[0];
-      if (!affUrl) throw new Error('Affirmation audio not ready yet');
+      if (!affUrl && !(session.volume_level === 'subliminal' && affirmationId)) {
+        throw new Error('Affirmation audio not ready yet');
+      }
       const bgUri = await resolveBackgroundUri(session);
 
       if (bgUri) {
         const { sound: newBg } = await Audio.Sound.createAsync({ uri: bgUri }, { shouldPlay: true, isLooping: true, volume: BG_GAIN * 0.75 });
         bgSoundRef.current = newBg;
       }
+
+      // Silent mode: stream the server-modulated (real DSB-SC ultrasonic)
+      // version instead of the plain voice file -- full volume, no rate/pitch
+      // manipulation, since that would disturb the carefully-shifted carrier.
+      const affSource = session.volume_level === 'subliminal'
+        ? getSilentAudioSource(affirmationId)
+        : { uri: affUrl };
+
       const { sound: newAff } = await Audio.Sound.createAsync(
-        { uri: affUrl },
+        affSource,
         {
           shouldPlay: true, isLooping: true,
-          volume: voiceVol(presetDef.voicePct),
+          volume: rawVoiceVolume(session.volume_level, presetDef.voicePct),
           rate: presetDef.rate, shouldCorrectPitch: presetDef.correctPitch,
         }
       );
@@ -287,7 +308,7 @@ export default function Subliminal() {
 
   const applyVoicePct = async (pct) => {
     setVoicePct(pct);
-    if (affSoundRef.current) await affSoundRef.current.setVolumeAsync(voiceVol(pct)).catch(() => {});
+    if (affSoundRef.current) await affSoundRef.current.setVolumeAsync(rawVoiceVolume(activeSession?.volume_level, pct)).catch(() => {});
   };
   const applyBgPct = async (pct) => {
     setBgPct(pct);
@@ -338,8 +359,11 @@ export default function Subliminal() {
     try {
       const session = await saveSubSession({
         affirmation_set_ids: [selectedSetId],
-        background_type: bgType,
-        background_track: selectedTrack,
+        // Backend requires these as plain strings (not nullable) -- if the
+        // user skipped picking a background, send '' rather than null, or
+        // the request 422s with "Input should be a valid string".
+        background_type: bgType || '',
+        background_track: selectedTrack || '',
         layered: true,
         volume_level: preset,
         session_mins: 20,
@@ -570,7 +594,7 @@ export default function Subliminal() {
                 {step === 3 && (
                   <GlassCard style={styles.cardMargin}>
                     <Text style={styles.stepHeading}>Activate Subliminal</Text>
-                    <Text style={styles.stepSub}>Your affirmations will loop under the background track you picked.</Text>
+                    <Text style={styles.stepSub}>Choose your transmission output level.</Text>
 
                     {Object.entries(PRESETS).map(([key, p]) => (
                       <TouchableOpacity key={key} style={[styles.presetCard, preset === key && styles.presetCardActive]} onPress={() => setPreset(key)}>
@@ -663,14 +687,18 @@ export default function Subliminal() {
                       ))}
                     </View>
 
-                    <Text style={styles.controlLabel}>SPEED</Text>
-                    <View style={styles.pillRow}>
-                      {AUDIBLE_SPEED_OPTIONS.map((r) => (
-                        <TouchableOpacity key={r} style={[styles.durPill, speed === r && styles.durPillActive]} onPress={() => applySpeed(r)}>
-                          <Text style={[styles.durPillText, speed === r && styles.durPillTextActive]}>{r}×</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
+                    {activeSession.volume_level !== 'subliminal' && (
+                      <>
+                        <Text style={styles.controlLabel}>SPEED</Text>
+                        <View style={styles.pillRow}>
+                          {AUDIBLE_SPEED_OPTIONS.map((r) => (
+                            <TouchableOpacity key={r} style={[styles.durPill, speed === r && styles.durPillActive]} onPress={() => applySpeed(r)}>
+                              <Text style={[styles.durPillText, speed === r && styles.durPillTextActive]}>{r}×</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </>
+                    )}
 
                     <TouchableOpacity style={styles.settingsToggle} onPress={() => setSettingsOpen((v) => !v)}>
                       <Text style={styles.settingsToggleText}>⚙️ Settings {settingsOpen ? '▲' : '▼'}</Text>
@@ -778,6 +806,13 @@ export default function Subliminal() {
           </>
         )}
       </ScrollView>
+
+      {view === 'generator' && step === 1 && selectedSetId && (
+        <View style={styles.floatBar}>
+          <Text style={styles.floatBarText}>1 set selected</Text>
+          <Button title="Next →" size="sm" onPress={() => setStep(2)} />
+        </View>
+      )}
 
       <UpgradeModal
         visible={showUpgrade}
@@ -910,4 +945,14 @@ const styles = StyleSheet.create({
   checkboxOn: { backgroundColor: colors.purpleMid, borderColor: colors.purpleMid },
   libExpand: { backgroundColor: 'rgba(201,168,201,0.08)', borderRadius: radii.sm, padding: 12, marginTop: -4, marginBottom: 8 },
   libExpandLine: { fontFamily: fonts.displayItalic, fontSize: 12.5, color: colors.ink2, fontStyle: 'italic', marginBottom: 4 },
+
+  floatBar: {
+    position: 'absolute', left: 16, right: 16, bottom: 24,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: 'rgba(28,10,48,0.9)', borderRadius: radii.pill,
+    paddingVertical: 10, paddingHorizontal: 18,
+    borderWidth: 1, borderColor: 'rgba(184,136,184,0.4)',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 14, elevation: 8,
+  },
+  floatBarText: { fontFamily: fonts.displayItalic, fontSize: 13, color: '#fff', fontStyle: 'italic' },
 });

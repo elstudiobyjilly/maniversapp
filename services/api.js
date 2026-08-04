@@ -387,6 +387,17 @@ export function resolveMusicUrl(trackId) {
   return `https://manivers.com/sounds/${trackId}.mp3`;
 }
 
+// Server-side DSB-SC "Silent" subliminal audio -- returns a {uri, headers}
+// source for Audio.Sound.createAsync (the endpoint needs the auth header,
+// which createAsync supports passing straight through). Regenerated fresh
+// on every call server-side, never cached.
+export function getSilentAudioSource(affirmationId) {
+  return {
+    uri: `${API_BASE}/subliminal/silent-audio?affirmation_id=${affirmationId}`,
+    headers: _token ? { Authorization: 'Bearer ' + _token } : {},
+  };
+}
+
 // ── VISION BOARD ──────────────────────────────────────────────────────
 export async function getVisionBoard() {
   return req('GET', '/vision-board/');

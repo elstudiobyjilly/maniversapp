@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Dimensions } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet, ActivityIndicator, Dimensions } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, useAnimatedReaction, runOnJS, withTiming } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { captureRef } from 'react-native-view-shot';
@@ -18,6 +18,10 @@ import * as Linking from 'expo-linking';
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const CANVAS_WIDTH = SCREEN_WIDTH * 1.6;
 const CANVAS_HEIGHT = 1000;
+// The board's visible frame — fixed size, matches the website. Zooming
+// scales/pans the content inside this frame; the frame itself never resizes.
+const VIEWPORT_WIDTH = SCREEN_WIDTH - 32;
+const VIEWPORT_HEIGHT = 500;
 const ITEM_SIZE = 120;
 const MIN_ITEM_SIZE = 60;
 
@@ -174,12 +178,18 @@ export default function VisionBoard() {
 
   const canvasRef = useRef(null);
 
-  // zoom is the live, gesture-driven scale (0.5–2.0). zoomPct mirrors it back
-  // to JS state purely for the % readout and for sizing the ScrollView's
-  // scrollable content area, which has to be a real layout number.
+  // The board FRAME is a fixed-size viewport (matches the website — zooming
+  // never resizes the board itself). zoom/pan only move the content around
+  // inside that fixed frame, like a camera zooming into a photo rather than
+  // the photo's frame growing.
   const zoom = useSharedValue(1);
   const savedZoom = useSharedValue(1);
   const [zoomPct, setZoomPct] = useState(100);
+
+  const panX = useSharedValue(0);
+  const panY = useSharedValue(0);
+  const startPanX = useSharedValue(0);
+  const startPanY = useSharedValue(0);
 
   useAnimatedReaction(
     () => zoom.value,
@@ -195,6 +205,7 @@ export default function VisionBoard() {
     const clamped = Math.max(0.5, Math.min(2, value));
     zoom.value = withTiming(clamped, { duration: 200 });
     savedZoom.value = clamped;
+    if (clamped === 1) { panX.value = withTiming(0); panY.value = withTiming(0); }
   };
 
   const pinchGesture = Gesture.Pinch()
@@ -209,12 +220,40 @@ export default function VisionBoard() {
       savedZoom.value = zoom.value;
     });
 
-  // The white board's boundary scales together with its contents — the
-  // border/background live on this same animated node as the pinch scale,
-  // so the "boundary" always exactly wraps whatever is zoomed.
-  const canvasAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: zoom.value }],
-  }));
+  // Two-finger pan to look around a zoomed-in board without fighting the
+  // single-finger drag that moves individual images.
+  const panGesture = Gesture.Pan()
+    .minPointers(2)
+    .maxPointers(2)
+    .onStart(() => {
+      startPanX.value = panX.value;
+      startPanY.value = panY.value;
+    })
+    .onUpdate((e) => {
+      panX.value = startPanX.value + e.translationX;
+      panY.value = startPanY.value + e.translationY;
+    });
+
+  const canvasGestures = Gesture.Simultaneous(pinchGesture, panGesture);
+
+  // The board's boundary (border/background) stays a fixed size — only the
+  // content inside it scales+pans. Pan is clamped so the content can never
+  // be dragged fully out of the fixed frame.
+  const canvasAnimatedStyle = useAnimatedStyle(() => {
+    const scaledW = CANVAS_WIDTH * zoom.value;
+    const scaledH = CANVAS_HEIGHT * zoom.value;
+    const maxPanX = Math.max(0, (scaledW - VIEWPORT_WIDTH) / 2);
+    const maxPanY = Math.max(0, (scaledH - VIEWPORT_HEIGHT) / 2);
+    const clampedX = Math.min(maxPanX, Math.max(-maxPanX, panX.value));
+    const clampedY = Math.min(maxPanY, Math.max(-maxPanY, panY.value));
+    return {
+      transform: [
+        { translateX: clampedX },
+        { translateY: clampedY },
+        { scale: zoom.value },
+      ],
+    };
+  });
 
   const load = async () => {
     try {
@@ -463,38 +502,34 @@ export default function VisionBoard() {
   }
 
   const canvasNode = (
-    <ScrollView horizontal style={{ flex: 1, marginTop: 10 }}>
-      <ScrollView>
-        <View style={[styles.canvasWrap, { width: CANVAS_WIDTH * (zoomPct / 100), height: CANVAS_HEIGHT * (zoomPct / 100) }]}>
-          <GestureDetector gesture={pinchGesture}>
-            <Animated.View
-              ref={canvasRef}
-              collapsable={false}
-              style={[styles.canvas, { width: CANVAS_WIDTH, height: CANVAS_HEIGHT }, canvasAnimatedStyle]}
-            >
-              {items.map((item, i) => (
-                <DraggableImage
-                  key={i}
-                  item={item}
-                  index={i}
-                  isLocked={isLocked}
-                  selectMode={selectMode}
-                  selected={selectedIndices.includes(i)}
-                  onMove={handleMove}
-                  onResize={handleResize}
-                  onRemove={handleRemove}
-                  onToggleSelect={toggleSelect}
-                  onLongPressItem={handleLongPressItem}
-                />
-              ))}
-              {items.length === 0 && (
-                <Text style={styles.emptyText}>Your vision board is empty — add your first image ✨</Text>
-              )}
-            </Animated.View>
-          </GestureDetector>
-        </View>
-      </ScrollView>
-    </ScrollView>
+    <View style={[styles.viewport, fullscreen && styles.viewportFullscreen]}>
+      <GestureDetector gesture={canvasGestures}>
+        <Animated.View
+          ref={canvasRef}
+          collapsable={false}
+          style={[styles.canvas, { width: CANVAS_WIDTH, height: CANVAS_HEIGHT }, canvasAnimatedStyle]}
+        >
+          {items.map((item, i) => (
+            <DraggableImage
+              key={i}
+              item={item}
+              index={i}
+              isLocked={isLocked}
+              selectMode={selectMode}
+              selected={selectedIndices.includes(i)}
+              onMove={handleMove}
+              onResize={handleResize}
+              onRemove={handleRemove}
+              onToggleSelect={toggleSelect}
+              onLongPressItem={handleLongPressItem}
+            />
+          ))}
+          {items.length === 0 && (
+            <Text style={styles.emptyText}>Your vision board is empty — add your first image ✨</Text>
+          )}
+        </Animated.View>
+      </GestureDetector>
+    </View>
   );
 
   return (
@@ -549,7 +584,7 @@ export default function VisionBoard() {
 
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
           {info ? <Text style={styles.infoText}>{info}</Text> : null}
-          <Text style={styles.hintText}>Drag to move (or use two fingers) · Resize from corner · Lock when done ✨</Text>
+          <Text style={styles.hintText}>Drag to move · Pinch or two-finger drag to zoom/pan the board · Resize from corner · Lock when done ✨</Text>
           <Text style={styles.hintText}>Press and hold an image for a moment to add a category 🏷️</Text>
         </View>
       )}
@@ -624,17 +659,25 @@ const styles = StyleSheet.create({
   errorText: { fontFamily: fonts.body, color: colors.danger, fontSize: 12, marginBottom: 6 },
   infoText: { fontFamily: fonts.body, color: colors.purpleDark, fontSize: 12, marginBottom: 6 },
   hintText: { fontFamily: fonts.displayItalic, color: colors.mist, fontSize: 12, marginBottom: 4, fontStyle: 'italic' },
-  canvasWrap: { padding: 10 },
-  // The visible "boundary" — a coloured border + soft shadow so the board's
-  // edges read clearly against the page background, and scale together with
-  // pinch-zoom since they live on the same animated node as the content.
-  canvas: {
-    backgroundColor: 'rgba(255,255,255,0.6)',
+  // Fixed-size frame — never resizes with zoom, matching the website. Content
+  // inside it scales/pans via canvasAnimatedStyle; overflow is clipped here.
+  viewport: {
+    width: VIEWPORT_WIDTH,
+    height: VIEWPORT_HEIGHT,
+    alignSelf: 'center',
     borderRadius: 20,
     borderWidth: 2,
     borderColor: 'rgba(200,120,180,0.35)',
-    position: 'relative',
+    overflow: 'hidden',
+    marginTop: 10,
     ...shadows.card,
+  },
+  viewportFullscreen: { flex: 1, width: '100%', height: '100%', borderRadius: 0, marginTop: 0 },
+  canvas: {
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    position: 'absolute',
+    left: (VIEWPORT_WIDTH - CANVAS_WIDTH) / 2,
+    top: (VIEWPORT_HEIGHT - CANVAS_HEIGHT) / 2,
   },
   draggable: { position: 'absolute' },
   draggableSelected: { borderWidth: 2, borderColor: colors.pinkAccent, borderRadius: 14 },
