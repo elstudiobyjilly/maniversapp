@@ -28,12 +28,8 @@ const SECTIONS = [
     tools: [
       { key: 'practice', label: 'Practice', icon: 'flower-outline', desc: 'Methods to try & manifestation tools' },
       { key: 'meditate', label: 'Meditate', icon: 'leaf-outline', desc: 'Breath timer, med timer, guided sessions' },
-      { key: 'daily-intention', label: 'Daily Intention', icon: 'sunny-outline', desc: 'Set your focus for today' },
       { key: 'scripting', label: 'Scripting', icon: 'create-outline', desc: 'Script your day as it happens' },
-      { key: 'reps', label: 'Reps', icon: 'repeat-outline', desc: 'Daily affirmation rep counter' },
-      { key: 'tracker', label: 'Habit Tracker', icon: 'checkmark-circle-outline', desc: 'Build your manifestation habits' },
       { key: 'gratitude', label: 'Gratitude', icon: 'heart-outline', desc: 'Daily gratitude journal' },
-      { key: 'journal', label: 'Journal', icon: 'book-outline', desc: 'Free-write reflections' },
     ],
   },
   {
@@ -42,23 +38,21 @@ const SECTIONS = [
       { key: 'feelit', label: 'Feel It', icon: 'pulse-outline', desc: 'Move through any feeling' },
       { key: 'beliefs', label: 'Limiting Beliefs', icon: 'bulb-outline', desc: 'Reframe what holds you back' },
       { key: 'letgo', label: 'Let Go', icon: 'leaf-outline', desc: 'Release what no longer serves you' },
-      { key: 'identity', label: 'Identity', icon: 'star-outline', desc: '"I am..." statements' },
-      { key: 'futureself', label: 'Future Self', icon: 'person-outline', desc: 'Letters from who you\'re becoming' },
+      { key: 'futureself', label: 'Self', icon: 'person-outline', desc: 'Identity, portrait, bridge & letters from who you\'re becoming' },
     ],
   },
   {
     title: 'Insights',
     tools: [
       { key: 'daily', label: 'Daily Energy', icon: 'sparkles-outline', desc: "Today's message, oracle pull & horoscope" },
-      { key: 'synclog', label: 'Synchronicity Log', icon: 'flash-outline', desc: 'Track signs from the universe' },
     ],
   },
   {
     title: 'Planning & Wins',
     tools: [
+      { key: 'desire-hub', label: 'Desires', icon: 'planet-outline', desc: 'Your full desire hub' },
       { key: 'desire-action', label: 'Desire Action', icon: 'footsteps-outline', desc: 'Daily practice tracker per desire' },
       { key: 'manifested', label: 'Manifested', icon: 'trophy-outline', desc: 'Celebrate your wins' },
-      { key: 'abundance-cheque', label: 'Abundance Cheque', icon: 'cash-outline', desc: 'Visualize receiving' },
     ],
   },
   {
@@ -66,7 +60,6 @@ const SECTIONS = [
     tools: [
       { key: 'community', label: 'Community Feed', icon: 'people-outline', desc: 'Share intentions with others' },
       { key: 'discover', label: 'Discover', icon: 'compass-outline', desc: 'Posts, guides & all 17 techniques' },
-      { key: 'reviews', label: 'Reviews', icon: 'chatbubble-ellipses-outline', desc: 'See what others are saying' },
     ],
   },
   {

@@ -21,25 +21,15 @@ export default function ToolsLayout() {
         headerLeft: () => <BackButton />,
       }}
     >
-      <Stack.Screen name="oracle" options={{ title: 'Oracle' }} />
       <Stack.Screen name="gratitude" options={{ title: 'Gratitude' }} />
       <Stack.Screen name="beliefs" options={{ title: 'Limiting Beliefs' }} />
       <Stack.Screen name="letgo" options={{ title: 'Let Go' }} />
       <Stack.Screen name="futureself" options={{ title: 'Future Self' }} />
-      <Stack.Screen name="identity" options={{ title: 'Identity' }} />
       <Stack.Screen name="scripting" options={{ title: 'Scripting' }} />
-      <Stack.Screen name="reps" options={{ title: 'Reps' }} />
-      <Stack.Screen name="tracker" options={{ title: 'Habit Tracker' }} />
       <Stack.Screen name="manifested" options={{ title: 'Manifested' }} />
       <Stack.Screen name="desire-action" options={{ title: 'Desire Action' }} />
-      <Stack.Screen name="synclog" options={{ title: 'Synchronicity Log' }} />
-      <Stack.Screen name="journal" options={{ title: 'Journal' }} />
-      <Stack.Screen name="abundance-cheque" options={{ title: 'Abundance Cheque' }} />
-      <Stack.Screen name="daily-intention" options={{ title: 'Daily Intention' }} />
-      <Stack.Screen name="horoscope" options={{ title: 'Horoscope' }} />
       <Stack.Screen name="community" options={{ title: '', headerTransparent: true }} />
       <Stack.Screen name="discover" options={{ title: '', headerTransparent: true }} />
-      <Stack.Screen name="reviews" options={{ title: 'Reviews' }} />
       <Stack.Screen name="feelit" options={{ title: 'Feel It' }} />
       <Stack.Screen name="meditate" options={{ title: '', headerTransparent: true }} />
       <Stack.Screen name="aura-card" options={{ title: 'Aura Card' }} />
