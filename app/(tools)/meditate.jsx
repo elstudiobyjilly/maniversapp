@@ -6,6 +6,7 @@ import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import ScreenHeader from '../../components/ScreenHeader';
 import Button from '../../components/Button';
+import { startSession, completeSession } from '../../services/api';
 
 const GUIDED_MEDITATIONS = [
   { key: 'deep_sleep', icon: '🌙', label: 'Deep Sleep', color: 'rgba(173,196,230,0.35)' },
@@ -135,6 +136,9 @@ function MedTimer() {
   const [running, setRunning] = useState(false);
   const intervalRef = useRef(null);
   const soundRef = useRef(null);
+  // Meditation never reached the Tracker at all — a finished sit now opens
+  // and completes a /sessions row like every other practice.
+  const trackedSessionId = useRef(null);
 
   useEffect(() => () => clearInterval(intervalRef.current), []);
 
@@ -146,7 +150,7 @@ function MedTimer() {
     } catch (_) {}
   };
 
-  const start = () => {
+  const start = async () => {
     setRunning(true);
     intervalRef.current = setInterval(() => {
       setSecondsLeft((prev) => {
@@ -154,15 +158,29 @@ function MedTimer() {
           clearInterval(intervalRef.current);
           setRunning(false);
           playBell();
+          // Sat the full duration — count it as a completed session.
+          const id = trackedSessionId.current;
+          if (id) {
+            trackedSessionId.current = null;
+            completeSession(id, 1).catch(() => {});
+          }
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
+    // Best-effort — a tracking failure must never block the timer.
+    try {
+      const sess = await startSession({ affirmationId: null, repeatTarget: 1 });
+      trackedSessionId.current = sess?.id ?? null;
+    } catch (_) { trackedSessionId.current = null; }
   };
 
+  // Stopping early leaves the session open-but-incomplete, matching the
+  // other players.
   const stop = () => {
     setRunning(false);
+    trackedSessionId.current = null;
     clearInterval(intervalRef.current);
   };
 

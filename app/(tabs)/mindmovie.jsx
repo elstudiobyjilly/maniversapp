@@ -7,6 +7,7 @@ import { Audio } from 'expo-av';
 import {
   getMindMovies, createMindMovie, updateMindMovie, deleteMindMovie,
   uploadImage, finalizeMindMovie, generateMindMovieAudio, createCheckout,
+  startSession, completeSession,
 } from '../../services/api';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
@@ -97,6 +98,9 @@ export default function MindMovie() {
   const [narrationLoading, setNarrationLoading] = useState(false);
   const soundRef = useRef(null);
   const fallbackTimerRef = useRef(null);
+  // Open /sessions row for the movie currently playing, so watching a Mind
+  // Movie reaches the Tracker's totals/streak like affirmations do.
+  const trackedSessionId = useRef(null);
 
   const load = async () => {
     try { setMovies(await getMindMovies()); } catch (e) { setError(e.message || 'Could not load movies'); }
@@ -244,7 +248,15 @@ export default function MindMovie() {
       const next = index + 1;
       if (next < movie.scenes.length) playScene(movie, next);
       else if (movie.loop) playScene(movie, 0);
-      else setPlayingMovie(null);
+      else {
+        // Watched to the end — close the Tracker session as completed.
+        const id = trackedSessionId.current;
+        if (id) {
+          trackedSessionId.current = null;
+          completeSession(id, 1).catch(() => {});
+        }
+        setPlayingMovie(null);
+      }
     };
 
     // Prefer the pre-generated cached narration URL for this movie's
@@ -266,13 +278,21 @@ export default function MindMovie() {
     }
   };
 
-  const startPlayback = (movie) => {
+  const startPlayback = async (movie) => {
     setPlayingMovie(movie);
     playScene(movie, 0);
+    // Best-effort tracking — never let it interrupt playback.
+    try {
+      const sess = await startSession({ affirmationId: null, repeatTarget: 1 });
+      trackedSessionId.current = sess?.id ?? null;
+    } catch (_) { trackedSessionId.current = null; }
   };
 
+  // Closing early leaves the session open-but-incomplete, matching the
+  // affirmation/story players.
   const closePlayback = async () => {
     await cleanupPlayback();
+    trackedSessionId.current = null;
     setPlayingMovie(null);
   };
 

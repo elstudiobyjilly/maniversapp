@@ -7,6 +7,9 @@ import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Stop } from 're
 import {
   getSubPreloaded, getSubBackgrounds, getSubAffirmationSets, saveSubSession,
   getSubSessions, deleteSubSession, resolveMusicUrl, createCheckout, getSilentAudioSource,
+  // Aliased: this screen already has its own local startSession() that drives
+  // the audio player, so the Tracker API is imported under distinct names.
+  startSession as trackSessionStart, completeSession as trackSessionComplete,
 } from '../../services/api';
 import { generateToneFile } from '../../services/toneGenerator';
 import GlassCard from '../../components/GlassCard';
@@ -120,6 +123,9 @@ export default function Subliminal() {
   const bgSoundRef = useRef(null);
   const affSoundRef = useRef(null);
   const timerRef = useRef(null);
+  // Open /sessions row for the run currently playing, so subliminal listens
+  // reach the Tracker's totals/streak like affirmations and stories do.
+  const trackedSessionId = useRef(null);
 
   const canCreate = hasFeature('subliminal_active_cap');
   const maxActive = limits?.subliminal_active_cap;
@@ -176,6 +182,13 @@ export default function Subliminal() {
         setElapsed((prev) => {
           const next = prev + 1;
           if (next >= durationMin * 60) {
+            // Ran to completion — close the Tracker session as completed
+            // before stopAll() clears it as an abandoned run.
+            const id = trackedSessionId.current;
+            if (id) {
+              trackedSessionId.current = null;
+              trackSessionComplete(id, 1).catch(() => {});
+            }
             stopAll();
             Alert.alert('Session complete ✨');
             return 0;
@@ -223,9 +236,12 @@ export default function Subliminal() {
   };
 
   // ── Session playback ──
+  // Stopping early leaves the Tracker session open-but-incomplete, matching
+  // how the affirmation and story players behave.
   const stopAll = async () => {
     if (bgSoundRef.current) { await bgSoundRef.current.stopAsync().catch(() => {}); await bgSoundRef.current.unloadAsync().catch(() => {}); bgSoundRef.current = null; }
     if (affSoundRef.current) { await affSoundRef.current.stopAsync().catch(() => {}); await affSoundRef.current.unloadAsync().catch(() => {}); affSoundRef.current = null; }
+    trackedSessionId.current = null;
     setPlaying(false);
     setElapsed(0);
   };
@@ -294,6 +310,13 @@ export default function Subliminal() {
       );
       affSoundRef.current = newAff;
       setPlaying(true);
+
+      // Count this listen towards the Tracker's totals/streak. Best-effort —
+      // never let a tracking failure interrupt playback.
+      try {
+        const sess = await trackSessionStart({ affirmationId: affirmationId || null, repeatTarget: 1 });
+        trackedSessionId.current = sess?.id ?? null;
+      } catch (_) { trackedSessionId.current = null; }
     } catch (e) {
       setError(e.message || 'Could not play session');
       setPlaying(false);

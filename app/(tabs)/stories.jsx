@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
@@ -7,7 +7,7 @@ import {
   generateStory, saveOwnStory, getStories, getItemAudio,
   favoriteStory, pinStory, deleteStory, regenerateStory,
   getStoryAudioStatus, getStoryPlaysToday, addStoryPlay, createCheckout,
-  updateStoryLabel, updateStoryContent,
+  updateStoryLabel, updateStoryContent, startSession, completeSession,
 } from '../../services/api';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
@@ -97,6 +97,10 @@ export default function Stories() {
   const [playingId, setPlayingId] = useState(null);
   const [error, setError] = useState('');
   const [sound, setSound] = useState(null);
+  // Open /sessions row for the story currently narrating, completed when the
+  // audio finishes. Without this, listening to a story never reached the
+  // Tracker's totals/streak — only affirmation plays did.
+  const activeSessionId = useRef(null);
   const [playsToday, setPlaysToday] = useState(null);
 
   const [expandedId, setExpandedId] = useState(null); // 👁 preview toggle
@@ -141,7 +145,14 @@ export default function Stories() {
     })();
   }, []);
 
-  const stopSound = async () => { if (sound) { try { await sound.unloadAsync(); } catch (_) {} } setSound(null); setPlayingId(null); setPreviewPlaying(false); setRtgPlayingTitle(null); };
+  // Stopping early leaves the session row open-but-incomplete, exactly like
+  // the affirmation player: total_sessions still counts it, completed_sessions
+  // doesn't.
+  const stopSound = async () => {
+    if (sound) { try { await sound.unloadAsync(); } catch (_) {} }
+    activeSessionId.current = null;
+    setSound(null); setPlayingId(null); setPreviewPlaying(false); setRtgPlayingTitle(null);
+  };
 
   const handleGenerate = async () => {
     if (!canGenerateAi) {
@@ -238,7 +249,25 @@ export default function Stories() {
       }
       const { sound: newSound } = await Audio.Sound.createAsync({ uri }, { shouldPlay: true });
       setSound(newSound);
-      newSound.setOnPlaybackStatusUpdate((status) => { if (status.didJustFinish) setPlayingId(null); });
+
+      // Count this listen towards the Tracker (totals / streak / days
+      // practiced), the same way the affirmation player does. Best-effort:
+      // a failure here must never stop playback.
+      try {
+        const sess = await startSession({ affirmationId: null, repeatTarget: 1 });
+        activeSessionId.current = sess?.id ?? null;
+      } catch (_) { activeSessionId.current = null; }
+
+      newSound.setOnPlaybackStatusUpdate((status) => {
+        if (status.didJustFinish) {
+          setPlayingId(null);
+          const id = activeSessionId.current;
+          if (id) {
+            activeSessionId.current = null;
+            completeSession(id, 1).catch(() => {});
+          }
+        }
+      });
       try { await addStoryPlay(); loadPlaysToday(); } catch (_) {}
     } catch (e) {
       if (e.status === 403 || e.status === 429) { setUpgradeMsg(e.message || 'Upgrade for unlimited story plays.'); setShowUpgrade(true); }
