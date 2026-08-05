@@ -49,7 +49,8 @@ const AURA_PREVIEW = Math.min((IS_WIDE ? SCREEN_WIDTH / 2 : SCREEN_WIDTH) - 96, 
 // boxes line up by default — real content is still allowed to grow the box
 // rather than getting clipped (a fixed `height` was cutting off checkboxes
 // and tiles). A row's shorter box stretches to match its taller sibling.
-const WIDGET_H_TALL = 380;   // Gratitude / Desire Action / Mind Movies / Subliminals
+const WIDGET_H_TALL = 380;   // Gratitude / Desire Action
+const WIDGET_H_MEDIA = 340;  // Mind Movies / Subliminals — sized to exactly fit 2 tile rows, no dead space
 const WIDGET_H_SHORT = 230;  // Message for the Day / Manifested
 
 function dayOfYear(date) {
@@ -239,7 +240,7 @@ function DesireActionWidget({ router, roadmaps, rawLogs, setRawLogs }) {
 function MindMovieWidget({ router, movies }) {
   const shown = (movies || []).slice(0, 4);
   return (
-    <Widget icon="🎬" title="Mind Movies" onOpen={() => router.push('/mindmovie')} openLabel="All" style={{ minHeight: WIDGET_H_TALL }}>
+    <Widget icon="🎬" title="Mind Movies" onOpen={() => router.push('/mindmovie')} openLabel="All" style={{ minHeight: WIDGET_H_MEDIA }}>
       {shown.length === 0 ? (
         <>
           <Text style={styles.widgetEmpty}>No movies yet — turn your dream life into a film 🎬</Text>
@@ -270,7 +271,7 @@ function MindMovieWidget({ router, movies }) {
 // ─── 🎧 Subliminal — saved sessions, tap to play in the Station ───────────
 function SubliminalWidget({ router, sessions, locked }) {
   return (
-    <Widget icon="🎧" title="Subliminals" onOpen={() => router.push('/subliminal')} openLabel="Station" style={{ minHeight: WIDGET_H_TALL }}>
+    <Widget icon="🎧" title="Subliminals" onOpen={() => router.push('/subliminal')} openLabel="Station" style={{ minHeight: WIDGET_H_MEDIA }}>
       {locked ? (
         <Text style={styles.widgetEmpty}>Custom subliminals are a Basic Manifestor feature — the sample tracks are free to play in the Station ✨</Text>
       ) : (sessions || []).length === 0 ? (
