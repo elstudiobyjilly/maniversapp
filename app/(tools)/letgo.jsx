@@ -42,6 +42,7 @@ export default function LetGo() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [logged, setLogged] = useState(false);
+  const [openTip, setOpenTip] = useState(null);
 
   const load = async () => {
     try { setList(await getLetGo()); } catch (e) { setError(e.message || 'Could not load entries'); }
@@ -154,12 +155,22 @@ export default function LetGo() {
             </>
           )
         ) : (
-          TIPS.map((t, i) => (
-            <GlassCard key={i} style={{ marginBottom: 12 }}>
-              <Text style={styles.tipTitle}>{t.title}</Text>
-              <Text style={styles.tipBody}>{t.body}</Text>
-            </GlassCard>
-          ))
+          // A dropdown-style accordion instead of a wall of always-open
+          // cards — tap a title to expand just that tip.
+          TIPS.map((t, i) => {
+            const isOpen = openTip === i;
+            return (
+              <GlassCard key={i} style={styles.tipCard} noPadding>
+                <TouchableOpacity style={styles.tipHeaderRow} onPress={() => setOpenTip(isOpen ? null : i)}>
+                  <Text style={styles.tipTitle}>{t.title}</Text>
+                  <Text style={styles.tipChevron}>{isOpen ? '▾' : '▸'}</Text>
+                </TouchableOpacity>
+                {isOpen && (
+                  <Text style={styles.tipBody}>{t.body}</Text>
+                )}
+              </GlassCard>
+            );
+          })
         )}
       </ScrollView>
     </GradientBackground>
@@ -209,8 +220,11 @@ const styles = StyleSheet.create({
   logActionBtnDanger: { backgroundColor: colors.dangerBg, borderWidth: 1, borderColor: colors.dangerBorder, borderRadius: radii.pill, width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
   logActionIcon: { fontSize: 12 },
 
-  tipTitle: { fontFamily: fonts.displayMedium, fontSize: 17, color: colors.ink, fontWeight: '600', marginBottom: 8 },
-  tipBody: { fontFamily: fonts.body, fontSize: 13.5, color: colors.ink2, lineHeight: 20 },
+  tipCard: { marginBottom: 12 },
+  tipHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 18 },
+  tipChevron: { fontSize: 14, color: colors.purpleDark, marginLeft: 10 },
+  tipTitle: { flex: 1, fontFamily: fonts.displayMedium, fontSize: 16, color: colors.ink, fontWeight: '600' },
+  tipBody: { fontFamily: fonts.body, fontSize: 13.5, color: colors.ink2, lineHeight: 20, paddingHorizontal: 18, paddingBottom: 18, paddingTop: 0 },
 
   emptyCard: { alignItems: 'center', paddingVertical: 32 },
   emptyIcon: { fontSize: 36, marginBottom: 10 },

@@ -33,6 +33,15 @@ const REFRAME_STARTERS = [
 ];
 const CATEGORY_NAMES = Object.keys(BELIEF_PRESETS);
 
+// Show only the first sentence of a belief in the reframe view — long
+// beliefs shouldn't dominate the screen while you're writing the reframe.
+function firstSentence(text, maxLen = 120) {
+  if (!text) return '';
+  const match = text.match(/^[^.!?]*[.!?]/);
+  if (match) return match[0].trim();
+  return text.length > maxLen ? `${text.slice(0, maxLen).trim()}…` : text;
+}
+
 export default function Beliefs() {
   const [tab, setTab] = useState('identify'); // 'identify' | 'reframe'
   const [belief, setBelief] = useState('');
@@ -200,7 +209,7 @@ export default function Beliefs() {
               <>
                 <Text style={styles.label}>CHOOSE A BELIEF TO REFRAME</Text>
                 <Dropdown value={reframeId} options={reframeOptions} onSelect={handleSelectReframeBelief} fullWidth />
-                <Text style={styles.reframeQuote}>"{reframeBelief?.belief}"</Text>
+                <Text style={styles.reframeQuote}>"{firstSentence(reframeBelief?.belief)}"</Text>
 
                 <Text style={[styles.label, { marginTop: 14 }]}>BUT NOW I KNOW...</Text>
                 <ExpandableTextArea
