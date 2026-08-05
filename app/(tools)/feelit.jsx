@@ -19,7 +19,6 @@ import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import ExpandableTextArea from '../../components/ExpandableTextArea';
 import {
-  generateFeelIt,
   saveFeelItCard,
   getFeelItCards,
   updateFeelItCard,
@@ -28,7 +27,6 @@ import {
 } from '../../services/api';
 import UpgradeModal from '../../components/UpgradeModal';
 import ScreenHeader from '../../components/ScreenHeader';
-import TabPill from '../../components/TabPill';
 import Button from '../../components/Button';
 import { usePlanStore } from '../../store/planStore';
 import { colors, fonts, radii } from '../../constants/theme';
@@ -309,16 +307,6 @@ export default function FeelIt() {
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [upgradeMsg, setUpgradeMsg] = useState('');
 
-  const [tab, setTab] = useState('library');
-
-  // Generate tab state — untouched, matches the website's "Feeling" tab
-  const [stateInput, setStateInput] = useState('');
-  const [card, setCard] = useState(null);
-  const [generating, setGenerating] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState('');
-
   // My Feel Cards state
   const [myCards, setMyCards] = useState([]);
   const [loadingCards, setLoadingCards] = useState(true);
@@ -338,43 +326,6 @@ export default function FeelIt() {
   };
 
   useEffect(() => { refresh(); loadCards().finally(() => setLoadingCards(false)); }, []);
-
-  const handleGenerate = async () => {
-    if (!stateInput.trim()) { setError("Tell me how you're feeling."); return; }
-    setError(''); setGenerating(true); setSaved(false); setCard(null);
-    try {
-      const result = await generateFeelIt(stateInput.trim());
-      setCard(result);
-    } catch (e) {
-      setError(e.message || 'Could not generate');
-    } finally { setGenerating(false); }
-  };
-
-  const handleSaveCard = async () => {
-    if (!card) return;
-    const cap = limits?.feelit_cards_total;
-    if (cap != null && myCards.length >= cap) {
-      setUpgradeMsg(`You've reached your ${cap} free Feel It cards -- upgrade for more room.`);
-      setShowUpgrade(true);
-      return;
-    }
-    setSaving(true); setError('');
-    try {
-      const savedCard = await saveFeelItCard({
-        state: card.state,
-        what: card.what,
-        how_to: card.how_to,
-        body_scan: card.body_scan,
-        anchor: card.anchor,
-        script: card.script,
-      });
-      setMyCards((prev) => [savedCard, ...prev]);
-      setSaved(true);
-    } catch (e) {
-      if (e.status === 403) { setUpgradeMsg(e.message || 'Upgrade for more Feel It cards.'); setShowUpgrade(true); }
-      else setError(e.message || 'Could not save card');
-    } finally { setSaving(false); }
-  };
 
   const openCard = (index) => { setStackIndex(index); setFeelView('fullscreen'); };
   const closeToGrid = () => setFeelView('grid');
@@ -423,101 +374,31 @@ export default function FeelIt() {
 
         <ScreenHeader lead="Feel It" accent="Cards" subtitle="Transmute your emotional state ✨" />
 
-        <TabPill
-          style={{ marginBottom: 16 }}
-          value={tab}
-          onChange={setTab}
-          options={[
-            { value: 'generate', label: 'Feeling' },
-            { value: 'library', label: 'My Feel Cards' },
-          ]}
-        />
-
-        {/* ── GENERATE TAB (untouched) ── */}
-        {tab === 'generate' ? (
-          <>
-            <GlassCard style={styles.mb16}>
-              <Text style={styles.cardTitle}>How are you feeling right now?</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. anxious, stuck, overwhelmed, doubtful..."
-                placeholderTextColor="#9a8896"
-                value={stateInput}
-                onChangeText={setStateInput}
-              />
-              {!!error && <Text style={styles.errorText}>{error}</Text>}
-              <Button title="Feel Into It ✨" onPress={handleGenerate} loading={generating} fullWidth style={{ marginTop: 12 }} />
-            </GlassCard>
-
-            {card && (
-              <GlassCard style={styles.mb16}>
-                <Text style={styles.generatedState}>{card.state}</Text>
-
-                <Text style={styles.sectionLabel}>What's happening</Text>
-                <Text style={styles.bodyText}>{card.what}</Text>
-
-                {Array.isArray(card.how_to) && card.how_to.length > 0 && (
-                  <>
-                    <Text style={styles.sectionLabel}>How to shift it</Text>
-                    {card.how_to.map((line, i) => (
-                      <Text key={i} style={styles.listItem}>• {line}</Text>
-                    ))}
-                  </>
-                )}
-
-                {Array.isArray(card.body_scan) && card.body_scan.length > 0 && (
-                  <>
-                    <Text style={styles.sectionLabel}>Body scan</Text>
-                    {card.body_scan.map((line, i) => (
-                      <Text key={i} style={styles.listItem}>• {line}</Text>
-                    ))}
-                  </>
-                )}
-
-                {!!card.anchor && (
-                  <>
-                    <Text style={styles.sectionLabel}>Anchor</Text>
-                    <Text style={styles.bodyText}>{card.anchor}</Text>
-                  </>
-                )}
-
-                {!!card.script && (
-                  <>
-                    <Text style={styles.sectionLabel}>Script</Text>
-                    <Text style={styles.scriptText}>{card.script}</Text>
-                  </>
-                )}
-
-                <Button title={saved ? 'Saved ✨' : 'Save to My Feel Cards'} variant="ghost" onPress={handleSaveCard} loading={saving} fullWidth style={{ marginTop: 12 }} />
-              </GlassCard>
-            )}
-          </>
+        {/* ── MY FEEL CARDS — grid of small colored cards; tap to open into a
+             full-screen swipeable reader; X returns to this grid. No AI/
+             backend generation here — cards are written and saved by hand. ── */}
+        {loadingCards ? (
+          <ActivityIndicator color="#c9a8c9" style={{ marginTop: 40 }} />
         ) : (
-          /* ── MY FEEL CARDS TAB — grid of small colored cards; tap to open
-               into a full-screen swipeable reader; X returns to this grid. ── */
-          loadingCards ? (
-            <ActivityIndicator color="#c9a8c9" style={{ marginTop: 40 }} />
-          ) : (
-            <>
-              <Text style={styles.hintText}>✦ Tap a card to read it full screen ✨</Text>
-              <View style={styles.grid}>
-                <TouchableOpacity style={styles.addTile} onPress={startAdd}>
-                  <Text style={styles.addTileIcon}>＋</Text>
-                  <Text style={styles.addTileLabel}>Add desire card</Text>
-                </TouchableOpacity>
-                {myCards.map((c, i) => (
-                  <FeelGridCard
-                    key={c.id}
-                    card={c}
-                    index={i}
-                    onOpen={() => openCard(i)}
-                    onEdit={() => startEdit(c)}
-                    onDelete={() => handleDeleteCard(c)}
-                  />
-                ))}
-              </View>
-            </>
-          )
+          <>
+            <Text style={styles.hintText}>✦ Tap a card to read it full screen ✨</Text>
+            <View style={styles.grid}>
+              <TouchableOpacity style={styles.addTile} onPress={startAdd}>
+                <Text style={styles.addTileIcon}>＋</Text>
+                <Text style={styles.addTileLabel}>Add desire card</Text>
+              </TouchableOpacity>
+              {myCards.map((c, i) => (
+                <FeelGridCard
+                  key={c.id}
+                  card={c}
+                  index={i}
+                  onOpen={() => openCard(i)}
+                  onEdit={() => startEdit(c)}
+                  onDelete={() => handleDeleteCard(c)}
+                />
+              ))}
+            </View>
+          </>
         )}
 
       </ScrollView>
@@ -560,33 +441,6 @@ const styles = StyleSheet.create({
 
   mb16: { marginBottom: 16 },
   label: { fontFamily: fonts.bodyMedium, fontSize: 10.5, color: colors.purpleDark, fontWeight: '700', letterSpacing: 0.6, marginBottom: 8, textTransform: 'uppercase' },
-
-  cardTitle: { fontSize: 15, fontWeight: '600', color: '#2e2530', marginBottom: 12 },
-  input: {
-    backgroundColor: 'rgba(255,255,255,0.5)',
-    borderRadius: 14,
-    padding: 14,
-    fontSize: 14,
-    color: '#2e2530',
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(201,168,201,0.25)',
-  },
-  errorText: { color: '#c04040', fontSize: 13, marginBottom: 10, textAlign: 'center' },
-
-  generatedState: { fontSize: 18, fontWeight: '600', color: '#2e2530', textTransform: 'capitalize', marginBottom: 8 },
-  sectionLabel: {
-    fontSize: 11,
-    color: '#9a5fa8',
-    fontWeight: '700',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  bodyText: { color: '#2e2530', fontSize: 14, lineHeight: 20 },
-  listItem: { color: '#2e2530', fontSize: 14, lineHeight: 20, marginLeft: 4 },
-  scriptText: { color: '#2e2530', fontSize: 14, fontStyle: 'italic', lineHeight: 20 },
 
   hintText: { fontFamily: fonts.displayItalic, fontSize: 12, color: colors.mist, fontStyle: 'italic', marginBottom: 12, textAlign: 'center' },
 
