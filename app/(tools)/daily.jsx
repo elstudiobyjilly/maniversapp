@@ -10,6 +10,7 @@ import ScreenHeader from '../../components/ScreenHeader';
 import Button from '../../components/Button';
 import { colors, fonts, radii } from '../../constants/theme';
 import { DAILY_MESSAGES, ORACLE_CARDS, HOROSCOPE_30_DAYS } from '../../constants/dailyContent';
+import { pullOracleCard, getOracleHistory } from '../../services/api';
 
 const STAR_SIGN_KEY = 'mv_star_sign';
 
@@ -43,6 +44,11 @@ export default function Daily() {
 
   const [oracleOrder, setOracleOrder] = useState(() => shuffledIndices(ORACLE_CARDS.length));
   const [pulledSlot, setPulledSlot] = useState(null);
+  // Oracle pulls were purely local before, so nothing survived a reload and
+  // /oracle/pull + /oracle/history were never called. A pull is now recorded
+  // server-side and past pulls are listed underneath.
+  const [oracleHistory, setOracleHistory] = useState([]);
+  const [showOracleHistory, setShowOracleHistory] = useState(false);
 
   const [starSign, setStarSignState] = useState(null);
   const [loadedSign, setLoadedSign] = useState(false);
@@ -54,8 +60,24 @@ export default function Daily() {
     AsyncStorage.getItem(STAR_SIGN_KEY).then((s) => { if (s) setStarSignState(s); setLoadedSign(true); });
   }, []);
 
+  const loadOracleHistory = async () => {
+    try {
+      const h = await getOracleHistory();
+      setOracleHistory(Array.isArray(h) ? h : (h?.pulls || []));
+    } catch (_) {}
+  };
+
+  useEffect(() => { loadOracleHistory(); }, []);
+
   const handleShuffleOracle = () => { setOracleOrder(shuffledIndices(ORACLE_CARDS.length)); setPulledSlot(null); };
   const handleClearOracle = () => setPulledSlot(null);
+
+  // Record the pull server-side, best-effort — the card still flips locally
+  // even if the network call fails, so the reading is never blocked.
+  const handlePullSlot = (slot) => {
+    setPulledSlot(slot);
+    pullOracleCard().then(loadOracleHistory).catch(() => {});
+  };
 
   const deck = oracleOrder.slice(0, 7);
   const pulledCard = pulledSlot != null ? ORACLE_CARDS[deck[pulledSlot]] : null;
@@ -118,7 +140,7 @@ export default function Daily() {
               const isPulled = pulledSlot === slot;
               const card = ORACLE_CARDS[cardIdx];
               return (
-                <TouchableOpacity key={slot} style={[styles.oracleTile, isPulled && styles.oracleTileFlipped]} onPress={() => setPulledSlot(slot)}>
+                <TouchableOpacity key={slot} style={[styles.oracleTile, isPulled && styles.oracleTileFlipped]} onPress={() => handlePullSlot(slot)}>
                   {isPulled ? (
                     <>
                       <Text style={styles.oracleTileIcon}>{card.ic}</Text>
@@ -147,6 +169,27 @@ export default function Daily() {
                 <Button title="🔊 Read Aloud" size="sm" variant="ghost" onPress={() => readAloud(`${pulledCard.name}. ${pulledCard.msg} ${pulledCard.action}`)} />
               </View>
             </GlassCard>
+          )}
+
+          {oracleHistory.length > 0 && (
+            <>
+              <TouchableOpacity style={styles.historyHead} onPress={() => setShowOracleHistory((v) => !v)}>
+                <Text style={styles.historyHeadText}>🗂 Past Pulls ({oracleHistory.length})</Text>
+                <Text style={styles.historyChevron}>{showOracleHistory ? '▾' : '▸'}</Text>
+              </TouchableOpacity>
+              {showOracleHistory && oracleHistory.map((h, i) => {
+                const name = h.card_name || h.card || h.name || 'Oracle Card';
+                const when = h.created_at || h.pulled_at || h.date;
+                return (
+                  <View key={h.id ?? i} style={styles.historyRow}>
+                    <Text style={styles.historyRowName} numberOfLines={1}>{name}</Text>
+                    <Text style={styles.historyRowDate}>
+                      {when ? new Date(when).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
+                    </Text>
+                  </View>
+                );
+              })}
+            </>
           )}
 
           <Text style={styles.sectionHeading}>📈 Your Horoscope</Text>
@@ -221,6 +264,17 @@ const styles = StyleSheet.create({
   btnRow: { flexDirection: 'row', gap: 8 },
 
   sectionHeading: { fontFamily: fonts.displayMedium, fontSize: 18, color: colors.ink, fontWeight: '600', marginBottom: 4 },
+
+  historyHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6, marginBottom: 8 },
+  historyHeadText: { fontFamily: fonts.bodyMedium, fontSize: 12.5, color: colors.purpleDark, fontWeight: '700' },
+  historyChevron: { fontSize: 12, color: colors.mist },
+  historyRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: 'rgba(255,255,255,0.55)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.25)',
+    borderRadius: radii.sm, paddingVertical: 9, paddingHorizontal: 12, marginBottom: 6,
+  },
+  historyRowName: { flex: 1, fontFamily: fonts.body, fontSize: 13, color: colors.ink },
+  historyRowDate: { fontFamily: fonts.body, fontSize: 11, color: colors.mist2 },
   sectionSub: { fontFamily: fonts.body, fontSize: 12.5, color: colors.mist, marginBottom: 14 },
 
   oracleGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
