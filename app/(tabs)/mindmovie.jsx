@@ -38,6 +38,23 @@ const DURATION_OPTIONS = [
   { value: 12, label: '12 sec' },
 ];
 
+// A scene's img is legitimately null whenever the picture never made it to
+// storage — the backend strips any non-http value before saving (hub.js's
+// _cloudinaryOnly does the same on the website). Rendering <Image uri={null}>
+// just draws nothing, which is why saved movies looked empty; show a real
+// placeholder instead, and fall back the same way if the URL 404s later.
+function SceneImage({ uri, style, iconSize = 22 }) {
+  const [failed, setFailed] = useState(false);
+  if (!uri || failed) {
+    return (
+      <View style={[style, styles.sceneFallback]}>
+        <Text style={{ fontSize: iconSize, opacity: 0.5 }}>🎬</Text>
+      </View>
+    );
+  }
+  return <Image source={{ uri }} style={style} onError={() => setFailed(true)} />;
+}
+
 export default function MindMovie() {
   const insets = useSafeAreaInsets();
   const { playId } = useLocalSearchParams();
@@ -339,7 +356,7 @@ export default function MindMovie() {
                   <View style={styles.sceneNum}><Text style={styles.sceneNumText}>{i + 1}</Text></View>
                   <TouchableOpacity onPress={() => removeScene(i)}><Text style={styles.removeText}>✕</Text></TouchableOpacity>
                 </View>
-                <Image source={{ uri: scene.img }} style={styles.sceneImage} />
+                <SceneImage uri={scene.img} style={styles.sceneImage} iconSize={24} />
                 <View style={[styles.inputBox, { marginTop: 10 }]}>
                   <TextInput
                     style={styles.input}
@@ -377,7 +394,7 @@ export default function MindMovie() {
                 <Text style={styles.muted}>{m.scenes?.length || 0} slides · {m.slideDur || 5}s · {m.loop ? 'Loop' : 'Once'} · {(m.voice || 'luna')}</Text>
                 <ScrollView horizontal style={{ marginTop: 10, marginBottom: 12 }}>
                   {(m.scenes || []).map((s, i) => (
-                    <Image key={i} source={{ uri: s.img }} style={styles.thumb} />
+                    <SceneImage key={i} uri={s.img} style={styles.thumb} iconSize={16} />
                   ))}
                 </ScrollView>
                 <View style={styles.row}>
@@ -396,7 +413,7 @@ export default function MindMovie() {
       <Modal visible={!!playingMovie} animationType="fade" onRequestClose={closePlayback}>
         {playingMovie && (
           <View style={styles.playerContainer}>
-            <Image source={{ uri: playingMovie.scenes[sceneIndex]?.img }} style={styles.playerImage} />
+            <SceneImage uri={playingMovie.scenes[sceneIndex]?.img} style={styles.playerImage} iconSize={54} />
             <View style={styles.playerCaptionWrap}>
               {narrationLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.playerCaption}>{playingMovie.scenes[sceneIndex]?.text}</Text>}
             </View>
@@ -435,6 +452,7 @@ const styles = StyleSheet.create({
   sceneNumText: { color: '#fff', fontSize: 11, fontWeight: '700' },
   removeText: { color: colors.danger, fontSize: 16 },
   sceneImage: { width: '100%', height: 140, borderRadius: radii.sm, backgroundColor: 'rgba(255,255,255,0.35)' },
+  sceneFallback: { alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(201,168,201,0.18)' },
   errorText: { fontFamily: fonts.body, color: colors.danger, fontSize: 13, marginVertical: 10, textAlign: 'center' },
   addSceneButton: { borderWidth: 1.5, borderColor: colors.purpleMid, borderRadius: radii.pill, paddingVertical: 13, alignItems: 'center', marginVertical: 12 },
   addSceneText: { fontFamily: fonts.bodyMedium, color: colors.purpleDark, fontWeight: '600', fontSize: 14 },

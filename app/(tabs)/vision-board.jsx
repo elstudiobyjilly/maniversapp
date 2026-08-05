@@ -24,9 +24,37 @@ const CANVAS_HEIGHT = 1000;
 const VIEWPORT_WIDTH = SCREEN_WIDTH - 32;
 const VIEWPORT_HEIGHT = 500;
 const ITEM_SIZE = 120;
+// Zoom range for the board viewport. Max was 2x, which wasn't enough to
+// actually inspect a busy board.
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 3;
 const MIN_ITEM_SIZE = 60;
 
 const CATEGORIES = ['💰 Wealth', '💕 Love', '🌿 Health', '🚀 Career', '🏡 Home', '✨ Purpose', '🕊️ Peace'];
+
+// Board items can carry the image under different keys depending on where
+// they were created: the website writes `src` locally and normalises to
+// `url` when syncing to the backend (explore.js), and the Mind Movie
+// picker hands over `image`. Reading only `url` left website-authored
+// items rendering blank, so accept all three like the site does.
+function itemUri(item) {
+  return item?.url || item?.src || item?.image || '';
+}
+
+// An item's image URL can 404 or expire (R2 objects are replaceable) — show
+// a visible placeholder instead of a blank tile so the board never looks
+// silently empty.
+function BoardImage({ uri, style }) {
+  const [failed, setFailed] = useState(false);
+  if (!uri || failed) {
+    return (
+      <View style={[style, styles.imageFallback]}>
+        <Text style={styles.imageFallbackIcon}>🖼️</Text>
+      </View>
+    );
+  }
+  return <Image source={{ uri }} style={style} onError={() => setFailed(true)} />;
+}
 
 function DraggableImage({ item, index, isLocked, selectMode, selected, onMove, onResize, onRemove, onToggleSelect, onLongPressItem }) {
   const translateX = useSharedValue(item.x || 0);
@@ -115,7 +143,7 @@ function DraggableImage({ item, index, isLocked, selectMode, selected, onMove, o
   return (
     <GestureDetector gesture={selectMode ? tapToSelect : moveOrLongPress}>
       <Animated.View style={[styles.draggable, containerStyle, selected && styles.draggableSelected]}>
-        <Image source={{ uri: item.url }} style={styles.image} />
+        <BoardImage uri={itemUri(item)} style={styles.image} />
         {item.category ? (
           <View style={styles.categoryBadge}><Text style={styles.categoryBadgeText}>{item.category}</Text></View>
         ) : null}
@@ -204,7 +232,7 @@ export default function VisionBoard() {
   );
 
   const setZoomTo = (value) => {
-    const clamped = Math.max(0.5, Math.min(2, value));
+    const clamped = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, value));
     zoom.value = withTiming(clamped, { duration: 200 });
     savedZoom.value = clamped;
     if (clamped === 1) { panX.value = withTiming(0); panY.value = withTiming(0); }
@@ -216,17 +244,20 @@ export default function VisionBoard() {
     })
     .onUpdate((e) => {
       const next = savedZoom.value * e.scale;
-      zoom.value = Math.max(0.5, Math.min(2, next));
+      zoom.value = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, next));
     })
     .onEnd(() => {
       savedZoom.value = zoom.value;
     });
 
-  // Two-finger pan to look around a zoomed-in board without fighting the
-  // single-finger drag that moves individual images.
+  // While editing, a single finger drags individual images, so panning the
+  // board needs two fingers. When the board is locked or in fullscreen the
+  // images aren't draggable, so a single finger should pan — requiring two
+  // fingers just to look around a zoomed-in board is what made viewing feel
+  // stuck.
+  const panNeedsTwoFingers = !isLocked && !fullscreen;
   const panGesture = Gesture.Pan()
-    .minPointers(2)
-    .maxPointers(2)
+    .minPointers(panNeedsTwoFingers ? 2 : 1)
     .onStart(() => {
       startPanX.value = panX.value;
       startPanY.value = panY.value;
@@ -331,7 +362,7 @@ export default function VisionBoard() {
       const movies = await getMindMovies();
       const urls = [];
       (movies || []).forEach((m) => (m.scenes || []).forEach((s) => { if (s.img) urls.push(s.img); }));
-      const existing = new Set(items.map((it) => it.url));
+      const existing = new Set(items.map(itemUri));
       const fresh = [...new Set(urls)].filter((u) => !existing.has(u));
       if (fresh.length === 0) { setInfo('No new Mind Movie images to add.'); setTimeout(() => setInfo(''), 3000); return; }
 
@@ -684,6 +715,12 @@ const styles = StyleSheet.create({
   draggable: { position: 'absolute' },
   draggableSelected: { borderWidth: 2, borderColor: colors.pinkAccent, borderRadius: 14 },
   image: { width: '100%', height: '100%', borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.4)' },
+  imageFallback: {
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(201,168,201,0.18)',
+    borderWidth: 1, borderColor: 'rgba(201,168,201,0.35)', borderStyle: 'dashed',
+  },
+  imageFallbackIcon: { fontSize: 26, opacity: 0.55 },
   removeBtn: { position: 'absolute', top: -6, right: -6, backgroundColor: '#c04040', borderRadius: 12, width: 24, height: 24, justifyContent: 'center', alignItems: 'center' },
   removeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
   resizeHandle: {

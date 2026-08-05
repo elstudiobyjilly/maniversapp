@@ -149,42 +149,46 @@ function MethodsPane() {
   );
 }
 
+// Every tool in the active group renders as its own open panel, like the
+// website — previously these were collapsed accordion rows that only
+// allowed one tool open at a time, so you couldn't see what was available
+// without tapping through each one.
 function ToolsPane() {
   const [subTab, setSubTab] = useState('daily');
-  const [expandedKey, setExpandedKey] = useState(null);
+  const [collapsedKeys, setCollapsedKeys] = useState([]);
   const activeGroup = TOOL_SUBTABS.find((g) => g.key === subTab);
+
+  const toggleCollapsed = (key) =>
+    setCollapsedKeys((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
 
   return (
     <View>
       <View style={styles.subTabRow}>
         {TOOL_SUBTABS.map((g) => (
-          <TouchableOpacity key={g.key} style={[styles.subTab, subTab === g.key && styles.subTabActive]} onPress={() => { setSubTab(g.key); setExpandedKey(null); }}>
+          <TouchableOpacity key={g.key} style={[styles.subTab, subTab === g.key && styles.subTabActive]} onPress={() => { setSubTab(g.key); setCollapsedKeys([]); }}>
             <Text style={[styles.subTabText, subTab === g.key && styles.subTabTextActive]}>{g.label}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      <GlassCard noPadding>
-        {activeGroup.tools.map((tool, i) => {
-          const isOpen = expandedKey === tool.key;
-          const isLast = i === activeGroup.tools.length - 1;
-          const ToolComponent = tool.Component;
-          return (
-            <View key={tool.key}>
-              <TouchableOpacity style={styles.toolRow} onPress={() => setExpandedKey(isOpen ? null : tool.key)}>
-                <Text style={styles.toolLabel}>{tool.label}</Text>
-                <Text style={styles.toolChevron}>{isOpen ? '▾' : '▸'}</Text>
-              </TouchableOpacity>
-              {isOpen && (
-                <View style={styles.toolExpandedWrap}>
-                  <ToolComponent />
-                </View>
-              )}
-              {!isLast && <View style={styles.divider} />}
-            </View>
-          );
-        })}
-      </GlassCard>
+      {activeGroup.tools.map((tool) => {
+        // Open by default; the chevron only exists to tuck one away.
+        const isOpen = !collapsedKeys.includes(tool.key);
+        const ToolComponent = tool.Component;
+        return (
+          <GlassCard key={tool.key} noPadding style={styles.toolCard}>
+            <TouchableOpacity style={styles.toolRow} onPress={() => toggleCollapsed(tool.key)}>
+              <Text style={styles.toolLabel}>{tool.label}</Text>
+              <Text style={styles.toolChevron}>{isOpen ? '▾' : '▸'}</Text>
+            </TouchableOpacity>
+            {isOpen && (
+              <View style={styles.toolExpandedWrap}>
+                <ToolComponent />
+              </View>
+            )}
+          </GlassCard>
+        );
+      })}
     </View>
   );
 }
@@ -244,9 +248,9 @@ const styles = StyleSheet.create({
   subTabText: { fontFamily: fonts.bodyMedium, fontSize: 12.5, color: colors.ink2, fontWeight: '600' },
   subTabTextActive: { color: '#fff', fontWeight: '700' },
 
+  toolCard: { marginBottom: 12 },
   toolRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
   toolLabel: { fontFamily: fonts.bodyMedium, fontSize: 14, fontWeight: '600', color: colors.ink },
   toolChevron: { fontSize: 13, color: colors.mist2 },
   toolExpandedWrap: { paddingHorizontal: 16, paddingBottom: 16, borderTopWidth: 1, borderTopColor: 'rgba(154,95,168,0.12)', paddingTop: 14 },
-  divider: { borderBottomWidth: 1, borderBottomColor: 'rgba(154,95,168,0.12)' },
 });
