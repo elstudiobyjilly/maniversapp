@@ -53,6 +53,14 @@ const WIDGET_H_TALL = 380;   // Gratitude / Desire Action
 const WIDGET_H_MEDIA = 310;  // Mind Movies / Subliminals — sized to exactly fit 2 tile rows, no dead space
 const WIDGET_H_SHORT = 230;  // Message for the Day / Manifested
 
+// A desire's cover URL can 404/expire without the record itself changing —
+// falls back to the gradient placeholder instead of rendering blank white.
+function DesireCover({ uri, style }) {
+  const [failed, setFailed] = useState(false);
+  if (!uri || failed) return <LinearGradient colors={gradients.avatar} style={style} />;
+  return <Image source={{ uri }} style={style} onError={() => setFailed(true)} />;
+}
+
 function dayOfYear(date) {
   const start = new Date(date.getFullYear(), 0, 0);
   return Math.floor((date - start) / 86400000);
@@ -592,11 +600,7 @@ export default function Dashboard() {
             <View style={styles.desireTrack}>
               {desires.slice(0, 10).map((d) => (
                 <TouchableOpacity key={d.id} style={styles.desireCard} onPress={() => router.push(`/desire/${d.id}`)}>
-                  {d.images?.[0] ? (
-                    <Image source={{ uri: d.images[0] }} style={styles.desireCover} />
-                  ) : (
-                    <LinearGradient colors={gradients.avatar} style={styles.desireCover} />
-                  )}
+                  <DesireCover uri={d.images?.[0]} style={styles.desireCover} />
                   <View style={styles.desireBody}>
                     <Text style={styles.desireTitle} numberOfLines={1}>{d.title}</Text>
                     {d.category ? <Text style={styles.desireCategory}>{categoryLabel(d.category)}</Text> : null}

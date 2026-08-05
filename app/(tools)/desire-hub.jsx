@@ -13,12 +13,22 @@ import { CATEGORIES, categoryLabel, timeAgo } from '../../constants/desires';
 import { getDesires, createDesire, getVisionBoard, getMindMovies } from '../../services/api';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const COLS = SCREEN_WIDTH >= 700 ? 3 : 2;
+// Website always runs 2 columns, phone or tablet — match that instead of
+// cramming 3 across on iPad.
+const COLS = 2;
 
 const CATEGORY_FILTER_OPTIONS = [
   { value: 'all', label: 'All Categories' },
   ...CATEGORIES.map((c) => ({ value: c.id, label: `${c.emoji} ${c.label}` })),
 ];
+
+// A desire's cover URL can 404/expire without the record itself changing —
+// falls back to the gradient placeholder instead of rendering blank white.
+function DesireCover({ uri, style }) {
+  const [failed, setFailed] = useState(false);
+  if (!uri || failed) return <LinearGradient colors={gradients.avatar} style={style} />;
+  return <Image source={{ uri }} style={style} onError={() => setFailed(true)} />;
+}
 
 export default function DesireHub() {
   const router = useRouter();
@@ -247,11 +257,7 @@ export default function DesireHub() {
           <View style={styles.grid}>
             {filtered.map((d) => (
               <TouchableOpacity key={d.id} style={[styles.card, { width: `${100 / COLS - 2}%` }]} onPress={() => router.push(`/desire/${d.id}`)}>
-                {d.images?.[0] ? (
-                  <Image source={{ uri: d.images[0] }} style={styles.cardImage} />
-                ) : (
-                  <LinearGradient colors={gradients.avatar} style={styles.cardImage} />
-                )}
+                <DesireCover uri={d.images?.[0]} style={styles.cardImage} />
                 <View style={styles.cardBody}>
                   <Text style={styles.cardTitle} numberOfLines={1}>{d.title}</Text>
                   {d.category ? <Text style={styles.cardCategory}>{categoryLabel(d.category)}</Text> : null}
@@ -305,7 +311,10 @@ const styles = StyleSheet.create({
 
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: '2%' },
   card: { backgroundColor: 'rgba(255,255,255,0.55)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.25)', borderRadius: radii.sm, overflow: 'hidden', marginBottom: 12 },
-  cardImage: { width: '100%', height: 100 },
+  // A fixed 100px cover read as a thin strip once cards got wider (2-col
+  // on tablet); aspect-ratio scales the cover with the card like the
+  // website's near-square hero image.
+  cardImage: { width: '100%', aspectRatio: 1.05 },
   cardBody: { padding: 10 },
   cardTitle: { fontFamily: fonts.displayMedium, fontSize: 14, color: colors.ink, fontWeight: '600', marginBottom: 2 },
   cardCategory: { fontFamily: fonts.body, fontSize: 11, color: colors.mist, marginBottom: 6 },

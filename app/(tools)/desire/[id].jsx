@@ -10,6 +10,14 @@ import { colors, fonts, gradients, radii } from '../../../constants/theme';
 import { CATEGORIES, categoryLabel, STATUSES, CONTENT_TYPES, timeAgo } from '../../../constants/desires';
 import { getDesire, updateDesire, deleteDesire, touchDesireActivity, unlinkDesire } from '../../../services/api';
 
+// A desire's cover URL can 404/expire without the record itself changing —
+// falls back to the gradient placeholder instead of rendering blank white.
+function DesireCover({ uri, style }) {
+  const [failed, setFailed] = useState(false);
+  if (!uri || failed) return <LinearGradient colors={gradients.avatar} style={style} />;
+  return <Image source={{ uri }} style={style} onError={() => setFailed(true)} />;
+}
+
 export default function DesireDetail() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
@@ -113,11 +121,7 @@ export default function DesireDetail() {
   return (
     <GradientBackground>
       <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 20, paddingBottom: 40 }}>
-        {desire.images?.[0] ? (
-          <Image source={{ uri: desire.images[0] }} style={styles.coverImage} />
-        ) : (
-          <LinearGradient colors={gradients.avatar} style={styles.coverImage} />
-        )}
+        <DesireCover uri={desire.images?.[0]} style={styles.coverImage} />
 
         {editing ? (
           <GlassCard style={{ marginTop: 16 }}>
