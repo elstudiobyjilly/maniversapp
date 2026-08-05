@@ -153,7 +153,7 @@ export default function Community() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 60, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 16, paddingBottom: 40 }}>
         <ScreenHeader lead="Community" accent="Wall" subtitle="Share your manifestations. Send love. Rise together. 🌸" />
 
         <GlassCard style={{ marginTop: 16, marginBottom: 18 }}>

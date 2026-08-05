@@ -26,7 +26,7 @@ export default function Meditate() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 60, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 16, paddingBottom: 40 }}>
         <ScreenHeader lead="Guided" accent="Meditations" subtitle="Settle in. Breathe. Let your mind become still. ✨" />
 
         <View style={styles.toolRow}>
