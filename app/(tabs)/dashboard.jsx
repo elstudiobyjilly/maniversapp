@@ -545,6 +545,7 @@ export default function Dashboard() {
           <ShortcutRow router={router} items={[
             { icon: '🌸', label: 'Community', route: '/community' },
             { icon: '📖', label: 'Read', route: '/discover' },
+            { icon: '📊', label: 'Tracker', route: '/tracker' },
           ]} />
 
           <AuraCardWidget router={router} />
