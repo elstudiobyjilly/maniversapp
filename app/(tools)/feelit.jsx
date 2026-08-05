@@ -27,6 +27,7 @@ import {
 } from '../../services/api';
 import UpgradeModal from '../../components/UpgradeModal';
 import ScreenHeader from '../../components/ScreenHeader';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Button from '../../components/Button';
 import { usePlanStore } from '../../store/planStore';
 import { colors, fonts, radii } from '../../constants/theme';
@@ -148,6 +149,12 @@ function FeelFullScreen({ cards, index, onIndexChange, onClose, onEdit, onDelete
   const pan = Gesture.Pan()
     .activeOffsetX([-12, 12])
     .failOffsetY([-18, 18])
+    // Shrink the gesture's hit area away from the extreme left edge so the
+    // OS's native edge-swipe-to-go-back gesture (iOS recognizes touches
+    // starting within ~20-24px of the screen edge) isn't swallowed by this
+    // card-swipe Pan gesture. Dragging from the middle of the card still
+    // works exactly as before.
+    .hitSlop({ left: -24 })
     .onUpdate((e) => { translateX.value = e.translationX; })
     .onEnd((e) => {
       if (e.translationX < -SWIPE_THRESHOLD) {
@@ -303,6 +310,7 @@ function FeelEditModal({ visible, card, onClose, onSave, onDelete }) {
 
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 export default function FeelIt() {
+  const insets = useSafeAreaInsets();
   const { limits, refresh } = usePlanStore();
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [upgradeMsg, setUpgradeMsg] = useState('');
@@ -370,7 +378,7 @@ export default function FeelIt() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 16 }]}>
 
         <ScreenHeader lead="Feel It" accent="Cards" subtitle="Transmute your emotional state ✨" />
 
