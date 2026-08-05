@@ -156,6 +156,11 @@ export async function generateAffirmation(desire, opts = {}) {
     repeat_count: opts.repeat_count || 10,
   };
   if (opts.style) body.style = opts.style;
+  // "system" is the device's own TTS — there's no server-side system voice,
+  // so the backend renders with Luna and the client speaks locally instead.
+  // Matches life.js: voice_id: getSelectedVoice()==='system'?'luna':...
+  if (opts.voice_id) body.voice_id = opts.voice_id === 'system' ? 'luna' : opts.voice_id;
+  if (opts.label) body.label = opts.label;
   return req('POST', '/affirmations/generate', body);
 }
 
@@ -205,13 +210,17 @@ export async function saveMyAffLibrary(items) {
 
 // ── STORIES ───────────────────────────────────────────────────────────
 export async function generateStory(desire, opts = {}) {
-  return req('POST', '/stories/generate', {
+  const body = {
     desire,
     length: opts.length || 'medium',
     theme: opts.theme || 'general',
     story_mode: opts.story_mode || '',
     label: opts.label || '',
-  });
+  };
+  // Same system→luna mapping as affirmations: there's no server-side
+  // "system" voice, that's the device's own TTS.
+  if (opts.voice_id) body.voice_id = opts.voice_id === 'system' ? 'luna' : opts.voice_id;
+  return req('POST', '/stories/generate', body);
 }
 
 export async function saveStory({ title, content, desire = '', client_id = '', source = 'user' }) {

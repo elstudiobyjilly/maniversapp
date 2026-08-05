@@ -7,7 +7,7 @@ import {
   generateStory, saveOwnStory, getStories, getItemAudio,
   favoriteStory, pinStory, deleteStory, regenerateStory,
   getStoryAudioStatus, getStoryPlaysToday, addStoryPlay, createCheckout,
-  getStoryUsage, updateStoryLabel, updateStoryContent,
+  updateStoryLabel, updateStoryContent,
 } from '../../services/api';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
@@ -16,7 +16,10 @@ import ScreenHeader from '../../components/ScreenHeader';
 import TabPill from '../../components/TabPill';
 import Chip from '../../components/Chip';
 import Button from '../../components/Button';
+import ExpandableTextArea from '../../components/ExpandableTextArea';
+import UsageBadge from '../../components/UsageBadge';
 import { usePlanStore } from '../../store/planStore';
+import { useAuthStore } from '../../store/authStore';
 import { colors, fonts, radii } from '../../constants/theme';
 import * as Linking from 'expo-linking';
 
@@ -34,11 +37,15 @@ const MODES = [
   { value: 'mix', label: '🎛️ Mix' },
 ];
 
+// "System" is the device's own TTS — available on every plan since nothing
+// is rendered server-side for it (matches the website's voice pills).
 const VOICES = [
   { id: 'luna', label: '🌸 Luna' },
   { id: 'orion', label: '🌙 Orion' },
   { id: 'sage', label: '🍃 Sage' },
+  { id: 'system', label: '🤖 System' },
 ];
+const voiceName = (id) => (VOICES.find((v) => v.id === id)?.label || '').replace(/^\S+\s/, '') || 'Luna';
 
 // Matches the website's "Ready-Made Stories" library — instant present-tense
 // stories, grouped by category, playable without generating or saving.
@@ -61,6 +68,12 @@ const RTG_CATEGORIES = ['All', ...Array.from(new Set(RTG_STORIES.map((s) => s.ca
 export default function Stories() {
   const insets = useSafeAreaInsets();
   const { limits, loaded, hasFeature, refresh } = usePlanStore();
+  // Usage counters come from /auth/me (ai_usage + ai_usage_today), matching
+  // the website's _fetchAndUpdateUsage().
+  const user = useAuthStore((s) => s.user);
+  const refreshUser = useAuthStore((s) => s.refreshUser);
+  const aiUsage = user?.ai_usage || {};
+  const aiUsageToday = user?.ai_usage_today || {};
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [upgradeMsg, setUpgradeMsg] = useState('');
 
@@ -85,7 +98,6 @@ export default function Stories() {
   const [error, setError] = useState('');
   const [sound, setSound] = useState(null);
   const [playsToday, setPlaysToday] = useState(null);
-  const [usage, setUsage] = useState(null);
 
   const [expandedId, setExpandedId] = useState(null); // 👁 preview toggle
   const [labelingId, setLabelingId] = useState(null); // 🏷 label editor
@@ -117,15 +129,10 @@ export default function Stories() {
     try { setPlaysToday(await getStoryPlaysToday()); } catch (_) {}
   };
 
-  const loadUsage = async () => {
-    try { setUsage(await getStoryUsage()); } catch (_) {}
-  };
-
   useEffect(() => {
     refresh();
     loadLibrary();
     loadPlaysToday();
-    loadUsage();
     (async () => {
       try {
         const pinned = await AsyncStorage.getItem(RTG_PINNED_KEY);
@@ -148,7 +155,7 @@ export default function Stories() {
       const story = await generateStory(desire.trim(), { length, theme: 'general', story_mode: mode, voice_id: voice });
       setLibrary((prev) => [story, ...prev]);
       setDesire('');
-      loadUsage();
+        refreshUser(); // usage badge reflects the quota we just consumed
     } catch (e) {
       if (e.status === 403) { setUpgradeMsg(e.message || 'Upgrade to generate AI stories.'); setShowUpgrade(true); }
       else setError(e.message || 'Could not generate story');
@@ -174,7 +181,7 @@ export default function Stories() {
         setLibrary((prev) => [story, ...prev]);
       }
       resetOwnForm();
-      loadUsage();
+        refreshUser();
     } catch (e) {
       if (e.status === 403) { setUpgradeMsg(e.message || 'Upgrade for more own stories.'); setShowUpgrade(true); }
       else setError(e.message || 'Could not save story');
@@ -274,10 +281,6 @@ export default function Stories() {
   const filteredLibrary = library.filter((s) => (libFilter === 'ai' ? s.source === 'ai' : s.source !== 'ai'));
   const filteredRTG = RTG_STORIES.filter((s) => rtgCategory === 'All' || s.category === rtgCategory);
 
-  const usageLine = usage
-    ? `${usage.used_today ?? usage.today ?? 0}/${usage.limit_today ?? usage.daily_limit ?? '—'} today · ${usage.used_month ?? usage.month ?? 0}/${usage.limit_month ?? usage.monthly_limit ?? '—'} this month`
-    : null;
-
   return (
     <GradientBackground>
       <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 14, paddingBottom: 40 }}>
@@ -295,17 +298,14 @@ export default function Stories() {
 
         {tab === 'manifest' ? (
           <GlassCard style={styles.cardMargin}>
-            <Text style={styles.helperText}>Describe your desire and Luna writes a vivid present-tense story as if it has already arrived.</Text>
-            <View style={styles.inputBox}>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. I have found my soulmate and we share a deep, joyful, passionate love..."
-                placeholderTextColor="rgba(46,37,48,0.4)"
-                value={desire}
-                onChangeText={setDesire}
-                multiline
-              />
-            </View>
+            <Text style={styles.helperText}>Describe your desire and {voiceName(voice)} writes a vivid present-tense story as if it has already arrived.</Text>
+            <ExpandableTextArea
+              value={desire}
+              onChangeText={setDesire}
+              placeholder="e.g. I have found my soulmate and we share a deep, joyful, passionate love..."
+              modalTitle="Your Desire"
+              minHeight={110}
+            />
 
             <Text style={[styles.label, { marginTop: 14 }]}>LENGTH</Text>
             <View style={styles.chipRow}>
@@ -332,8 +332,16 @@ export default function Stories() {
               <Text style={styles.upsellHint}>✨ AI story generation is a Basic Manifestor feature — write your own for free, or upgrade.</Text>
             ) : null}
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
-            <Button title="Generate My Story ✨" onPress={handleGenerate} loading={generating} fullWidth style={{ marginTop: 14 }} />
-            {usageLine ? <Text style={styles.usageText}>{usageLine}</Text> : null}
+            <View style={styles.actionRow}>
+              <Button title="Generate My Story ✨" onPress={handleGenerate} loading={generating} style={{ flex: 1 }} />
+              <UsageBadge
+                usedToday={aiUsageToday.ai_stories}
+                dailyLimit={limits?.ai_stories_day}
+                usedMonth={aiUsage.stories}
+                monthLimit={limits?.stories}
+                featureLabel="AI stories"
+              />
+            </View>
           </GlassCard>
         ) : (
           <GlassCard style={styles.cardMargin}>
@@ -347,16 +355,14 @@ export default function Stories() {
                 onChangeText={setOwnTitle}
               />
             </View>
-            <View style={[styles.inputBox, { marginTop: 8, minHeight: 140 }]}>
-              <TextInput
-                style={styles.input}
-                placeholder="I wake up this morning and everything has changed. I feel..."
-                placeholderTextColor="rgba(46,37,48,0.4)"
-                value={ownContent}
-                onChangeText={setOwnContent}
-                multiline
-              />
-            </View>
+            <ExpandableTextArea
+              value={ownContent}
+              onChangeText={setOwnContent}
+              placeholder="I wake up this morning and everything has changed. I feel..."
+              modalTitle="Your Story"
+              minHeight={140}
+              style={{ marginTop: 8 }}
+            />
 
             <Text style={[styles.label, { marginTop: 14 }]}>VOICE</Text>
             <View style={styles.chipRow}>
@@ -367,11 +373,19 @@ export default function Stories() {
 
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
             <View style={styles.ownBtnRow}>
-              <Button title="▶ Load & Play" size="sm" onPress={handleLoadAndPlay} loading={previewPlaying} style={{ flex: 1 }} />
-              <Button title="💾 Save" size="sm" variant="ghost" onPress={handleSaveOwn} loading={saving} style={{ flex: 1 }} />
-              <Button title={editingId ? '✕ Cancel' : 'Clear'} size="sm" variant="ghost" onPress={resetOwnForm} style={{ flex: 1 }} />
+              <Button title="▶ Load & Play" size="sm" onPress={handleLoadAndPlay} loading={previewPlaying} />
+              <Button title="💾 Save" size="sm" variant="ghost" onPress={handleSaveOwn} loading={saving} />
+              <Button title="Clear" size="sm" variant="ghost" onPress={() => { setOwnContent(''); setOwnTitle(''); setError(''); }} />
+              {editingId ? <Button title="✕ Cancel" size="sm" variant="ghost" onPress={resetOwnForm} /> : null}
             </View>
-            {usageLine ? <Text style={styles.usageText}>{usageLine}</Text> : null}
+            <UsageBadge
+              style={{ marginTop: 10 }}
+              usedToday={aiUsageToday.own_stories}
+              dailyLimit={limits?.own_stories_day}
+              usedMonth={aiUsage.own_stories}
+              monthLimit={limits?.own_stories_month ?? limits?.own_stories_total}
+              featureLabel="own stories"
+            />
           </GlassCard>
         )}
 
@@ -435,6 +449,11 @@ export default function Stories() {
                 </View>
                 <TouchableOpacity onPress={() => handleDelete(story.id)}><Text style={styles.libIconText}>🗑</Text></TouchableOpacity>
               </View>
+              {story.created_at ? (
+                <Text style={styles.storyDate}>
+                  {new Date(story.created_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                </Text>
+              ) : null}
               <Text style={styles.storyPreview} numberOfLines={expandedId === story.id ? undefined : 2}>{story.content}</Text>
 
               {labelingId === story.id && (
@@ -452,27 +471,37 @@ export default function Stories() {
                 </View>
               )}
 
-              <Button
-                title="▶ Play"
-                size="sm"
-                fullWidth
-                disabled={story.locked}
-                loading={playingId === story.id}
-                onPress={() => handlePlay(story)}
-                style={{ marginBottom: 8 }}
-              />
-              <View style={styles.storyIconRow}>
-                <TouchableOpacity onPress={() => setExpandedId(expandedId === story.id ? null : story.id)}><Text style={styles.libIconText}>👁</Text></TouchableOpacity>
+              {/* One row: Play · 👁 · 🏷 · 🔄 New style — matching the website's
+                  card action bar rather than a full-width button + icons below. */}
+              <View style={styles.storyActionRow}>
+                <Button
+                  title="▶ Play"
+                  size="sm"
+                  disabled={story.locked}
+                  loading={playingId === story.id}
+                  onPress={() => handlePlay(story)}
+                />
+                <TouchableOpacity style={styles.storyIconBtn} onPress={() => setExpandedId(expandedId === story.id ? null : story.id)}>
+                  <Text style={styles.libIconText}>👁</Text>
+                </TouchableOpacity>
                 {story.source === 'ai' ? (
                   <>
-                    <TouchableOpacity onPress={() => openLabelEditor(story)}><Text style={styles.libIconText}>🏷</Text></TouchableOpacity>
-                    <TouchableOpacity onPress={() => handleRegenerate(story.id)}><Text style={styles.libIconTextWithLabel}>🔄 New style</Text></TouchableOpacity>
+                    <TouchableOpacity style={styles.storyIconBtn} onPress={() => openLabelEditor(story)}>
+                      <Text style={styles.libIconText}>🏷</Text>
+                    </TouchableOpacity>
+                    <Button title="🔄 New style" size="sm" variant="ghost" onPress={() => handleRegenerate(story.id)} />
                   </>
                 ) : (
-                  <TouchableOpacity onPress={() => handleEditOwn(story)}><Text style={styles.libIconText}>✏️</Text></TouchableOpacity>
+                  <TouchableOpacity style={styles.storyIconBtn} onPress={() => handleEditOwn(story)}>
+                    <Text style={styles.libIconText}>✏️</Text>
+                  </TouchableOpacity>
                 )}
-                <TouchableOpacity onPress={() => handleFavorite(story.id)}><Text style={styles.libIconText}>{story.is_favorite ? '★' : '☆'}</Text></TouchableOpacity>
-                <TouchableOpacity onPress={() => handlePin(story.id)}><Text style={styles.libIconText}>{story.is_pinned ? '📌' : '📍'}</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.storyIconBtn} onPress={() => handleFavorite(story.id)}>
+                  <Text style={styles.libIconText}>{story.is_favorite ? '★' : '☆'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.storyIconBtn} onPress={() => handlePin(story.id)}>
+                  <Text style={styles.libIconText}>{story.is_pinned ? '📌' : '📍'}</Text>
+                </TouchableOpacity>
               </View>
             </View>
           ))
@@ -503,7 +532,8 @@ const styles = StyleSheet.create({
   muted: { fontFamily: fonts.body, color: colors.mist, fontSize: 13, textAlign: 'center', marginTop: 10 },
 
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  ownBtnRow: { flexDirection: 'row', gap: 8, marginTop: 14 },
+  ownBtnRow: { flexDirection: 'row', gap: 8, marginTop: 14, flexWrap: 'wrap' },
+  actionRow: { flexDirection: 'row', gap: 10, marginTop: 14, alignItems: 'center', flexWrap: 'wrap' },
 
   /* Ready-Made Stories */
   rtgHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.4)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.25)', borderRadius: radii.sm, paddingVertical: 12, paddingHorizontal: 14, marginBottom: 14 },
@@ -522,9 +552,13 @@ const styles = StyleSheet.create({
   storyCard: { backgroundColor: 'rgba(255,255,255,0.55)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.25)', borderRadius: radii.sm, padding: 12, marginBottom: 10 },
   storyCardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
   storyTitle: { fontFamily: fonts.bodyMedium, fontSize: 14, fontWeight: '600', color: colors.ink, flex: 1 },
-  storyIconRow: { flexDirection: 'row', gap: 12, alignItems: 'center' },
+  storyDate: { fontFamily: fonts.body, fontSize: 11.5, color: colors.mist2, marginBottom: 6 },
+  storyActionRow: { flexDirection: 'row', gap: 8, alignItems: 'center', flexWrap: 'wrap' },
+  storyIconBtn: {
+    width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.7)',
+    borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)', alignItems: 'center', justifyContent: 'center',
+  },
   libIconText: { fontSize: 14 },
-  libIconTextWithLabel: { fontSize: 12, fontFamily: fonts.bodyMedium, color: colors.purpleDark, fontWeight: '600' },
   storyPreview: { fontFamily: fonts.displayItalic, color: colors.mist, fontSize: 13.5, lineHeight: 20, marginBottom: 10, fontStyle: 'italic' },
   labelRow: { flexDirection: 'row', gap: 8, alignItems: 'center', marginBottom: 10 },
 });

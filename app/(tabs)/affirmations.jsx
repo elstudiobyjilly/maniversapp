@@ -16,7 +16,10 @@ import ScreenHeader from '../../components/ScreenHeader';
 import TabPill from '../../components/TabPill';
 import Chip from '../../components/Chip';
 import Button from '../../components/Button';
+import ExpandableTextArea from '../../components/ExpandableTextArea';
+import UsageBadge from '../../components/UsageBadge';
 import { usePlanStore } from '../../store/planStore';
+import { useAuthStore } from '../../store/authStore';
 import { colors, fonts, radii } from '../../constants/theme';
 import * as Linking from 'expo-linking';
 
@@ -28,10 +31,13 @@ const STYLES = [
   { value: 'mix', label: '🎛️ Mix' },
 ];
 
+// "System" is the device's own TTS — always available on every plan, since
+// nothing is rendered server-side for it (matches the website's voice pills).
 const VOICES = [
   { id: 'luna', label: '🌸 Luna' },
   { id: 'orion', label: '🌙 Orion' },
   { id: 'sage', label: '🍃 Sage' },
+  { id: 'system', label: '🤖 System' },
 ];
 
 // Matches the website's "Ready To Go Affirmations" pack — 12 instant sets,
@@ -57,6 +63,12 @@ const RTG_QUICK = RTG_PRESETS.slice(-2); // Ho'oponopono, Sleep Programming — 
 export default function Affirmations() {
   const insets = useSafeAreaInsets();
   const { limits, loaded, hasFeature, allowedVoices, refresh } = usePlanStore();
+  // Usage counters come from /auth/me (ai_usage + ai_usage_today), exactly
+  // like the website's _fetchAndUpdateUsage().
+  const user = useAuthStore((s) => s.user);
+  const refreshUser = useAuthStore((s) => s.refreshUser);
+  const aiUsage = user?.ai_usage || {};
+  const aiUsageToday = user?.ai_usage_today || {};
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [upgradeMsg, setUpgradeMsg] = useState('');
 
@@ -77,6 +89,7 @@ export default function Affirmations() {
   const [intentionSaved, setIntentionSaved] = useState(false);
 
   const [desire, setDesire] = useState('');
+  const [setName, setSetName] = useState(''); // "Name this set (optional)"
   const [style, setStyle] = useState('');
   const [count, setCount] = useState(5);
   const [repeatCount, setRepeatCount] = useState(10);
@@ -90,9 +103,11 @@ export default function Affirmations() {
   // audio finishes naturally (matching the website's activeSessId).
   const activeSessionId = useRef(null);
 
-  // Write-your-own state
+  // Write-your-own state. The website uses ONE textarea, one affirmation per
+  // line (not a growing list of single-line inputs), so the text is kept raw
+  // and split on save.
   const [ownTitle, setOwnTitle] = useState('');
-  const [ownLines, setOwnLines] = useState(['']);
+  const [ownText, setOwnText] = useState('');
   const [savingOwn, setSavingOwn] = useState(false);
 
   const [library, setLibrary] = useState([]);
@@ -174,9 +189,12 @@ export default function Affirmations() {
     if (!desire.trim()) { setError('Describe what you want to manifest.'); return; }
     setError(''); setGenerating(true);
     try {
-      const result = await generateAffirmation(desire.trim(), { count, repeat_count: repeatCount, style, voice_id: voice });
+      const result = await generateAffirmation(desire.trim(), {
+        count, repeat_count: repeatCount, style, voice_id: voice, label: setName.trim(),
+      });
       setCurrent(result);
       pollAudioStatus(result.id);
+      refreshUser(); // usage badge reflects the quota we just consumed
     } catch (e) {
       if (e.status === 403) { setUpgradeMsg(e.message || 'Upgrade to generate AI affirmations.'); setShowUpgrade(true); }
       else setError(e.message || 'Could not generate affirmations');
@@ -184,7 +202,7 @@ export default function Affirmations() {
   };
 
   const handleSaveOwn = async () => {
-    const cleanLines = ownLines.map((l) => l.trim()).filter(Boolean);
+    const cleanLines = ownText.split('\n').map((l) => l.trim()).filter(Boolean);
     if (cleanLines.length === 0) { setError('Write at least one affirmation.'); return; }
     if (ownCap != null && ownUsedCount + cleanLines.length > ownCap) {
       setUpgradeMsg(`You've used ${ownUsedCount} of your ${ownCap} free own affirmations -- upgrade for more room.`);
@@ -201,7 +219,9 @@ export default function Affirmations() {
       });
       setCurrent(result);
       pollAudioStatus(result.id);
-      setOwnTitle(''); setOwnLines(['']);
+      setOwnTitle(''); setOwnText('');
+      refreshUser();
+      loadLibrary(); // new set should appear in the Library immediately
     } catch (e) {
       if (e.status === 403 || e.status === 429) { setUpgradeMsg(e.message || 'Upgrade for more own affirmations.'); setShowUpgrade(true); }
       else setError(e.message || 'Could not save affirmations');
@@ -268,7 +288,7 @@ export default function Affirmations() {
   // matches the website's "Tap to load & edit" copy.
   const loadRTG = (preset) => {
     setOwnTitle(preset.name);
-    setOwnLines(preset.affs);
+    setOwnText(preset.affs.join('\n'));
     setCreateMode('own');
     setTopTab('create');
   };
@@ -473,15 +493,31 @@ export default function Affirmations() {
             {createMode === 'ai' ? (
               <>
                 <GlassCard style={styles.cardMargin}>
-                  <Text style={styles.label}>WHAT DO YOU WANT TO MANIFEST?</Text>
-                  <View style={styles.inputBox}>
+                  <View style={styles.labelRow}>
+                    <Text style={[styles.label, { marginBottom: 0, flexShrink: 1 }]}>WHAT DO YOU WANT TO MANIFEST?</Text>
+                    <UsageBadge
+                      usedToday={aiUsageToday.ai_affirmations}
+                      dailyLimit={limits?.ai_affirmations_day}
+                      usedMonth={aiUsage.affirmations}
+                      monthLimit={limits?.ai_affirmations}
+                      featureLabel="AI affirmations"
+                    />
+                  </View>
+                  <ExpandableTextArea
+                    value={desire}
+                    onChangeText={setDesire}
+                    placeholder="e.g. I want to attract financial abundance and feel truly free and secure..."
+                    modalTitle="What do you want to manifest?"
+                    minHeight={110}
+                  />
+
+                  <View style={[styles.inputBoxSm, { marginTop: 10 }]}>
                     <TextInput
                       style={styles.input}
-                      placeholder="e.g. I want to attract financial abundance and feel truly free and secure..."
+                      placeholder="Name this set (optional — e.g. Morning Abundance)"
                       placeholderTextColor="rgba(46,37,48,0.4)"
-                      value={desire}
-                      onChangeText={setDesire}
-                      multiline
+                      value={setName}
+                      onChangeText={setSetName}
                     />
                   </View>
 
@@ -509,7 +545,9 @@ export default function Affirmations() {
                   <Text style={[styles.label, { marginTop: 14 }]}>VOICE</Text>
                   <View style={styles.chipRow}>
                     {VOICES.map((v) => {
-                      const allowed = voicesAllowed.includes(v.id);
+                      // System = device TTS, nothing rendered server-side, so it's
+                      // never plan-locked.
+                      const allowed = v.id === 'system' || voicesAllowed.includes(v.id);
                       return (
                         <Chip
                           key={v.id}
@@ -526,7 +564,14 @@ export default function Affirmations() {
                     <Text style={styles.upsellHint}>✨ AI generation is a Basic Manifestor feature — try Write Your Own for free, or upgrade.</Text>
                   ) : null}
                   {error ? <Text style={styles.errorText}>{error}</Text> : null}
-                  <Button title="Generate & Play ✨" onPress={handleGenerate} loading={generating} fullWidth style={{ marginTop: 14 }} />
+                  <View style={styles.actionRow}>
+                    <Button title="Generate & Play ✨" onPress={handleGenerate} loading={generating} style={{ flex: 1 }} />
+                    <Button
+                      title="Clear"
+                      variant="ghost"
+                      onPress={() => { setDesire(''); setSetName(''); setStyle(''); setCurrent(null); setError(''); }}
+                    />
+                  </View>
                 </GlassCard>
 
                 {current && (
@@ -543,40 +588,41 @@ export default function Affirmations() {
               <>
                 <GlassCard style={styles.cardMargin}>
                   <Text style={styles.helperText}>Write your own affirmations — no AI cost, works on every plan (up to your set limit).</Text>
-                  <Text style={styles.label}>TITLE (OPTIONAL)</Text>
-                  <View style={styles.inputBoxSm}>
+
+                  <View style={styles.labelRow}>
+                    <Text style={[styles.label, { marginBottom: 0, flexShrink: 1 }]}>YOUR AFFIRMATIONS — ONE PER LINE</Text>
+                    <UsageBadge
+                      usedToday={aiUsageToday.own_affirmations}
+                      dailyLimit={limits?.own_affirmations_day}
+                      usedMonth={aiUsage.own_affirmations}
+                      monthLimit={limits?.own_affirmations_month ?? limits?.own_affirmations_total}
+                      featureLabel="own affirmations"
+                    />
+                  </View>
+                  <ExpandableTextArea
+                    value={ownText}
+                    onChangeText={setOwnText}
+                    placeholder={'I am worthy of love\nI attract abundance easily\nI am healthy, happy and free...'}
+                    modalTitle="Your Affirmations"
+                    minHeight={130}
+                  />
+
+                  <View style={[styles.inputBoxSm, { marginTop: 10 }]}>
                     <TextInput
                       style={styles.input}
-                      placeholder="e.g. My Money Affirmations"
+                      placeholder="Name this set (optional — e.g. Morning Confidence)"
                       placeholderTextColor="rgba(46,37,48,0.4)"
                       value={ownTitle}
                       onChangeText={setOwnTitle}
                     />
                   </View>
 
-                  <Text style={[styles.label, { marginTop: 14 }]}>YOUR AFFIRMATIONS</Text>
-                  {ownLines.map((line, i) => (
-                    <View key={i} style={[styles.inputBox, { marginBottom: 8, minHeight: 44 }]}>
-                      <TextInput
-                        style={styles.input}
-                        placeholder={`Affirmation ${i + 1}...`}
-                        placeholderTextColor="rgba(46,37,48,0.4)"
-                        value={line}
-                        onChangeText={(t) => setOwnLines((prev) => prev.map((l, idx) => (idx === i ? t : l)))}
-                        multiline
-                      />
-                    </View>
-                  ))}
-                  {ownLines.length < 10 && (
-                    <TouchableOpacity style={styles.addLineBtn} onPress={() => setOwnLines((prev) => [...prev, ''])}>
-                      <Text style={styles.addLineBtnText}>+ Add Line</Text>
-                    </TouchableOpacity>
-                  )}
-
                   <Text style={[styles.label, { marginTop: 14 }]}>VOICE</Text>
                   <View style={styles.chipRow}>
                     {VOICES.map((v) => {
-                      const allowed = voicesAllowed.includes(v.id);
+                      // System = device TTS, nothing rendered server-side, so it's
+                      // never plan-locked.
+                      const allowed = v.id === 'system' || voicesAllowed.includes(v.id);
                       return (
                         <Chip
                           key={v.id}
@@ -593,7 +639,14 @@ export default function Affirmations() {
                     <Text style={styles.upsellHint}>{ownUsedCount} / {ownCap} free own affirmations used</Text>
                   ) : null}
                   {error ? <Text style={styles.errorText}>{error}</Text> : null}
-                  <Button title="💾 Save My Affirmations" onPress={handleSaveOwn} loading={savingOwn} fullWidth style={{ marginTop: 14 }} />
+                  <View style={styles.actionRow}>
+                    <Button title="💾 Save to Library" onPress={handleSaveOwn} loading={savingOwn} style={{ flex: 1 }} />
+                    <Button
+                      title="Clear"
+                      variant="ghost"
+                      onPress={() => { setOwnText(''); setOwnTitle(''); setCurrent(null); setError(''); }}
+                    />
+                  </View>
                 </GlassCard>
 
                 {current && (
@@ -624,8 +677,8 @@ export default function Affirmations() {
 const styles = StyleSheet.create({
   helperText: { fontFamily: fonts.body, fontSize: 12, color: colors.mist, marginBottom: 10, lineHeight: 18 },
   inputBoxSm: { borderWidth: 1, borderColor: 'rgba(154,95,168,0.22)', borderRadius: radii.sm, padding: 12, backgroundColor: 'rgba(255,255,255,0.5)' },
-  addLineBtn: { alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 4 },
-  addLineBtnText: { fontFamily: fonts.bodyMedium, color: colors.purpleDark, fontSize: 12, fontWeight: '600' },
+  labelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 },
+  actionRow: { flexDirection: 'row', gap: 8, marginTop: 14, alignItems: 'center' },
   upsellHint: { fontFamily: fonts.displayItalic, fontSize: 12.5, color: colors.purpleDark, marginTop: 10, textAlign: 'center', fontStyle: 'italic' },
   savedHint: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.success, marginTop: 8, textAlign: 'center', fontWeight: '600' },
   cardMargin: { marginBottom: 16 },

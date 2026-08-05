@@ -64,6 +64,20 @@ export const useAuthStore = create((set, get) => ({
     } catch (_) {}
   },
 
+  // Re-pull /auth/me and merge it over the cached user. Screens call this
+  // after anything that consumes an AI quota so the usage badges update
+  // immediately — mirrors the website's _fetchAndUpdateUsage().
+  refreshUser: async () => {
+    try {
+      const me = await getMe();
+      if (me && me.id) {
+        const merged = { ...(get().user || {}), ...me };
+        await AsyncStorage.setItem(USER_KEY, JSON.stringify(merged));
+        set({ user: merged });
+      }
+    } catch (_) {}
+  },
+
   logout: async () => {
     setApiToken(null);
     await AsyncStorage.multiRemove([TOKEN_KEY, USER_KEY]);
