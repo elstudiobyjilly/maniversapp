@@ -234,8 +234,8 @@ export default function Gratitude() {
                         <View key={e.id} style={styles.entryRow}>
                           <Text style={styles.entryMood}>{e.mood}</Text>
                           <Text style={styles.entryText}>{e.text}</Text>
-                          <TouchableOpacity onPress={() => shareText(`${e.mood} ${e.text}`)}><Text style={styles.entryIcon}>🔗</Text></TouchableOpacity>
-                          <TouchableOpacity onPress={() => handleDelete(e.id)}><Text style={styles.entryIcon}>🗑️</Text></TouchableOpacity>
+                          <TouchableOpacity style={styles.entryIconBtn} onPress={() => shareText(`${e.mood} ${e.text}`)}><Text style={styles.entryIcon}>🔗</Text></TouchableOpacity>
+                          <TouchableOpacity style={[styles.entryIconBtn, styles.entryIconBtnDanger]} onPress={() => handleDelete(e.id)}><Text style={styles.entryIcon}>🗑️</Text></TouchableOpacity>
                         </View>
                       ))}
                     </View>
@@ -276,18 +276,23 @@ const styles = StyleSheet.create({
   emptyIcon: { fontSize: 36, marginBottom: 10 },
   emptyTitle: { fontSize: 14, fontWeight: '500', color: '#2e2530' },
 
-  weekWrap: { backgroundColor: '#fff', borderWidth: 1, borderColor: 'rgba(201,168,201,0.25)', borderRadius: radii.md, marginBottom: 10, overflow: 'hidden' },
-  weekHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 14, backgroundColor: 'rgba(245,240,252,0.6)' },
-  weekLabel: { fontFamily: fonts.displayMedium, fontSize: 14, color: colors.ink },
-  weekCount: { fontFamily: fonts.body, fontSize: 10.5, color: colors.purpleDark, backgroundColor: 'rgba(201,168,201,0.15)', borderRadius: radii.pill, paddingVertical: 3, paddingHorizontal: 9 },
+  weekWrap: { backgroundColor: '#fff', borderWidth: 1, borderColor: 'rgba(201,168,201,0.25)', borderRadius: radii.md, marginBottom: 12, overflow: 'hidden' },
+  weekHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 18, paddingHorizontal: 18, backgroundColor: 'rgba(245,240,252,0.6)' },
+  weekLabel: { fontFamily: fonts.displayMedium, fontSize: 17, color: colors.ink },
+  weekCount: { fontFamily: fonts.body, fontSize: 12, color: colors.purpleDark, backgroundColor: 'rgba(201,168,201,0.15)', borderRadius: radii.pill, paddingVertical: 5, paddingHorizontal: 12 },
 
-  dayWrap: { marginHorizontal: 8, marginTop: 6, marginBottom: 4, borderWidth: 1, borderColor: 'rgba(201,168,201,0.18)', borderRadius: radii.sm, overflow: 'hidden' },
-  dayHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 9, paddingHorizontal: 12 },
-  dayLabel: { fontFamily: fonts.displayItalic, fontSize: 13, color: colors.ink, fontStyle: 'italic' },
-  dayCount: { fontFamily: fonts.body, fontSize: 10, color: colors.purpleDark, backgroundColor: 'rgba(201,168,201,0.15)', borderRadius: radii.pill, paddingVertical: 2, paddingHorizontal: 8 },
+  dayWrap: { marginHorizontal: 8, marginTop: 8, marginBottom: 6, borderWidth: 1, borderColor: 'rgba(201,168,201,0.18)', borderRadius: radii.sm, overflow: 'hidden' },
+  dayHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 14 },
+  dayLabel: { fontFamily: fonts.displayItalic, fontSize: 16, color: colors.ink, fontStyle: 'italic' },
+  dayCount: { fontFamily: fonts.body, fontSize: 11.5, color: colors.purpleDark, backgroundColor: 'rgba(201,168,201,0.15)', borderRadius: radii.pill, paddingVertical: 4, paddingHorizontal: 10 },
 
-  entryRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingVertical: 8, paddingHorizontal: 10, borderTopWidth: 1, borderTopColor: 'rgba(201,168,201,0.12)' },
-  entryMood: { fontSize: 15 },
-  entryText: { flex: 1, fontFamily: fonts.displayItalic, fontSize: 13.5, color: colors.ink, fontStyle: 'italic', lineHeight: 20 },
-  entryIcon: { fontSize: 13, marginTop: 2 },
+  entryRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 14, paddingHorizontal: 14, borderTopWidth: 1, borderTopColor: 'rgba(201,168,201,0.12)' },
+  entryMood: { fontSize: 17 },
+  entryText: { flex: 1, fontFamily: fonts.displayItalic, fontSize: 15.5, color: colors.ink, fontStyle: 'italic', lineHeight: 23 },
+  entryIconBtn: {
+    width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.8)',
+    borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)', alignItems: 'center', justifyContent: 'center',
+  },
+  entryIconBtnDanger: { backgroundColor: 'rgba(230,140,150,0.15)', borderColor: 'rgba(230,140,150,0.3)' },
+  entryIcon: { fontSize: 14 },
 });
