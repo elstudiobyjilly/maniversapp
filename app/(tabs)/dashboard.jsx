@@ -19,7 +19,7 @@ import { AuraCardFace } from '../../components/AuraCardCanvas';
 import { colors, fonts, gradients, radii } from '../../constants/theme';
 import { categoryLabel } from '../../constants/desires';
 import { DAILY_MESSAGES } from '../../constants/dailyContent';
-import { AURA_AFFIRMATIONS, PATTERNS, PATTERN_LABELS, COLOUR_FAMILIES, detectStyle } from '../../constants/auraCard';
+import { AURA_AFFIRMATIONS, PATTERNS, PATTERN_LABELS, COLOUR_FAMILIES, AURA_STYLES, STYLE_KEYS, detectStyle } from '../../constants/auraCard';
 import {
   START_KEY_PREFIX, toDateKey, addDays, buildLogsMap, dayNumberFor,
 } from '../../constants/desireAction';
@@ -45,10 +45,12 @@ const DESIRE_ROWS = 2;
 const DESIRE_ROW_GAP = 12;
 const AURA_PREVIEW = Math.min((IS_WIDE ? SCREEN_WIDTH / 2 : SCREEN_WIDTH) - 96, 300);
 
-// Every Home widget box shares one of these two fixed heights so paired and
-// unpaired boxes all line up instead of shrinking/growing with content.
-const WIDGET_H_TALL = 360;   // Gratitude / Desire Action / Mind Movies / Subliminals
-const WIDGET_H_SHORT = 190;  // Message for the Day / Manifested
+// Every Home widget box shares one of these two MINIMUM heights so paired
+// boxes line up by default — real content is still allowed to grow the box
+// rather than getting clipped (a fixed `height` was cutting off checkboxes
+// and tiles). A row's shorter box stretches to match its taller sibling.
+const WIDGET_H_TALL = 380;   // Gratitude / Desire Action / Mind Movies / Subliminals
+const WIDGET_H_SHORT = 230;  // Message for the Day / Manifested
 
 function dayOfYear(date) {
   const start = new Date(date.getFullYear(), 0, 0);
@@ -121,7 +123,7 @@ function GratitudeWidget({ router, entries, onSaved }) {
   };
 
   return (
-    <Widget icon="🙏" title="Gratitude Entry" onOpen={() => router.push('/gratitude')} style={{ height: WIDGET_H_TALL }}>
+    <Widget icon="🙏" title="Gratitude Entry" onOpen={() => router.push('/gratitude')} style={{ minHeight: WIDGET_H_TALL }}>
       <WriteBox value={text} onChangeText={setText} placeholder="I am grateful for..." />
       <Button title="Save ✨" size="sm" onPress={save} loading={saving} style={{ marginTop: 10, alignSelf: 'flex-start' }} />
       <Text style={styles.widgetSubLabel}>TODAY'S ENTRIES</Text>
@@ -176,7 +178,7 @@ function DesireActionWidget({ router, roadmaps, rawLogs, setRawLogs }) {
 
   if (!roadmaps.length) {
     return (
-      <Widget icon="🗺️" title="Desire Action" onOpen={() => router.push('/desire-action')} openLabel="Start" style={{ height: WIDGET_H_TALL }}>
+      <Widget icon="🗺️" title="Desire Action" onOpen={() => router.push('/desire-action')} openLabel="Start" style={{ minHeight: WIDGET_H_TALL }}>
         <Text style={styles.widgetEmpty}>No tracker running yet — pick a desire and your daily practices ✨</Text>
         <Button title="＋ Start a tracker" size="sm" onPress={() => router.push('/desire-action')} style={{ marginTop: 10, alignSelf: 'flex-start' }} />
       </Widget>
@@ -187,7 +189,7 @@ function DesireActionWidget({ router, roadmaps, rawLogs, setRawLogs }) {
   const shownPractices = practices.slice(0, 3);
 
   return (
-    <Widget icon="🗺️" title="Desire Action" onOpen={() => router.push('/desire-action')} style={{ height: WIDGET_H_TALL }}>
+    <Widget icon="🗺️" title="Desire Action" onOpen={() => router.push('/desire-action')} style={{ minHeight: WIDGET_H_TALL }}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillRow}>
         {roadmaps.map((r) => (
           <TouchableOpacity
@@ -232,9 +234,9 @@ function DesireActionWidget({ router, roadmaps, rawLogs, setRawLogs }) {
 
 // ─── 🎬 Mind Movies — thumbnail grid ──────────────────────────────────────
 function MindMovieWidget({ router, movies }) {
-  const shown = (movies || []).slice(0, 2);
+  const shown = (movies || []).slice(0, 4);
   return (
-    <Widget icon="🎬" title="Mind Movies" onOpen={() => router.push('/mindmovie')} openLabel="All" style={{ height: WIDGET_H_TALL }}>
+    <Widget icon="🎬" title="Mind Movies" onOpen={() => router.push('/mindmovie')} openLabel="All" style={{ minHeight: WIDGET_H_TALL }}>
       {shown.length === 0 ? (
         <>
           <Text style={styles.widgetEmpty}>No movies yet — turn your dream life into a film 🎬</Text>
@@ -261,7 +263,7 @@ function MindMovieWidget({ router, movies }) {
 // ─── 🎧 Subliminal — saved sessions, tap to play in the Station ───────────
 function SubliminalWidget({ router, sessions, locked }) {
   return (
-    <Widget icon="🎧" title="Subliminals" onOpen={() => router.push('/subliminal')} openLabel="Station" style={{ height: WIDGET_H_TALL }}>
+    <Widget icon="🎧" title="Subliminals" onOpen={() => router.push('/subliminal')} openLabel="Station" style={{ minHeight: WIDGET_H_TALL }}>
       {locked ? (
         <Text style={styles.widgetEmpty}>Custom subliminals are a Basic Manifestor feature — the sample tracks are free to play in the Station ✨</Text>
       ) : (sessions || []).length === 0 ? (
@@ -271,7 +273,7 @@ function SubliminalWidget({ router, sessions, locked }) {
         </>
       ) : (
         <View style={styles.tileGrid}>
-          {sessions.slice(0, 2).map((s) => (
+          {sessions.slice(0, 4).map((s) => (
             <TouchableOpacity key={s.id} style={styles.subTile} onPress={() => router.push('/subliminal')}>
               <Text style={styles.subTilePlay}>▶</Text>
               <Text style={styles.subTileTitle} numberOfLines={1}>
@@ -290,7 +292,7 @@ function SubliminalWidget({ router, sessions, locked }) {
 function DailyWidget({ router }) {
   const msg = DAILY_MESSAGES[dayOfYear(new Date()) % DAILY_MESSAGES.length];
   return (
-    <Widget icon="☀️" title="Message for the Day" onOpen={() => router.push('/daily')} openLabel="Daily" style={{ height: WIDGET_H_SHORT }}>
+    <Widget icon="☀️" title="Message for the Day" onOpen={() => router.push('/daily')} openLabel="Daily" style={{ minHeight: WIDGET_H_SHORT }}>
       <Text style={styles.dailyMsg}>"{msg}"</Text>
     </Widget>
   );
@@ -312,8 +314,8 @@ function ManifestedWidget({ router, wins, onSaved }) {
   };
 
   return (
-    <Widget icon="🏆" title="Manifested" onOpen={() => router.push('/manifested')} openLabel="All" style={{ height: WIDGET_H_SHORT }}>
-      <WriteBox value={title} onChangeText={setTitle} placeholder="What just manifested for you? 🎉" minHeight={40} />
+    <Widget icon="🏆" title="Manifested" onOpen={() => router.push('/manifested')} openLabel="All" style={{ minHeight: WIDGET_H_SHORT }}>
+      <WriteBox value={title} onChangeText={setTitle} placeholder="What just manifested for you? 🎉" minHeight={72} />
       <Button title="Log it 🎉" size="sm" onPress={save} loading={saving} style={{ marginTop: 8, alignSelf: 'flex-start' }} />
       {(wins || []).length > 0 && (
         <View style={styles.listLine}>
@@ -328,13 +330,14 @@ function ManifestedWidget({ router, wins, onSaved }) {
 // ─── 🎴 Aura Card — make one right here ───────────────────────────────────
 function AuraCardWidget({ router }) {
   const [words, setWords] = useState('');
+  const [manualStyle, setManualStyle] = useState(null);
   const [pattern, setPattern] = useState('radial');
   const [colours, setColours] = useState({ purple: true, pink: true, blue: true, gold: true });
   const [busy, setBusy] = useState(false);
   const [info, setInfo] = useState('');
   const cardRef = useRef(null);
 
-  const styleKey = detectStyle(words || 'aura');
+  const styleKey = manualStyle || detectStyle(words || 'aura');
   const quote = words.trim()
     ? words.trim().split('\n').filter(Boolean).pop()
     : AURA_AFFIRMATIONS[dayOfYear(new Date()) % AURA_AFFIRMATIONS.length];
@@ -367,20 +370,32 @@ function AuraCardWidget({ router }) {
       />
 
       <Text style={styles.widgetSubLabel}>COLOURS</Text>
-      <View style={styles.pillRow}>
+      <View style={styles.colourRow}>
         {COLOUR_FAMILIES.map((c) => {
           const on = colours[c.key] !== false;
           return (
             <TouchableOpacity
               key={c.key}
-              style={[styles.colourChip, { borderColor: c.swatch }, on && { backgroundColor: c.swatch }]}
+              style={[styles.colourDot, { backgroundColor: c.swatch }, !on && styles.colourDotOff]}
               onPress={() => toggleColour(c.key)}
             >
-              <Text style={[styles.colourChipText, on && styles.colourChipTextOn]}>{c.key}</Text>
+              {on && <Text style={styles.colourDotTick}>✓</Text>}
             </TouchableOpacity>
           );
         })}
       </View>
+
+      <Text style={styles.widgetSubLabel}>STYLE</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillRow}>
+        <TouchableOpacity style={[styles.patPill, !manualStyle && styles.patPillOn]} onPress={() => setManualStyle(null)}>
+          <Text style={[styles.patPillText, !manualStyle && styles.patPillTextOn]}>✨ Auto</Text>
+        </TouchableOpacity>
+        {STYLE_KEYS.map((key) => (
+          <TouchableOpacity key={key} style={[styles.patPill, manualStyle === key && styles.patPillOn]} onPress={() => setManualStyle(key)}>
+            <Text style={[styles.patPillText, manualStyle === key && styles.patPillTextOn]}>{AURA_STYLES[key].label}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
 
       <Text style={styles.widgetSubLabel}>PATTERN</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillRow}>
@@ -648,12 +663,13 @@ const styles = StyleSheet.create({
   widgetEmpty: { fontFamily: fonts.body, fontSize: 12.5, color: colors.mist, lineHeight: 19 },
   widgetMore: { fontFamily: fonts.body, fontSize: 11, color: colors.mist, marginTop: 4, fontStyle: 'italic' },
 
-  colourChip: {
-    paddingVertical: 6, paddingHorizontal: 12, borderRadius: radii.pill, borderWidth: 1.5,
-    backgroundColor: 'rgba(255,255,255,0.6)',
+  colourRow: { flexDirection: 'row', gap: 8, marginBottom: 4 },
+  colourDot: {
+    width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.6)',
   },
-  colourChipText: { fontFamily: fonts.body, fontSize: 11.5, color: colors.ink2, textTransform: 'capitalize' },
-  colourChipTextOn: { color: '#fff', fontWeight: '700' },
+  colourDotOff: { opacity: 0.25 },
+  colourDotTick: { color: '#fff', fontSize: 10, fontWeight: '700' },
 
   writeBox: {
     borderWidth: 1.5, borderColor: 'rgba(248,184,200,0.35)', borderRadius: radii.md,
@@ -705,7 +721,7 @@ const styles = StyleSheet.create({
   subTileTitle: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.ink, fontWeight: '600' },
   subTileMeta: { fontFamily: fonts.body, fontSize: 10, color: colors.mist, marginTop: 2 },
 
-  dailyMsg: { fontFamily: fonts.displayItalic, fontSize: 17, fontStyle: 'italic', color: colors.ink2, lineHeight: 26 },
+  dailyMsg: { fontFamily: fonts.displayItalic, fontSize: 21, fontStyle: 'italic', color: colors.ink2, lineHeight: 30 },
 
   auraWrap: { alignItems: 'center', marginTop: 12 },
   auraBtnRow: { flexDirection: 'row', gap: 8, justifyContent: 'center', marginTop: 12 },
