@@ -17,10 +17,19 @@ export default function ExpandableTextArea({
   const [expanded, setExpanded] = useState(false);
   const [focused, setFocused] = useState(false);
 
+  // The wrapper View's minHeight only creates real tappable space if the
+  // TextInput itself is tall enough to fill it -- a wrapper-only minHeight
+  // (matching the bug fixed elsewhere on desire-hub/desire detail) leaves a
+  // dead strip below a content-sized single-line input that never receives
+  // touches, so the box looks tappable but the keyboard never opens there.
+  // Subtract the box's vertical padding so the input's own minHeight lines
+  // up with the wrapper's.
+  const innerMinHeight = Math.max(0, minHeight - styles.box.paddingVertical * 2);
+
   return (
     <View style={[styles.box, { minHeight }, focused && styles.boxFocused, style]}>
       <TextInput
-        style={styles.input}
+        style={[styles.input, { minHeight: innerMinHeight }]}
         placeholder={placeholder}
         placeholderTextColor="rgba(46,37,48,0.4)"
         value={value}
