@@ -9,10 +9,11 @@ import {
   ActivityIndicator,
   Modal,
   Dimensions,
-  PanResponder,
   Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, runOnJS } from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Speech from 'expo-speech';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
@@ -121,23 +122,59 @@ function FeelGridCard({ card, index, onOpen, onEdit, onDelete }) {
 }
 
 // ─── Full-screen swipeable reader — matches the website's mv-feel-fs-ov.
+// The card itself (not the whole screen) is the thing that swipes: drag it
+// horizontally, release past the threshold and it flies off-screen revealing
+// the next/prev card, or it snaps back to center if the drag wasn't far
+// enough -- matching a standard swipeable-card-deck.
+const SWIPE_THRESHOLD = SCREEN_W * 0.28;
+
 function FeelFullScreen({ cards, index, onIndexChange, onClose, onEdit, onDelete, onAdd }) {
   const card = cards[index];
   const [speaking, setSpeaking] = useState(false);
   const pal = card ? paletteFor(card, index) : FEEL_COLOR_PALETTE[0];
   const tc = cardTextColors(pal);
 
-  const pan = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 20 && Math.abs(gs.dx) > Math.abs(gs.dy),
-      onPanResponderRelease: (_, gs) => {
-        if (gs.dx < -50) onIndexChange((index + 1) % cards.length);
-        else if (gs.dx > 50) onIndexChange((index - 1 + cards.length) % cards.length);
-      },
-    })
-  ).current;
+  const translateX = useSharedValue(0);
+  const cardOpacity = useSharedValue(1);
+
+  const goNext = useCallback(() => onIndexChange((index + 1) % cards.length), [index, cards.length, onIndexChange]);
+  const goPrev = useCallback(() => onIndexChange((index - 1 + cards.length) % cards.length), [index, cards.length, onIndexChange]);
+
+  const settleAndAdvance = useCallback((direction) => {
+    // direction: 1 = swiped left (go next), -1 = swiped right (go prev)
+    if (direction > 0) goNext(); else goPrev();
+    translateX.value = 0;
+    cardOpacity.value = 1;
+  }, [goNext, goPrev, translateX, cardOpacity]);
+
+  const pan = Gesture.Pan()
+    .activeOffsetX([-12, 12])
+    .failOffsetY([-18, 18])
+    .onUpdate((e) => { translateX.value = e.translationX; })
+    .onEnd((e) => {
+      if (e.translationX < -SWIPE_THRESHOLD) {
+        translateX.value = withTiming(-SCREEN_W, { duration: 220 }, () => runOnJS(settleAndAdvance)(1));
+        cardOpacity.value = withTiming(0, { duration: 220 });
+      } else if (e.translationX > SWIPE_THRESHOLD) {
+        translateX.value = withTiming(SCREEN_W, { duration: 220 }, () => runOnJS(settleAndAdvance)(-1));
+        cardOpacity.value = withTiming(0, { duration: 220 });
+      } else {
+        translateX.value = withSpring(0, { damping: 18, stiffness: 180 });
+      }
+    });
+
+  const cardAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { rotate: `${translateX.value / 22}deg` },
+    ],
+    opacity: cardOpacity.value,
+  }));
 
   useEffect(() => { Speech.stop(); setSpeaking(false); }, [index]);
+  // Reset the drag position whenever the underlying card changes (e.g. via
+  // the pager dots) so a leftover translateX doesn't carry into the new card.
+  useEffect(() => { translateX.value = 0; cardOpacity.value = 1; }, [index]);
 
   if (!card) return null;
 
@@ -150,50 +187,51 @@ function FeelFullScreen({ cards, index, onIndexChange, onClose, onEdit, onDelete
 
   return (
     <Modal visible animationType="fade" onRequestClose={onClose}>
-      <LinearGradient colors={pal.colors} start={{ x: 0.15, y: 0 }} end={{ x: 0.85, y: 1 }} style={styles.fsRoot} {...pan.panHandlers}>
+      <View style={styles.fsRoot}>
         <View style={styles.fsNav}>
-          <Text style={[styles.fsCounter, { color: tc.accent }]}>{index + 1} of {cards.length}</Text>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <TouchableOpacity style={styles.fsNavBtn} onPress={onEdit}><Text style={styles.fsNavBtnText}>✏️ Edit</Text></TouchableOpacity>
-            <TouchableOpacity style={styles.fsNavBtn} onPress={onClose}><Text style={styles.fsNavBtnText}>✕</Text></TouchableOpacity>
-          </View>
+          <TouchableOpacity onPress={onClose} hitSlop={8}><Text style={styles.fsCloseIcon}>✕</Text></TouchableOpacity>
+          <Text style={styles.fsCounter}>{index + 1} of {cards.length}</Text>
+          <TouchableOpacity style={styles.fsNavBtn} onPress={onEdit}><Text style={styles.fsNavBtnText}>✏️ Edit</Text></TouchableOpacity>
         </View>
 
-        <ScrollView contentContainerStyle={styles.fsBody}>
-          <Text style={[styles.fsDesire, { color: tc.accent }]}>✨ {card.state}</Text>
-          <Text style={[styles.fsText, { color: tc.ink }]}>
-            {card.what && card.what.trim() ? card.what : 'Tap Edit to write how this feels…'}
-          </Text>
-        </ScrollView>
+        <View style={styles.fsCardArea}>
+          <GestureDetector gesture={pan}>
+            <Animated.View style={cardAnimatedStyle}>
+              <LinearGradient colors={pal.colors} start={{ x: 0.15, y: 0 }} end={{ x: 0.85, y: 1 }} style={[styles.fsCard, { borderColor: tc.border }]}>
+                {/* Heading pinned to the top of the CARD itself. */}
+                <Text style={[styles.fsDesire, { color: tc.accent }]}>✨ {card.state}</Text>
+                {/* Body vertically centered within the remaining card space. */}
+                <View style={styles.fsBody}>
+                  <ScrollView contentContainerStyle={styles.fsBodyScroll} showsVerticalScrollIndicator={false}>
+                    <Text style={[styles.fsText, { color: tc.ink }]}>
+                      {card.what && card.what.trim() ? card.what : 'Tap Edit to write how this feels…'}
+                    </Text>
+                  </ScrollView>
+                </View>
+              </LinearGradient>
+            </Animated.View>
+          </GestureDetector>
+        </View>
 
+        <Text style={styles.fsSwipeHint}>← swipe to browse →</Text>
+
+        {/* Single, clean row of controls — replaces the old duplicated Prev/Next + pager rows. */}
         <View style={styles.fsBottom}>
-          <TouchableOpacity style={styles.fsNavBtn} onPress={() => onIndexChange((index - 1 + cards.length) % cards.length)}>
+          <TouchableOpacity style={styles.fsNavBtn} onPress={goPrev}>
             <Text style={styles.fsNavBtnText}>‹ Prev</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.fsNavBtn} onPress={handleListen}>
             <Text style={styles.fsNavBtnText}>{speaking ? '⏹ Stop' : '🔊 Listen'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.fsNavBtn} onPress={() => onIndexChange((index + 1) % cards.length)}>
+          <TouchableOpacity style={styles.fsNavBtn} onPress={goNext}>
             <Text style={styles.fsNavBtnText}>Next ›</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.fsPager}>
-          <TouchableOpacity style={styles.fsNavBtn} onPress={() => onIndexChange((index - 1 + cards.length) % cards.length)}>
-            <Text style={styles.fsNavBtnText}>‹</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={onClose}>
-            <Text style={[styles.fsCounter, { color: tc.accent }]}>{index + 1} of {cards.length}  ✕</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.fsNavBtn} onPress={() => onIndexChange((index + 1) % cards.length)}>
-            <Text style={styles.fsNavBtnText}>›</Text>
           </TouchableOpacity>
         </View>
 
         <TouchableOpacity style={styles.fsAddBtn} onPress={onAdd}>
           <Text style={styles.fsAddBtnText}>＋ Add desire card</Text>
         </TouchableOpacity>
-      </LinearGradient>
+      </View>
     </Modal>
   );
 }
@@ -576,17 +614,30 @@ const styles = StyleSheet.create({
   gridCardPreview: { fontFamily: fonts.displayItalic, fontSize: 13.5, fontStyle: 'italic', lineHeight: 19, opacity: 0.9 },
 
   // Full-screen reader
-  fsRoot: { flex: 1 },
-  fsNav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 54, paddingHorizontal: 20, paddingBottom: 10 },
-  fsCounter: { fontFamily: fonts.displayItalic, fontSize: 14, fontStyle: 'italic', fontWeight: '600' },
-  fsNavBtn: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: radii.pill, backgroundColor: 'rgba(255,255,255,0.3)' },
+  fsRoot: { flex: 1, backgroundColor: colors.white },
+  fsNav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 54, paddingHorizontal: 20, paddingBottom: 14 },
+  fsCloseIcon: { fontSize: 18, color: colors.ink2, fontWeight: '600' },
+  fsCounter: { fontFamily: fonts.displayItalic, fontSize: 13, fontStyle: 'italic', fontWeight: '600', color: colors.mist },
+  fsNavBtn: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: radii.pill, backgroundColor: 'rgba(201,168,201,0.18)' },
   fsNavBtnText: { fontFamily: fonts.bodyMedium, fontSize: 12.5, fontWeight: '600', color: colors.purpleDark },
-  fsBody: { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 40, flexGrow: 1, justifyContent: 'center' },
-  fsDesire: { fontFamily: fonts.bodyMedium, fontSize: 11, fontWeight: '700', letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: 20 },
+
+  // Card area — bounded box (not full screen) so the heading pins to the
+  // TOP of the card and the body centers within the card, rather than
+  // floating anywhere across the whole screen.
+  fsCardArea: { flex: 1, paddingHorizontal: 20, paddingBottom: 6, justifyContent: 'center' },
+  fsCard: {
+    minHeight: SCREEN_H * 0.5, maxHeight: SCREEN_H * 0.62, borderRadius: radii.lg, borderWidth: 1.5,
+    paddingHorizontal: 26, paddingTop: 26, paddingBottom: 22,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.12, shadowRadius: 20, elevation: 6,
+  },
+  fsDesire: { fontFamily: fonts.bodyMedium, fontSize: 11, fontWeight: '700', letterSpacing: 1.4, textTransform: 'uppercase' },
+  fsBody: { flex: 1 },
+  fsBodyScroll: { flexGrow: 1, justifyContent: 'center', paddingVertical: 16 },
   fsText: { fontFamily: fonts.displayItalic, fontSize: 20, fontStyle: 'italic', fontWeight: '300', lineHeight: 32 },
-  fsBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, backgroundColor: 'rgba(255,255,255,0.25)' },
-  fsPager: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 14, paddingVertical: 12, backgroundColor: 'rgba(255,255,255,0.25)' },
-  fsAddBtn: { alignSelf: 'center', marginTop: 10, marginBottom: 30, paddingVertical: 10, paddingHorizontal: 20, borderRadius: radii.pill, borderWidth: 1.5, borderStyle: 'dashed', borderColor: 'rgba(255,255,255,0.6)' },
+  fsSwipeHint: { textAlign: 'center', fontFamily: fonts.body, fontSize: 11, color: colors.mist, marginBottom: 6, opacity: 0.7 },
+
+  fsBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16 },
+  fsAddBtn: { alignSelf: 'center', marginTop: 4, marginBottom: 30, paddingVertical: 10, paddingHorizontal: 20, borderRadius: radii.pill, borderWidth: 1.5, borderStyle: 'dashed', borderColor: 'rgba(154,95,168,0.4)' },
   fsAddBtnText: { fontFamily: fonts.bodyMedium, fontSize: 13, fontWeight: '600', color: colors.purpleDark },
 
   // Edit modal
