@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Modal, SafeAreaView } from 'react-native';
 import { colors, fonts, radii } from '../constants/theme';
 
@@ -16,6 +16,7 @@ export default function ExpandableTextArea({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [focused, setFocused] = useState(false);
+  const modalInputRef = useRef(null);
 
   // The wrapper View's minHeight only creates real tappable space if the
   // TextInput itself is tall enough to fill it -- a wrapper-only minHeight
@@ -43,26 +44,35 @@ export default function ExpandableTextArea({
         <Text style={styles.expandIcon}>⛶</Text>
       </TouchableOpacity>
 
-      <Modal visible={expanded} animationType="slide" onRequestClose={() => setExpanded(false)}>
-        <SafeAreaView style={styles.modalRoot}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>{modalTitle}</Text>
-            <TouchableOpacity onPress={() => setExpanded(false)} hitSlop={10}>
-              <Text style={styles.modalDone}>Done</Text>
-            </TouchableOpacity>
-          </View>
-          <TextInput
-            style={styles.modalInput}
-            placeholder={placeholder}
-            placeholderTextColor="rgba(46,37,48,0.4)"
-            value={value}
-            onChangeText={onChangeText}
-            multiline
-            textAlignVertical="top"
-            autoFocus
-          />
-        </SafeAreaView>
-      </Modal>
+      {/* Modal only mounts once actually opened -- RN keeps a Modal's subtree
+          mounted even while visible={false}, so an always-present autoFocus
+          TextInput inside it was silently contesting focus with the inline
+          box's own TextInput the instant this component rendered, causing
+          the keyboard to pop up and immediately retract on tap. Mounting the
+          Modal conditionally, and focusing on its onShow instead of
+          autoFocus, keeps that hidden input from ever existing until needed. */}
+      {expanded && (
+        <Modal visible animationType="slide" onRequestClose={() => setExpanded(false)} onShow={() => modalInputRef.current?.focus()}>
+          <SafeAreaView style={styles.modalRoot}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{modalTitle}</Text>
+              <TouchableOpacity onPress={() => setExpanded(false)} hitSlop={10}>
+                <Text style={styles.modalDone}>Done</Text>
+              </TouchableOpacity>
+            </View>
+            <TextInput
+              ref={modalInputRef}
+              style={styles.modalInput}
+              placeholder={placeholder}
+              placeholderTextColor="rgba(46,37,48,0.4)"
+              value={value}
+              onChangeText={onChangeText}
+              multiline
+              textAlignVertical="top"
+            />
+          </SafeAreaView>
+        </Modal>
+      )}
     </View>
   );
 }
