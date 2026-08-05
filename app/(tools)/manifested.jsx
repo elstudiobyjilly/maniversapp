@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Alert, Share, Linking } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Alert, Share, Linking, ImageBackground } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
+import * as ImagePicker from 'expo-image-picker';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import ScreenHeader from '../../components/ScreenHeader';
@@ -92,6 +93,7 @@ export default function Manifested() {
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('all');
   const [showIgCta, setShowIgCta] = useState(false);
+  const [storyBgUri, setStoryBgUri] = useState(null);
 
   const storyCardRef = useRef(null);
 
@@ -141,6 +143,14 @@ export default function Manifested() {
     if (!title.trim()) { setError('Write what you manifested first ✨'); return; }
     try { await Share.share({ message: `🎉 ${title.trim()}${story.trim() ? '\n\n' + story.trim() : ''}` }); } catch (_) {}
   };
+
+  const handlePickStoryBg = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) { setError('Photo library permission is needed to add an image.'); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8, allowsEditing: true, aspect: [9, 16] });
+    if (!result.canceled && result.assets?.[0]?.uri) setStoryBgUri(result.assets[0].uri);
+  };
+  const handleClearStoryBg = () => setStoryBgUri(null);
 
   const handleShareToStory = async () => {
     if (!title.trim()) { setError('Write what you manifested first ✨'); return; }
@@ -209,11 +219,28 @@ export default function Manifested() {
             <Button title="🔗 Share" size="sm" variant="ghost" onPress={handleShare} />
             <Button title="📤 Share to Story" size="sm" variant="ghost" onPress={handleShareToStory} loading={sharingStory} />
           </View>
+
+          <View style={styles.storyBgRow}>
+            <Text style={styles.storyBgLabel}>Story background:</Text>
+            <TouchableOpacity style={styles.storyBgBtn} onPress={handlePickStoryBg}>
+              <Text style={styles.storyBgBtnText}>{storyBgUri ? '🖼️ Change Image' : '🖼️ Add Image'}</Text>
+            </TouchableOpacity>
+            {storyBgUri && (
+              <TouchableOpacity style={styles.storyBgClearBtn} onPress={handleClearStoryBg}>
+                <Text style={styles.storyBgClearBtnText}>✕</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </GlassCard>
 
         {/* Off-screen branded card used only to capture "Share to Story" */}
         <View style={styles.hiddenCaptureWrap} pointerEvents="none">
           <View ref={storyCardRef} collapsable={false} style={styles.storyCard}>
+            {storyBgUri ? (
+              <ImageBackground source={{ uri: storyBgUri }} style={StyleSheet.absoluteFill} imageStyle={styles.storyCardBgImage}>
+                <View style={styles.storyCardBgOverlay} />
+              </ImageBackground>
+            ) : null}
             <Text style={styles.storyCardBrand}>MANIVERS</Text>
             <Text style={styles.storyCardIcon}>🎉</Text>
             <Text style={styles.storyCardTitle}>{title || 'My Manifestation'}</Text>
@@ -291,8 +318,17 @@ const styles = StyleSheet.create({
   entryNote: { fontFamily: fonts.displayItalic, fontSize: 12.5, color: colors.mist, fontStyle: 'italic', lineHeight: 19, marginTop: 3 },
   readMore: { fontFamily: fonts.bodyMedium, fontSize: 11.5, color: colors.purpleDark, marginTop: 2 },
 
+  storyBgRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
+  storyBgLabel: { fontFamily: fonts.body, fontSize: 12, color: colors.mist },
+  storyBgBtn: { backgroundColor: 'rgba(255,255,255,0.6)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)', borderRadius: radii.pill, paddingVertical: 6, paddingHorizontal: 12 },
+  storyBgBtnText: { fontFamily: fonts.bodyMedium, fontSize: 11.5, color: colors.ink2, fontWeight: '600' },
+  storyBgClearBtn: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.dangerBg, alignItems: 'center', justifyContent: 'center' },
+  storyBgClearBtnText: { fontSize: 11, color: colors.danger },
+
   hiddenCaptureWrap: { position: 'absolute', top: -9999, left: -9999 },
-  storyCard: { width: 320, padding: 28, backgroundColor: '#1a0f2e', alignItems: 'center', borderRadius: 24 },
+  storyCard: { width: 320, padding: 28, backgroundColor: '#1a0f2e', alignItems: 'center', borderRadius: 24, overflow: 'hidden' },
+  storyCardBgImage: { resizeMode: 'cover' },
+  storyCardBgOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(26,15,46,0.55)' },
   storyCardBrand: { color: 'rgba(255,255,255,0.6)', fontSize: 13, letterSpacing: 2, marginBottom: 20 },
   storyCardIcon: { fontSize: 40, marginBottom: 12 },
   storyCardTitle: { color: '#fff', fontSize: 20, fontFamily: fonts.display, textAlign: 'center', marginBottom: 10 },
