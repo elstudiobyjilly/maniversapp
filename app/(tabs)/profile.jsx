@@ -541,7 +541,7 @@ const styles = StyleSheet.create({
   planBadge: { alignSelf: 'center', backgroundColor: 'rgba(201,168,201,0.2)', borderRadius: radii.pill, paddingVertical: 4, paddingHorizontal: 12, marginTop: 10 },
   planBadgeText: { fontFamily: fonts.bodyMedium, fontSize: 11, color: colors.purpleDark, fontWeight: '700' },
 
-  inputBox: { borderWidth: 1.5, borderColor: 'rgba(154,95,168,0.3)', borderRadius: radii.sm, paddingVertical: 16, paddingHorizontal: 16, backgroundColor: 'rgba(255,255,255,0.5)' },
+  inputBox: { borderWidth: 1, borderColor: 'rgba(154,95,168,0.22)', borderRadius: radii.sm, paddingVertical: 16, paddingHorizontal: 16, backgroundColor: 'rgba(255,255,255,0.5)' },
   // Same neon glow as ExpandableTextArea's focus state, for parity across
   // every writing box in the app.
   inputBoxFocused: {

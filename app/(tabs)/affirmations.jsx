@@ -623,14 +623,14 @@ export default function Affirmations() {
 
 const styles = StyleSheet.create({
   helperText: { fontFamily: fonts.body, fontSize: 12, color: colors.mist, marginBottom: 10, lineHeight: 18 },
-  inputBoxSm: { borderWidth: 1.5, borderColor: 'rgba(154,95,168,0.3)', borderRadius: radii.sm, padding: 12, backgroundColor: 'rgba(255,255,255,0.5)' },
+  inputBoxSm: { borderWidth: 1, borderColor: 'rgba(154,95,168,0.22)', borderRadius: radii.sm, padding: 12, backgroundColor: 'rgba(255,255,255,0.5)' },
   addLineBtn: { alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 4 },
   addLineBtnText: { fontFamily: fonts.bodyMedium, color: colors.purpleDark, fontSize: 12, fontWeight: '600' },
   upsellHint: { fontFamily: fonts.displayItalic, fontSize: 12.5, color: colors.purpleDark, marginTop: 10, textAlign: 'center', fontStyle: 'italic' },
   savedHint: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.success, marginTop: 8, textAlign: 'center', fontWeight: '600' },
   cardMargin: { marginBottom: 16 },
   label: { fontFamily: fonts.bodyMedium, fontSize: 10.5, color: colors.purpleDark, fontWeight: '700', letterSpacing: 0.6, marginBottom: 8, textTransform: 'uppercase' },
-  inputBox: { borderWidth: 1.5, borderColor: 'rgba(154,95,168,0.3)', borderRadius: radii.sm, padding: 12, backgroundColor: 'rgba(255,255,255,0.5)', minHeight: 60 },
+  inputBox: { borderWidth: 1, borderColor: 'rgba(154,95,168,0.22)', borderRadius: radii.sm, padding: 12, backgroundColor: 'rgba(255,255,255,0.5)', minHeight: 60 },
   input: { fontFamily: fonts.body, fontSize: 14.5, color: colors.ink },
   errorText: { fontFamily: fonts.body, color: colors.danger, fontSize: 13, marginVertical: 10, textAlign: 'center' },
   affLine: { fontFamily: fonts.displayItalic, color: colors.ink2, fontSize: 17, marginBottom: 10, lineHeight: 25, fontStyle: 'italic' },

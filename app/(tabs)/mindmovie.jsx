@@ -425,7 +425,7 @@ const styles = StyleSheet.create({
   upsellPerk: { fontFamily: fonts.body, fontSize: 13, color: colors.ink2, marginBottom: 8, textAlign: 'center' },
   lockBadge: { fontFamily: fonts.bodyMedium, fontSize: 10, color: colors.goldDeep, backgroundColor: 'rgba(224,192,128,0.25)', borderRadius: radii.pill, paddingVertical: 2, paddingHorizontal: 8, fontWeight: '600' },
   label: { fontFamily: fonts.bodyMedium, fontSize: 10.5, color: colors.purpleDark, fontWeight: '700', letterSpacing: 0.6, marginBottom: 8, textTransform: 'uppercase' },
-  inputBox: { borderWidth: 1.5, borderColor: 'rgba(154,95,168,0.3)', borderRadius: radii.sm, padding: 12, backgroundColor: 'rgba(255,255,255,0.5)' },
+  inputBox: { borderWidth: 1, borderColor: 'rgba(154,95,168,0.22)', borderRadius: radii.sm, padding: 12, backgroundColor: 'rgba(255,255,255,0.5)' },
   input: { fontFamily: fonts.body, fontSize: 14.5, color: colors.ink },
   loopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 },
   sectionLabel: { fontFamily: fonts.displayMedium, fontSize: 17, fontWeight: '600', color: colors.ink, marginBottom: 4 },
