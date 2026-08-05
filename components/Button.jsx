@@ -112,9 +112,9 @@ const styles = StyleSheet.create({
     borderColor: colors.dangerBorder,
   },
 
-  sizeMd: { pad: { paddingVertical: 12, paddingHorizontal: 25 }, text: { fontSize: 13 } },
-  sizeSm: { pad: { paddingVertical: 9, paddingHorizontal: 18 }, text: { fontSize: 12.5 } },
-  sizeXs: { pad: { paddingVertical: 6, paddingHorizontal: 13 }, text: { fontSize: 11.5 } },
+  sizeMd: { pad: { paddingVertical: 10, paddingHorizontal: 20 }, text: { fontSize: 12.5 } },
+  sizeSm: { pad: { paddingVertical: 7, paddingHorizontal: 14 }, text: { fontSize: 11.5 } },
+  sizeXs: { pad: { paddingVertical: 5, paddingHorizontal: 11 }, text: { fontSize: 11 } },
 
   contentRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   icon: { fontSize: 14 },

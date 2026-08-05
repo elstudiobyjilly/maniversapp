@@ -257,6 +257,6 @@ const styles = StyleSheet.create({
   horoscopeMetaRow: { flexDirection: 'row', gap: 18, marginBottom: 16 },
   horoscopeMeta: { fontFamily: fonts.body, fontSize: 12.5, color: 'rgba(255,255,255,0.75)' },
   horoscopeMetaBold: { fontFamily: fonts.bodyMedium, fontWeight: '700', color: '#fff' },
-  horoscopeActionBtn: { flex: 1, backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', borderRadius: radii.pill, paddingVertical: 10, alignItems: 'center' },
+  horoscopeActionBtn: { flex: 1, backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', borderRadius: radii.pill, paddingVertical: 8, alignItems: 'center' },
   horoscopeActionBtnText: { fontFamily: fonts.bodyMedium, fontSize: 11.5, color: '#fff', fontWeight: '600' },
 });
