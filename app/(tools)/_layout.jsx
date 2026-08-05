@@ -38,6 +38,7 @@ export default function ToolsLayout() {
       <Stack.Screen name="desire/[id]" options={{ title: '' }} />
       <Stack.Screen name="daily" options={{ title: 'Daily' }} />
       <Stack.Screen name="tracker" options={{ title: 'Tracker' }} />
+      <Stack.Screen name="reps" options={{ title: 'Reps' }} />
       <Stack.Screen name="techniques" options={{ title: 'Techniques' }} />
     </Stack>
   );

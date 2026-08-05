@@ -57,6 +57,7 @@ const SECTIONS = [
       { key: 'desire-hub', label: 'Desires', icon: 'planet-outline', desc: 'Your full desire hub' },
       { key: 'daily', label: 'Daily Energy', icon: 'sparkles-outline', desc: "Today's message, oracle pull & horoscope" },
       { key: 'tracker', label: 'Tracker', icon: 'stats-chart-outline', desc: 'Your practice stats & plan usage' },
+      { key: 'reps', label: 'Reps', icon: 'repeat-outline', desc: 'Your affirmation & story rep count' },
     ],
   },
   {
