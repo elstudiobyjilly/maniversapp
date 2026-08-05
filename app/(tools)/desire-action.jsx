@@ -76,10 +76,15 @@ export default function DesireActionTool() {
   }, [currentId]);
 
   const currentDesire = desires.find((d) => d.id === currentId) || null;
-  const logs = useMemo(
+  const baseLogs = useMemo(
     () => (currentDesire ? buildLogsMap(rawLogs, currentDesire.title) : {}),
     [rawLogs, currentDesire]
   );
+  // Checkbox taps show their new state immediately instead of waiting on
+  // the delete+create round trip -- otherwise a slow network makes the
+  // checkbox look unresponsive/missing rather than just toggled.
+  const [optimisticLogs, setOptimisticLogs] = useState({});
+  const logs = useMemo(() => ({ ...baseLogs, ...optimisticLogs }), [baseLogs, optimisticLogs]);
 
   // ── Derived: progress ────────────────────────────────────────────────
   const progress = useMemo(() => {
@@ -157,7 +162,7 @@ export default function DesireActionTool() {
   // existing row (if any) and create a fresh one with the merged fields.
   const saveDayLog = useCallback(async (dateKey, { practices, note }) => {
     if (!currentDesire) return;
-    const existing = logs[dateKey];
+    const existing = baseLogs[dateKey];
     const day = dayNumberFor(dateKey, currentDesire.startDate);
     const completedNames = Object.keys(practices).filter((p) => practices[p]);
     try {
@@ -171,13 +176,20 @@ export default function DesireActionTool() {
       ]);
     } catch (e) {
       Alert.alert('Could not save', e.message || 'Please try again.');
+    } finally {
+      setOptimisticLogs((cur) => { const next = { ...cur }; delete next[dateKey]; return next; });
     }
-  }, [currentDesire, logs]);
+  }, [currentDesire, baseLogs]);
 
   const handleTogglePractice = (practice) => {
     if (!selectedDay || !currentDesire) return;
     const cur = logs[selectedDay]?.practices || {};
     const nextPractices = { ...cur, [practice]: !cur[practice] };
+    // Reflect the tap immediately (see optimisticLogs above), then persist.
+    setOptimisticLogs((prev) => ({
+      ...prev,
+      [selectedDay]: { ...(logs[selectedDay] || {}), practices: nextPractices },
+    }));
     saveDayLog(selectedDay, { practices: nextPractices, note: logs[selectedDay]?.note || noteText });
   };
 

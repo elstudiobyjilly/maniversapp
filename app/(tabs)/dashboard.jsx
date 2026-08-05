@@ -166,17 +166,23 @@ function DesireActionWidget({ router, roadmaps, rawLogs, setRawLogs }) {
 
   const active = roadmaps.find((r) => r.id === activeId) || roadmaps[0] || null;
   const todayKey = toDateKey(new Date());
-  const logs = active ? buildLogsMap(rawLogs, active.title) : {};
-  const todayLog = logs[todayKey];
+  const baseLogs = active ? buildLogsMap(rawLogs, active.title) : {};
+  // Show the checkbox's new state right away instead of waiting on the
+  // delete+create round trip -- otherwise a slow network makes the tap
+  // look like it did nothing.
+  const [optimisticPractices, setOptimisticPractices] = useState(null);
+  const todayLog = optimisticPractices
+    ? { ...baseLogs[todayKey], practices: optimisticPractices }
+    : baseLogs[todayKey];
 
-  useEffect(() => { setNote(todayLog?.note || ''); }, [active?.id, todayLog?.id]);
+  useEffect(() => { setNote(todayLog?.note || ''); setOptimisticPractices(null); }, [active?.id]);
 
   // A day log has no PATCH on the backend — saving means replacing the row.
   const writeDay = async (practices, noteText) => {
     if (!active || busy) return;
     setBusy(true);
     try {
-      if (todayLog?.id) { try { await deleteRoadmapDayLog(todayLog.id); } catch (_) {} }
+      if (baseLogs[todayKey]?.id) { try { await deleteRoadmapDayLog(baseLogs[todayKey].id); } catch (_) {} }
       const created = await createRoadmapDayLog({
         day: dayNumberFor(todayKey, active.startDate),
         desire: active.title,
@@ -184,13 +190,15 @@ function DesireActionWidget({ router, roadmaps, rawLogs, setRawLogs }) {
         action: noteText || '',
         date: todayKey,
       });
-      setRawLogs((cur) => [...cur.filter((l) => !(todayLog?.id && l.id === todayLog.id)), created]);
-    } catch (_) {} finally { setBusy(false); }
+      setRawLogs((cur) => [...cur.filter((l) => !(baseLogs[todayKey]?.id && l.id === baseLogs[todayKey].id)), created]);
+    } catch (_) {} finally { setBusy(false); setOptimisticPractices(null); }
   };
 
   const toggle = (p) => {
     const cur = todayLog?.practices || {};
-    writeDay({ ...cur, [p]: !cur[p] }, todayLog?.note ?? note);
+    const next = { ...cur, [p]: !cur[p] };
+    setOptimisticPractices(next);
+    writeDay(next, todayLog?.note ?? note);
   };
 
   if (!roadmaps.length) {
