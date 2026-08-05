@@ -19,7 +19,7 @@ import { AuraCardFace } from '../../components/AuraCardCanvas';
 import { colors, fonts, gradients, radii } from '../../constants/theme';
 import { categoryLabel } from '../../constants/desires';
 import { DAILY_MESSAGES } from '../../constants/dailyContent';
-import { AURA_AFFIRMATIONS, PATTERNS, PATTERN_LABELS, detectStyle } from '../../constants/auraCard';
+import { AURA_AFFIRMATIONS, PATTERNS, PATTERN_LABELS, COLOUR_FAMILIES, detectStyle } from '../../constants/auraCard';
 import {
   START_KEY_PREFIX, toDateKey, addDays, buildLogsMap, dayNumberFor,
 } from '../../constants/desireAction';
@@ -36,12 +36,19 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 const IS_WIDE = SCREEN_WIDTH >= 600;
 
 // "Big boxes" per the sketch — desire cards are roughly half the screen wide
-// with a tall cover, rather than the old small 150px thumbnails.
-const DESIRE_CARD_W = Math.min(220, SCREEN_WIDTH * 0.56);
+// with a tall cover, rather than the old small 150px thumbnails. On wide
+// screens (tablets) cards are sized so only ~2-3 fit per row instead of 4+,
+// so the rest stay reachable by scrolling instead of cramming the row.
+const DESIRE_CARD_W = IS_WIDE ? Math.min(300, SCREEN_WIDTH * 0.32) : Math.min(220, SCREEN_WIDTH * 0.56);
 const DESIRE_CARD_H = DESIRE_CARD_W * 0.72 + 64;
 const DESIRE_ROWS = 2;
 const DESIRE_ROW_GAP = 12;
 const AURA_PREVIEW = Math.min((IS_WIDE ? SCREEN_WIDTH / 2 : SCREEN_WIDTH) - 96, 300);
+
+// Every Home widget box shares one of these two fixed heights so paired and
+// unpaired boxes all line up instead of shrinking/growing with content.
+const WIDGET_H_TALL = 360;   // Gratitude / Desire Action / Mind Movies / Subliminals
+const WIDGET_H_SHORT = 190;  // Message for the Day / Manifested
 
 function dayOfYear(date) {
   const start = new Date(date.getFullYear(), 0, 0);
@@ -114,14 +121,14 @@ function GratitudeWidget({ router, entries, onSaved }) {
   };
 
   return (
-    <Widget icon="🙏" title="Gratitude Entry" onOpen={() => router.push('/gratitude')}>
+    <Widget icon="🙏" title="Gratitude Entry" onOpen={() => router.push('/gratitude')} style={{ height: WIDGET_H_TALL }}>
       <WriteBox value={text} onChangeText={setText} placeholder="I am grateful for..." />
       <Button title="Save ✨" size="sm" onPress={save} loading={saving} style={{ marginTop: 10, alignSelf: 'flex-start' }} />
       <Text style={styles.widgetSubLabel}>TODAY'S ENTRIES</Text>
       {todays.length === 0 ? (
         <Text style={styles.widgetEmpty}>Nothing yet today — start with one small thing 🌸</Text>
       ) : (
-        todays.slice(0, 4).map((e) => (
+        todays.slice(0, 2).map((e) => (
           <View key={e.id} style={styles.listLine}>
             <Text style={styles.listDot}>·</Text>
             <Text style={styles.listText} numberOfLines={2}>{e.content}</Text>
@@ -169,15 +176,18 @@ function DesireActionWidget({ router, roadmaps, rawLogs, setRawLogs }) {
 
   if (!roadmaps.length) {
     return (
-      <Widget icon="🗺️" title="Desire Action" onOpen={() => router.push('/desire-action')} openLabel="Start">
+      <Widget icon="🗺️" title="Desire Action" onOpen={() => router.push('/desire-action')} openLabel="Start" style={{ height: WIDGET_H_TALL }}>
         <Text style={styles.widgetEmpty}>No tracker running yet — pick a desire and your daily practices ✨</Text>
         <Button title="＋ Start a tracker" size="sm" onPress={() => router.push('/desire-action')} style={{ marginTop: 10, alignSelf: 'flex-start' }} />
       </Widget>
     );
   }
 
+  const practices = active?.practices || [];
+  const shownPractices = practices.slice(0, 3);
+
   return (
-    <Widget icon="🗺️" title="Desire Action" onOpen={() => router.push('/desire-action')}>
+    <Widget icon="🗺️" title="Desire Action" onOpen={() => router.push('/desire-action')} style={{ height: WIDGET_H_TALL }}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillRow}>
         {roadmaps.map((r) => (
           <TouchableOpacity
@@ -191,22 +201,23 @@ function DesireActionWidget({ router, roadmaps, rawLogs, setRawLogs }) {
       </ScrollView>
 
       <Text style={styles.widgetSubLabel}>TODAY'S CHECKLIST</Text>
-      {(active?.practices || []).length === 0 ? (
+      {shownPractices.length === 0 ? (
         <Text style={styles.widgetEmpty}>No practices set for this desire.</Text>
       ) : (
-        active.practices.map((p) => {
+        shownPractices.map((p) => {
           const done = !!todayLog?.practices?.[p];
           return (
             <TouchableOpacity key={p} style={styles.checkRow} onPress={() => toggle(p)} disabled={busy}>
               <View style={[styles.checkbox, done && styles.checkboxOn]}>{done && <Text style={styles.checkTick}>✓</Text>}</View>
-              <Text style={[styles.checkLabel, done && styles.checkLabelDone]}>{p}</Text>
+              <Text style={[styles.checkLabel, done && styles.checkLabelDone]} numberOfLines={1}>{p}</Text>
             </TouchableOpacity>
           );
         })
       )}
+      {practices.length > 3 && <Text style={styles.widgetMore}>+{practices.length - 3} more in tracker</Text>}
 
       <Text style={styles.widgetSubLabel}>ACTION / NOTE</Text>
-      <WriteBox value={note} onChangeText={setNote} placeholder="What action did you take today?" minHeight={70} />
+      <WriteBox value={note} onChangeText={setNote} placeholder="What action did you take today?" minHeight={48} />
       <Button
         title="Save note"
         size="sm"
@@ -221,9 +232,9 @@ function DesireActionWidget({ router, roadmaps, rawLogs, setRawLogs }) {
 
 // ─── 🎬 Mind Movies — thumbnail grid ──────────────────────────────────────
 function MindMovieWidget({ router, movies }) {
-  const shown = (movies || []).slice(0, 4);
+  const shown = (movies || []).slice(0, 2);
   return (
-    <Widget icon="🎬" title="Mind Movies" onOpen={() => router.push('/mindmovie')} openLabel="All">
+    <Widget icon="🎬" title="Mind Movies" onOpen={() => router.push('/mindmovie')} openLabel="All" style={{ height: WIDGET_H_TALL }}>
       {shown.length === 0 ? (
         <>
           <Text style={styles.widgetEmpty}>No movies yet — turn your dream life into a film 🎬</Text>
@@ -250,7 +261,7 @@ function MindMovieWidget({ router, movies }) {
 // ─── 🎧 Subliminal — saved sessions, tap to play in the Station ───────────
 function SubliminalWidget({ router, sessions, locked }) {
   return (
-    <Widget icon="🎧" title="Subliminals" onOpen={() => router.push('/subliminal')} openLabel="Station">
+    <Widget icon="🎧" title="Subliminals" onOpen={() => router.push('/subliminal')} openLabel="Station" style={{ height: WIDGET_H_TALL }}>
       {locked ? (
         <Text style={styles.widgetEmpty}>Custom subliminals are a Basic Manifestor feature — the sample tracks are free to play in the Station ✨</Text>
       ) : (sessions || []).length === 0 ? (
@@ -260,7 +271,7 @@ function SubliminalWidget({ router, sessions, locked }) {
         </>
       ) : (
         <View style={styles.tileGrid}>
-          {sessions.slice(0, 4).map((s) => (
+          {sessions.slice(0, 2).map((s) => (
             <TouchableOpacity key={s.id} style={styles.subTile} onPress={() => router.push('/subliminal')}>
               <Text style={styles.subTilePlay}>▶</Text>
               <Text style={styles.subTileTitle} numberOfLines={1}>
@@ -279,7 +290,7 @@ function SubliminalWidget({ router, sessions, locked }) {
 function DailyWidget({ router }) {
   const msg = DAILY_MESSAGES[dayOfYear(new Date()) % DAILY_MESSAGES.length];
   return (
-    <Widget icon="☀️" title="Message for the Day" onOpen={() => router.push('/daily')} openLabel="Daily">
+    <Widget icon="☀️" title="Message for the Day" onOpen={() => router.push('/daily')} openLabel="Daily" style={{ height: WIDGET_H_SHORT }}>
       <Text style={styles.dailyMsg}>"{msg}"</Text>
     </Widget>
   );
@@ -301,19 +312,14 @@ function ManifestedWidget({ router, wins, onSaved }) {
   };
 
   return (
-    <Widget icon="🏆" title="Manifested" onOpen={() => router.push('/manifested')} openLabel="All">
-      <WriteBox value={title} onChangeText={setTitle} placeholder="What just manifested for you? 🎉" minHeight={70} />
-      <Button title="Log it 🎉" size="sm" onPress={save} loading={saving} style={{ marginTop: 10, alignSelf: 'flex-start' }} />
+    <Widget icon="🏆" title="Manifested" onOpen={() => router.push('/manifested')} openLabel="All" style={{ height: WIDGET_H_SHORT }}>
+      <WriteBox value={title} onChangeText={setTitle} placeholder="What just manifested for you? 🎉" minHeight={40} />
+      <Button title="Log it 🎉" size="sm" onPress={save} loading={saving} style={{ marginTop: 8, alignSelf: 'flex-start' }} />
       {(wins || []).length > 0 && (
-        <>
-          <Text style={styles.widgetSubLabel}>RECENT WINS</Text>
-          {wins.slice(0, 3).map((w) => (
-            <View key={w.id} style={styles.listLine}>
-              <Text style={styles.listDot}>🎉</Text>
-              <Text style={styles.listText} numberOfLines={1}>{w.title}</Text>
-            </View>
-          ))}
-        </>
+        <View style={styles.listLine}>
+          <Text style={styles.listDot}>🎉</Text>
+          <Text style={styles.listText} numberOfLines={1}>{wins[0].title}</Text>
+        </View>
       )}
     </Widget>
   );
@@ -321,14 +327,19 @@ function ManifestedWidget({ router, wins, onSaved }) {
 
 // ─── 🎴 Aura Card — make one right here ───────────────────────────────────
 function AuraCardWidget({ router }) {
+  const [words, setWords] = useState('');
   const [pattern, setPattern] = useState('radial');
+  const [colours, setColours] = useState({ purple: true, pink: true, blue: true, gold: true });
   const [busy, setBusy] = useState(false);
   const [info, setInfo] = useState('');
   const cardRef = useRef(null);
 
-  const styleKey = detectStyle('aura');
-  const quote = AURA_AFFIRMATIONS[dayOfYear(new Date()) % AURA_AFFIRMATIONS.length];
-  const colours = { purple: true, pink: true, blue: true, gold: true };
+  const styleKey = detectStyle(words || 'aura');
+  const quote = words.trim()
+    ? words.trim().split('\n').filter(Boolean).pop()
+    : AURA_AFFIRMATIONS[dayOfYear(new Date()) % AURA_AFFIRMATIONS.length];
+
+  const toggleColour = (key) => setColours((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const capture = async (mode) => {
     setBusy(true); setInfo('');
@@ -348,6 +359,30 @@ function AuraCardWidget({ router }) {
 
   return (
     <Widget icon="🎴" title="Aura Card" onOpen={() => router.push('/aura-card')} openLabel="Customise">
+      <WriteBox
+        value={words}
+        onChangeText={setWords}
+        placeholder="A word, affirmation, or gratitude..."
+        minHeight={56}
+      />
+
+      <Text style={styles.widgetSubLabel}>COLOURS</Text>
+      <View style={styles.pillRow}>
+        {COLOUR_FAMILIES.map((c) => {
+          const on = colours[c.key] !== false;
+          return (
+            <TouchableOpacity
+              key={c.key}
+              style={[styles.colourChip, { borderColor: c.swatch }, on && { backgroundColor: c.swatch }]}
+              onPress={() => toggleColour(c.key)}
+            >
+              <Text style={[styles.colourChipText, on && styles.colourChipTextOn]}>{c.key}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      <Text style={styles.widgetSubLabel}>PATTERN</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillRow}>
         {PATTERNS.map((p) => (
           <TouchableOpacity key={p} style={[styles.patPill, pattern === p && styles.patPillOn]} onPress={() => setPattern(p)}>
@@ -393,6 +428,7 @@ function ShortcutRow({ items, router }) {
 export default function Dashboard() {
   const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
   const router = useRouter();
   const { plan, refresh: refreshPlan } = usePlanStore();
 
@@ -452,6 +488,11 @@ export default function Dashboard() {
     setRefreshing(true);
     await load();
     setRefreshing(false);
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    router.replace('/(auth)/login');
   };
 
   const planLabel = `${(user?.plan || plan || 'free').toUpperCase()} · ${user?.plan_status || 'active'}`;
@@ -549,6 +590,8 @@ export default function Dashboard() {
           ]} />
 
           <AuraCardWidget router={router} />
+
+          <Button title="Log out" variant="danger" onPress={handleLogout} style={{ alignSelf: 'center', marginTop: 8 }} />
         </View>
       </ScrollView>
     </GradientBackground>
@@ -603,6 +646,14 @@ const styles = StyleSheet.create({
   widgetOpen: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.purpleDark, fontWeight: '600' },
   widgetSubLabel: { fontFamily: fonts.bodyMedium, fontSize: 10, color: colors.purpleDark, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', marginTop: 16, marginBottom: 8 },
   widgetEmpty: { fontFamily: fonts.body, fontSize: 12.5, color: colors.mist, lineHeight: 19 },
+  widgetMore: { fontFamily: fonts.body, fontSize: 11, color: colors.mist, marginTop: 4, fontStyle: 'italic' },
+
+  colourChip: {
+    paddingVertical: 6, paddingHorizontal: 12, borderRadius: radii.pill, borderWidth: 1.5,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+  },
+  colourChipText: { fontFamily: fonts.body, fontSize: 11.5, color: colors.ink2, textTransform: 'capitalize' },
+  colourChipTextOn: { color: '#fff', fontWeight: '700' },
 
   writeBox: {
     borderWidth: 1.5, borderColor: 'rgba(248,184,200,0.35)', borderRadius: radii.md,
