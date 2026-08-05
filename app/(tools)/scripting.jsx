@@ -310,7 +310,7 @@ const styles = StyleSheet.create({
 
   subHeading: { fontFamily: fonts.bodyMedium, fontSize: 10.5, color: colors.mist, fontWeight: '600', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 },
 
-  dayRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.6)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.2)', borderRadius: radii.sm, paddingVertical: 9, paddingHorizontal: 12, marginBottom: 6 },
+  dayRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.6)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.2)', borderRadius: radii.sm, paddingVertical: 16, paddingHorizontal: 14, marginBottom: 3, minHeight: 58 },
   dayRowLabel: { fontFamily: fonts.body, fontSize: 12.5, color: colors.ink2 },
   dayRowActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   readBtn: { backgroundColor: colors.purpleMid, borderRadius: radii.pill, paddingVertical: 4, paddingHorizontal: 10 },
