@@ -1,15 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Alert, Share, Linking, ImageBackground } from 'react-native';
+import { useEffect, useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Alert, Share, Linking } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { captureRef } from 'react-native-view-shot';
-import * as Sharing from 'expo-sharing';
-import * as ImagePicker from 'expo-image-picker';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import ScreenHeader from '../../components/ScreenHeader';
 import Dropdown from '../../components/Dropdown';
 import Button from '../../components/Button';
 import ExpandableTextArea from '../../components/ExpandableTextArea';
+import ShareManifestationSheet from '../../components/ShareManifestationSheet';
 import { colors, fonts, radii } from '../../constants/theme';
 import { getManifested, addManifested, deleteManifested } from '../../services/api';
 
@@ -47,15 +45,11 @@ function parseEntry(item) {
   return { category, title, note };
 }
 
-function ManifestedEntry({ item, onDelete }) {
+function ManifestedEntry({ item, onDelete, onShareToStory }) {
   const [expanded, setExpanded] = useState(false);
   const { category, title, note } = parseEntry(item);
   const meta = CATEGORY_META[category];
   const dateStr = new Date(item.manifested_at || item.created_at || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-
-  const handleShare = async () => {
-    try { await Share.share({ message: `${meta.ic} ${title}${note ? '\n\n' + note : ''}` }); } catch (_) {}
-  };
 
   return (
     <GlassCard style={styles.entryCard}>
@@ -63,7 +57,7 @@ function ManifestedEntry({ item, onDelete }) {
         <Text style={styles.entryBadge}>{meta.ic} {meta.label}</Text>
         <View style={styles.entryHeadRight}>
           <Text style={styles.entryDate}>{dateStr}</Text>
-          <TouchableOpacity onPress={handleShare}><Text style={styles.entryIcon}>📤</Text></TouchableOpacity>
+          <TouchableOpacity onPress={() => onShareToStory({ title, note })}><Text style={styles.entryIcon}>📤</Text></TouchableOpacity>
           <TouchableOpacity onPress={() => onDelete(item.id)}><Text style={styles.entryIcon}>🗑️</Text></TouchableOpacity>
         </View>
       </View>
@@ -89,13 +83,10 @@ export default function Manifested() {
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [sharingStory, setSharingStory] = useState(false);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('all');
   const [showIgCta, setShowIgCta] = useState(false);
-  const [storyBgUri, setStoryBgUri] = useState(null);
-
-  const storyCardRef = useRef(null);
+  const [shareEntry, setShareEntry] = useState(null);
 
   const load = async () => {
     try { setList(await getManifested()); } catch (e) { setError(e.message || 'Could not load'); }
@@ -142,24 +133,6 @@ export default function Manifested() {
   const handleShare = async () => {
     if (!title.trim()) { setError('Write what you manifested first ✨'); return; }
     try { await Share.share({ message: `🎉 ${title.trim()}${story.trim() ? '\n\n' + story.trim() : ''}` }); } catch (_) {}
-  };
-
-  const handlePickStoryBg = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) { setError('Photo library permission is needed to add an image.'); return; }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8, allowsEditing: true, aspect: [9, 16] });
-    if (!result.canceled && result.assets?.[0]?.uri) setStoryBgUri(result.assets[0].uri);
-  };
-  const handleClearStoryBg = () => setStoryBgUri(null);
-
-  const handleShareToStory = async () => {
-    if (!title.trim()) { setError('Write what you manifested first ✨'); return; }
-    setError(''); setSharingStory(true);
-    try {
-      const uri = await captureRef(storyCardRef, { format: 'png', quality: 1 });
-      const available = await Sharing.isAvailableAsync();
-      if (available) await Sharing.shareAsync(uri);
-    } catch (_) {} finally { setSharingStory(false); }
   };
 
   const filtered = filter === 'all' ? list : list.filter((item) => parseEntry(item).category === filter);
@@ -217,29 +190,8 @@ export default function Manifested() {
             <Dropdown value={category} options={CATEGORIES} onSelect={setCategory} />
             <Button title="+ Log 🎉" size="sm" onPress={handleAdd} loading={saving} />
             <Button title="🔗 Share" size="sm" variant="ghost" onPress={handleShare} />
-            <Button title="📤 Share to Story" size="sm" variant="ghost" onPress={handleShareToStory} loading={sharingStory} />
           </View>
-
-          <TouchableOpacity style={styles.photoPill} onPress={storyBgUri ? handleClearStoryBg : handlePickStoryBg}>
-            <Text style={styles.photoPillText}>{storyBgUri ? '🖼️ Background photo added — tap to remove' : '🖼️ Add background photo (optional)'}</Text>
-          </TouchableOpacity>
         </GlassCard>
-
-        {/* Off-screen branded card used only to capture "Share to Story" */}
-        <View style={styles.hiddenCaptureWrap} pointerEvents="none">
-          <View ref={storyCardRef} collapsable={false} style={styles.storyCard}>
-            {storyBgUri ? (
-              <ImageBackground source={{ uri: storyBgUri }} style={StyleSheet.absoluteFill} imageStyle={styles.storyCardBgImage}>
-                <View style={styles.storyCardBgOverlay} />
-              </ImageBackground>
-            ) : null}
-            <Text style={styles.storyCardBrand}>MANIVERS</Text>
-            <Text style={styles.storyCardIcon}>🎉</Text>
-            <Text style={styles.storyCardTitle}>{title || 'My Manifestation'}</Text>
-            {story ? <Text style={styles.storyCardNote} numberOfLines={5}>{story}</Text> : null}
-            <Text style={styles.storyCardWatermark}>manivers.com</Text>
-          </View>
-        </View>
 
         <View style={styles.sectionHeadRow}>
           <Text style={styles.sectionHeading}>Your Manifestations</Text>
@@ -260,9 +212,15 @@ export default function Manifested() {
             <Text style={styles.emptyTitle}>{list.length === 0 ? 'Log your first manifestation above ✨' : `No ${filter} manifestations yet ✨`}</Text>
           </GlassCard>
         ) : (
-          filtered.map((item) => <ManifestedEntry key={item.id} item={item} onDelete={handleDelete} />)
+          filtered.map((item) => <ManifestedEntry key={item.id} item={item} onDelete={handleDelete} onShareToStory={setShareEntry} />)
         )}
       </ScrollView>
+
+      <ShareManifestationSheet
+        visible={!!shareEntry}
+        entry={shareEntry}
+        onClose={() => setShareEntry(null)}
+      />
     </GradientBackground>
   );
 }
@@ -309,20 +267,4 @@ const styles = StyleSheet.create({
   entryTitle: { fontFamily: fonts.displayMedium, fontSize: 16, color: colors.ink, fontWeight: '400' },
   entryNote: { fontFamily: fonts.displayItalic, fontSize: 12.5, color: colors.mist, fontStyle: 'italic', lineHeight: 19, marginTop: 3 },
   readMore: { fontFamily: fonts.bodyMedium, fontSize: 11.5, color: colors.purpleDark, marginTop: 2 },
-
-  photoPill: {
-    marginTop: 12, backgroundColor: 'rgba(201,168,201,0.12)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.25)',
-    borderRadius: radii.pill, paddingVertical: 11, paddingHorizontal: 16, alignItems: 'center',
-  },
-  photoPillText: { fontFamily: fonts.bodyMedium, fontSize: 12.5, color: colors.ink2, fontWeight: '500' },
-
-  hiddenCaptureWrap: { position: 'absolute', top: -9999, left: -9999 },
-  storyCard: { width: 320, padding: 28, backgroundColor: '#1a0f2e', alignItems: 'center', borderRadius: 24, overflow: 'hidden' },
-  storyCardBgImage: { resizeMode: 'cover' },
-  storyCardBgOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(26,15,46,0.55)' },
-  storyCardBrand: { color: 'rgba(255,255,255,0.6)', fontSize: 13, letterSpacing: 2, marginBottom: 20 },
-  storyCardIcon: { fontSize: 40, marginBottom: 12 },
-  storyCardTitle: { color: '#fff', fontSize: 20, fontFamily: fonts.display, textAlign: 'center', marginBottom: 10 },
-  storyCardNote: { color: 'rgba(255,255,255,0.75)', fontSize: 13, fontStyle: 'italic', textAlign: 'center', lineHeight: 19, marginBottom: 16 },
-  storyCardWatermark: { color: 'rgba(155,109,255,0.6)', fontSize: 11, letterSpacing: 1, marginTop: 8 },
 });
