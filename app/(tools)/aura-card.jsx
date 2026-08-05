@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Dimensions } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
@@ -8,6 +8,7 @@ import GradientBackground from '../../components/GradientBackground';
 import ScreenHeader from '../../components/ScreenHeader';
 import Button from '../../components/Button';
 import ExpandableTextArea from '../../components/ExpandableTextArea';
+import ColorPickerModal from '../../components/ColorPickerModal';
 import { AuraCardFace } from '../../components/AuraCardCanvas';
 import { colors, fonts, radii } from '../../constants/theme';
 import {
@@ -26,6 +27,7 @@ export default function AuraCard() {
   const [colours, setColours] = useState({ purple: true, pink: true, blue: true, gold: true });
   const [shadeOverrides, setShadeOverrides] = useState({});
   const [pickerFor, setPickerFor] = useState(null);
+  const [savedColors, setSavedColors] = useState([]);
   // The preview is always live — it reacts to Style/Colours/Pattern as you
   // pick them, it doesn't wait for a "Generate" tap. Generate Card just
   // (re)rolls the footer quote; Clear Card hides the preview until you
@@ -202,7 +204,7 @@ export default function AuraCard() {
               <Text style={styles.smallBtnText}>↺ Reset</Text>
             </TouchableOpacity>
           </View>
-          <Text style={styles.colourHint}>Tap the dot to pick its shade · tap on/off to toggle it</Text>
+          <Text style={styles.colourHint}>Tap the dot to open the colour picker · tap on/off to toggle it</Text>
           <View style={styles.coloursRow}>
             {COLOUR_FAMILIES.map((f) => (
               <View key={f.key} style={styles.colourItem}>
@@ -215,33 +217,17 @@ export default function AuraCard() {
               </View>
             ))}
           </View>
-          {pickerFor && (
-            <>
-              <View style={styles.shadeRow}>
-                {FAMILY_SHADES[pickerFor].map((hex) => (
-                  <TouchableOpacity key={hex} style={[styles.shadeSwatch, { backgroundColor: hex }]} onPress={() => pickShade(pickerFor, hex)} />
-                ))}
-              </View>
-              {/* Presets are a fixed palette — this lets you pick literally
-                  any colour instead of being limited to those swatches. */}
-              <View style={styles.customHexRow}>
-                <View style={[styles.customHexPreview, /^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/.test(customHex.trim()) && { backgroundColor: customHex.trim() }]} />
-                <TextInput
-                  style={styles.customHexInput}
-                  value={customHex}
-                  onChangeText={setCustomHex}
-                  placeholder="Any colour — #ff8cba"
-                  placeholderTextColor={colors.mist2}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  maxLength={7}
-                />
-                <TouchableOpacity style={styles.customHexApply} onPress={handleApplyCustomHex}>
-                  <Text style={styles.customHexApplyText}>Use</Text>
-                </TouchableOpacity>
-              </View>
-            </>
-          )}
+
+          <ColorPickerModal
+            visible={!!pickerFor}
+            initialHex={pickerFor ? (shadeOverrides[pickerFor] || COLOUR_FAMILIES.find((f) => f.key === pickerFor)?.swatch) : '#e898b8'}
+            savedColors={savedColors}
+            onClose={() => setPickerFor(null)}
+            onSave={(hex, keepOpen) => {
+              if (!savedColors.includes(hex)) setSavedColors((prev) => [hex, ...prev].slice(0, 20));
+              if (!keepOpen) pickShade(pickerFor, hex);
+            }}
+          />
 
           <Text style={[styles.label, { marginTop: 16 }]}>PATTERN</Text>
           <View style={styles.chipRow}>
