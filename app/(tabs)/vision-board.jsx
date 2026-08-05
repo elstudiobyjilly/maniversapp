@@ -57,14 +57,32 @@ function itemUri(item) {
 // silently empty.
 function BoardImage({ uri, style }) {
   const [failed, setFailed] = useState(false);
+  const [errMsg, setErrMsg] = useState('');
   if (!uri || failed) {
     return (
       <View style={[style, styles.imageFallback]}>
         <Text style={styles.imageFallbackIcon}>🖼️</Text>
+        {/* Temporary diagnostic — every board image is failing in-app while
+            the same URLs load fine on the website, so surfacing the actual
+            URL + error on-device is the fastest way to see what's actually
+            wrong instead of guessing further. Safe to remove once we know. */}
+        {uri ? (
+          <Text style={styles.imageFallbackDebug} numberOfLines={3}>
+            {uri.slice(0, 60)}{errMsg ? `\n${errMsg}` : ''}
+          </Text>
+        ) : (
+          <Text style={styles.imageFallbackDebug}>(no url on this item)</Text>
+        )}
       </View>
     );
   }
-  return <Image source={{ uri }} style={style} onError={() => setFailed(true)} />;
+  return (
+    <Image
+      source={{ uri }}
+      style={style}
+      onError={(e) => { setErrMsg(e?.nativeEvent?.error || 'load failed'); setFailed(true); }}
+    />
+  );
 }
 
 function DraggableImage({ item, index, isLocked, selectMode, selected, onMove, onResize, onRemove, onToggleSelect, onLongPressItem }) {
@@ -714,6 +732,13 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(200,120,180,0.35)',
     overflow: 'hidden',
     marginTop: 10,
+    // The board's own white surface — always fills the frame edge to edge,
+    // independent of zoom. Previously only `canvas` (the pannable/zoomable
+    // layer) had a background, so at any zoom below 100% the canvas
+    // shrank visually smaller than the frame and the page's pink
+    // background showed through around it like a mat/border, instead of
+    // the board looking like a solid page the way it does on the website.
+    backgroundColor: '#fff',
     ...shadows.card,
   },
   viewportFullscreen: { flex: 1, width: '100%', height: '100%', borderRadius: 0, marginTop: 0 },
@@ -732,6 +757,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(201,168,201,0.35)', borderStyle: 'dashed',
   },
   imageFallbackIcon: { fontSize: 26, opacity: 0.55 },
+  imageFallbackDebug: { fontSize: 8, color: colors.mist2, textAlign: 'center', marginTop: 4, paddingHorizontal: 4 },
   removeBtn: { position: 'absolute', top: -6, right: -6, backgroundColor: '#c04040', borderRadius: 12, width: 24, height: 24, justifyContent: 'center', alignItems: 'center' },
   removeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
   resizeHandle: {
