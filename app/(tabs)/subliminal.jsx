@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useLocalSearchParams } from 'expo-router';
 import { Audio } from 'expo-av';
 import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import {
@@ -71,6 +72,7 @@ function sessionName(s) {
 
 export default function Subliminal() {
   const insets = useSafeAreaInsets();
+  const { playId } = useLocalSearchParams();
   const { limits, hasFeature, refresh } = usePlanStore();
   const [checkingPlan, setCheckingPlan] = useState(true);
   const [showUpgrade, setShowUpgrade] = useState(false);
@@ -155,6 +157,17 @@ export default function Subliminal() {
   useEffect(() => { if (!checkingPlan) loadAll().finally(() => setLoading(false)); }, [checkingPlan]);
 
   useEffect(() => () => { stopAll(); stopPreview(); }, []);
+
+  // Tapping a session tile on Home's Subliminals widget links here with
+  // ?playId=<id> so it starts playing immediately instead of just opening
+  // the Station on whatever session was already active.
+  const autoPlayedRef = useRef(false);
+  useEffect(() => {
+    if (playId && sessions.length && !autoPlayedRef.current) {
+      const target = sessions.find((s) => String(s.id) === String(playId));
+      if (target) { autoPlayedRef.current = true; startSession(target); }
+    }
+  }, [playId, sessions]);
 
   // ── Timer driving the ring ──
   useEffect(() => {

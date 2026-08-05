@@ -89,7 +89,7 @@ export default function AuraCard() {
   const handleDownload = async () => {
     setError(''); setInfo(''); setDownloading(true);
     try {
-      const uri = await captureRef(cardRef, { format: 'png', quality: 1 });
+      const uri = await captureRef(cardRef, { format: 'png', quality: 1, width: 1080, height: 1080 });
       const { granted } = await MediaLibrary.requestPermissionsAsync();
       if (!granted) { setError('Photo library permission is needed to save your card.'); return; }
       await MediaLibrary.saveToLibraryAsync(uri);
@@ -103,7 +103,7 @@ export default function AuraCard() {
   const handleShare = async () => {
     setError(''); setInfo(''); setSharing(true);
     try {
-      const uri = await captureRef(cardRef, { format: 'png', quality: 1 });
+      const uri = await captureRef(cardRef, { format: 'png', quality: 1, width: 1080, height: 1080 });
       const available = await Sharing.isAvailableAsync();
       if (!available) { setInfo('Sharing isn\'t available on this device.'); return; }
       await Sharing.shareAsync(uri);

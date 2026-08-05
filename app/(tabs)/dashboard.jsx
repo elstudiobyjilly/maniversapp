@@ -87,10 +87,13 @@ function Widget({ icon, title, onOpen, openLabel = 'Open', children, style }) {
 
 function WriteBox({ value, onChangeText, placeholder, minHeight = 84 }) {
   const [focused, setFocused] = useState(false);
+  // The TextInput itself needs the minHeight, not just its wrapper — a
+  // wrapper-only minHeight left blank space below a single-line input that
+  // didn't respond to taps, since touches there never reached the input.
   return (
-    <View style={[styles.writeBox, { minHeight }, focused && styles.writeBoxFocused]}>
+    <View style={[styles.writeBox, focused && styles.writeBoxFocused]}>
       <TextInput
-        style={styles.writeInput}
+        style={[styles.writeInput, { minHeight }]}
         placeholder={placeholder}
         placeholderTextColor="rgba(46,37,48,0.4)"
         value={value}
@@ -245,7 +248,11 @@ function MindMovieWidget({ router, movies }) {
       ) : (
         <View style={styles.tileGrid}>
           {shown.map((m) => (
-            <TouchableOpacity key={m.id} style={styles.movieTile} onPress={() => router.push('/mindmovie')}>
+            <TouchableOpacity
+              key={m.id}
+              style={styles.movieTile}
+              onPress={() => router.push(m.locked ? '/mindmovie' : { pathname: '/mindmovie', params: { playId: m.id } })}
+            >
               {m.scenes?.[0]?.img ? (
                 <Image source={{ uri: m.scenes[0].img }} style={styles.movieThumb} />
               ) : (
@@ -274,7 +281,11 @@ function SubliminalWidget({ router, sessions, locked }) {
       ) : (
         <View style={styles.tileGrid}>
           {sessions.slice(0, 4).map((s) => (
-            <TouchableOpacity key={s.id} style={styles.subTile} onPress={() => router.push('/subliminal')}>
+            <TouchableOpacity
+              key={s.id}
+              style={styles.subTile}
+              onPress={() => router.push({ pathname: '/subliminal', params: { playId: s.id } })}
+            >
               <Text style={styles.subTilePlay}>▶</Text>
               <Text style={styles.subTileTitle} numberOfLines={1}>
                 {s.label || s.audio_items?.[0]?.desire || 'Session'}
@@ -347,7 +358,7 @@ function AuraCardWidget({ router }) {
   const capture = async (mode) => {
     setBusy(true); setInfo('');
     try {
-      const uri = await captureRef(cardRef, { format: 'png', quality: 1 });
+      const uri = await captureRef(cardRef, { format: 'png', quality: 1, width: 1080, height: 1080 });
       if (mode === 'save') {
         const { granted } = await MediaLibrary.requestPermissionsAsync();
         if (!granted) { setInfo('Photo permission needed to save.'); return; }
@@ -710,12 +721,12 @@ const styles = StyleSheet.create({
   checkLabelDone: { textDecorationLine: 'line-through', color: colors.mist },
 
   tileGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  movieTile: { width: '47%' },
+  movieTile: { width: '47%', height: 118 },
   movieThumb: { width: '100%', height: 78, borderRadius: radii.sm, marginBottom: 6 },
   movieTitle: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.ink, fontWeight: '600' },
   subTile: {
-    width: '47%', borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)', borderRadius: radii.sm,
-    backgroundColor: 'rgba(255,255,255,0.6)', padding: 12,
+    width: '47%', height: 118, borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)', borderRadius: radii.sm,
+    backgroundColor: 'rgba(255,255,255,0.6)', padding: 12, justifyContent: 'center',
   },
   subTilePlay: { fontSize: 15, color: colors.purpleDark, marginBottom: 4 },
   subTileTitle: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.ink, fontWeight: '600' },

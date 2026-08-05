@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, Image, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Modal, Switch } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Audio } from 'expo-av';
 import {
@@ -39,6 +40,7 @@ const DURATION_OPTIONS = [
 
 export default function MindMovie() {
   const insets = useSafeAreaInsets();
+  const { playId } = useLocalSearchParams();
   const { limits, loaded, hasFeature, refresh } = usePlanStore();
   const [checkingPlan, setCheckingPlan] = useState(true);
   const [showUpgrade, setShowUpgrade] = useState(false);
@@ -84,6 +86,17 @@ export default function MindMovie() {
   };
 
   useEffect(() => { load().finally(() => setLoading(false)); }, []);
+
+  // Tapping a movie tile on Home's Mind Movies widget links here with
+  // ?playId=<id> so playback starts immediately instead of landing on
+  // the library/create tab.
+  const autoPlayedRef = useRef(false);
+  useEffect(() => {
+    if (playId && movies.length && !autoPlayedRef.current) {
+      const target = movies.find((m) => String(m.id) === String(playId));
+      if (target && !target.locked) { autoPlayedRef.current = true; startPlayback(target); }
+    }
+  }, [playId, movies]);
 
   const resetForm = () => {
     setTitle(''); setMood('spiritual'); setSlideDur(5); setLoop(false); setScenes([]); setEditingId(null); setVoice('luna');
