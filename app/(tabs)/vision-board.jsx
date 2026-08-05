@@ -20,7 +20,6 @@ import * as Linking from 'expo-linking';
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 const CANVAS_WIDTH = SCREEN_WIDTH * 1.6;
-const CANVAS_HEIGHT = 1000;
 // The board's visible frame — fixed size, matches the website. Zooming
 // scales/pans the content inside this frame; the frame itself never resizes.
 const VIEWPORT_WIDTH = SCREEN_WIDTH - 32;
@@ -30,6 +29,15 @@ const VIEWPORT_WIDTH = SCREEN_WIDTH - 32;
 // the "+ Add Image" bar below, with sane floor/ceiling so it never gets
 // too cramped or absurdly tall.
 const VIEWPORT_HEIGHT = Math.max(420, Math.min(900, SCREEN_HEIGHT - 380));
+// CANVAS_HEIGHT used to be a flat 1000px, independent of VIEWPORT_HEIGHT.
+// Width scales the same way relative to its viewport (1.6x), so it always
+// had pan room; height didn't — once VIEWPORT_HEIGHT grew to fill taller
+// screens it could equal or exceed that flat 1000, leaving zero vertical
+// pan range (maxPanY computes to 0) while horizontal kept working fine.
+// That's the exact "left/right pans, up/down doesn't, can't reach the
+// bottom" symptom. Scaling it off the viewport the same way width does
+// guarantees vertical pan room always exists, on every screen size.
+const CANVAS_HEIGHT = VIEWPORT_HEIGHT * 1.6;
 const ITEM_SIZE = 120;
 // Zoom range for the board viewport. Max was 2x, which wasn't enough to
 // actually inspect a busy board.
