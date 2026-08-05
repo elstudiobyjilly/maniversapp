@@ -13,6 +13,7 @@ import {
   getAffirmations, getStories, getMindMovies, getSubSessions, getBeliefs, getLetGo,
   getGratitudeList, getFeelItCards, getScripts,
 } from '../../../services/api';
+import { safeImageUri } from '../../../services/imageUri';
 
 // One route per content type, for the section's "open full list" arrow.
 const TYPE_ROUTES = {
@@ -42,8 +43,12 @@ const LINK_SOURCES = {
 // falls back to the gradient placeholder instead of rendering blank white.
 function DesireCover({ uri, style }) {
   const [failed, setFailed] = useState(false);
-  if (!uri || failed) return <LinearGradient colors={gradients.avatar} style={style} />;
-  return <Image source={{ uri }} style={style} onError={() => setFailed(true)} />;
+  // R2 keys with spaces/special characters in the filename hit iOS's
+  // "Protocol error" in RN's Image, which doesn't auto-encode the URL the
+  // way a browser <img> silently does.
+  const safeUri = safeImageUri(uri);
+  if (!safeUri || failed) return <LinearGradient colors={gradients.avatar} style={style} />;
+  return <Image source={{ uri: safeUri }} style={style} onError={() => setFailed(true)} />;
 }
 
 export default function DesireDetail() {

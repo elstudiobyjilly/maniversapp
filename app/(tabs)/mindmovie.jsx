@@ -9,6 +9,7 @@ import {
   uploadImage, finalizeMindMovie, generateMindMovieAudio, createCheckout,
   startSession, completeSession,
 } from '../../services/api';
+import { safeImageUri } from '../../services/imageUri';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import Dropdown from '../../components/Dropdown';
@@ -46,14 +47,18 @@ const DURATION_OPTIONS = [
 // placeholder instead, and fall back the same way if the URL 404s later.
 function SceneImage({ uri, style, iconSize = 22 }) {
   const [failed, setFailed] = useState(false);
-  if (!uri || failed) {
+  // Same fix as Vision Board: R2 keys with spaces/special characters in the
+  // filename hit iOS's "Protocol error" in RN's Image, which — unlike a
+  // browser <img> — doesn't auto-encode the URL before requesting it.
+  const safeUri = safeImageUri(uri);
+  if (!safeUri || failed) {
     return (
       <View style={[style, styles.sceneFallback]}>
         <Text style={{ fontSize: iconSize, opacity: 0.5 }}>🎬</Text>
       </View>
     );
   }
-  return <Image source={{ uri }} style={style} onError={() => setFailed(true)} />;
+  return <Image source={{ uri: safeUri }} style={style} onError={() => setFailed(true)} />;
 }
 
 export default function MindMovie() {

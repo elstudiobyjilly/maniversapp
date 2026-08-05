@@ -8,6 +8,7 @@ import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
 import * as ImagePicker from 'expo-image-picker';
 import { getVisionBoard, saveVisionBoard, setVisionBoardLock, uploadImage, createCheckout, getMindMovies } from '../../services/api';
+import { safeImageUri } from '../../services/imageUri';
 import GradientBackground from '../../components/GradientBackground';
 import UpgradeModal from '../../components/UpgradeModal';
 import ScreenHeader from '../../components/ScreenHeader';
@@ -57,32 +58,20 @@ function itemUri(item) {
 // silently empty.
 function BoardImage({ uri, style }) {
   const [failed, setFailed] = useState(false);
-  const [errMsg, setErrMsg] = useState('');
-  if (!uri || failed) {
+  // R2 keys with spaces/special characters in the original filename hit
+  // iOS's "Protocol error" in RN's Image (which, unlike a browser <img>,
+  // doesn't auto-encode the URL) — confirmed from the on-device debug text.
+  // safeImageUri re-encodes the path/query safely without double-encoding
+  // URLs that are already clean.
+  const safeUri = safeImageUri(uri);
+  if (!safeUri || failed) {
     return (
       <View style={[style, styles.imageFallback]}>
         <Text style={styles.imageFallbackIcon}>🖼️</Text>
-        {/* Temporary diagnostic — every board image is failing in-app while
-            the same URLs load fine on the website, so surfacing the actual
-            URL + error on-device is the fastest way to see what's actually
-            wrong instead of guessing further. Safe to remove once we know. */}
-        {uri ? (
-          <Text style={styles.imageFallbackDebug} numberOfLines={3}>
-            {uri.slice(0, 60)}{errMsg ? `\n${errMsg}` : ''}
-          </Text>
-        ) : (
-          <Text style={styles.imageFallbackDebug}>(no url on this item)</Text>
-        )}
       </View>
     );
   }
-  return (
-    <Image
-      source={{ uri }}
-      style={style}
-      onError={(e) => { setErrMsg(e?.nativeEvent?.error || 'load failed'); setFailed(true); }}
-    />
-  );
+  return <Image source={{ uri: safeUri }} style={style} onError={() => setFailed(true)} />;
 }
 
 function DraggableImage({ item, index, isLocked, selectMode, selected, onMove, onResize, onRemove, onToggleSelect, onLongPressItem }) {
@@ -757,7 +746,6 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(201,168,201,0.35)', borderStyle: 'dashed',
   },
   imageFallbackIcon: { fontSize: 26, opacity: 0.55 },
-  imageFallbackDebug: { fontSize: 8, color: colors.mist2, textAlign: 'center', marginTop: 4, paddingHorizontal: 4 },
   removeBtn: { position: 'absolute', top: -6, right: -6, backgroundColor: '#c04040', borderRadius: 12, width: 24, height: 24, justifyContent: 'center', alignItems: 'center' },
   removeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
   resizeHandle: {

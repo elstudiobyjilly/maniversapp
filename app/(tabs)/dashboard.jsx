@@ -28,6 +28,7 @@ import {
   getRoadmaps, getRoadmapDayLogs, createRoadmapDayLog, deleteRoadmapDayLog,
   getMindMovies, getSubSessions, getManifested, addManifested,
 } from '../../services/api';
+import { safeImageUri } from '../../services/imageUri';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 // The layout sketch pairs widgets two-across. That's how it renders on a
@@ -57,8 +58,12 @@ const WIDGET_H_SHORT = 230;  // Message for the Day / Manifested
 // falls back to the gradient placeholder instead of rendering blank white.
 function DesireCover({ uri, style }) {
   const [failed, setFailed] = useState(false);
-  if (!uri || failed) return <LinearGradient colors={gradients.avatar} style={style} />;
-  return <Image source={{ uri }} style={style} onError={() => setFailed(true)} />;
+  // R2 keys with spaces/special characters in the filename hit iOS's
+  // "Protocol error" in RN's Image, which doesn't auto-encode the URL the
+  // way a browser <img> silently does.
+  const safeUri = safeImageUri(uri);
+  if (!safeUri || failed) return <LinearGradient colors={gradients.avatar} style={style} />;
+  return <Image source={{ uri: safeUri }} style={style} onError={() => setFailed(true)} />;
 }
 
 function dayOfYear(date) {
