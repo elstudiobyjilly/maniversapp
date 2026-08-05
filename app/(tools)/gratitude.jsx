@@ -288,7 +288,7 @@ const styles = StyleSheet.create({
 
   entryRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 9, paddingHorizontal: 10, borderTopWidth: 1, borderTopColor: 'rgba(201,168,201,0.12)' },
   entryMood: { fontSize: 14 },
-  entryText: { flex: 1, fontFamily: fonts.bodyMedium, fontSize: 16.5, fontWeight: '500', color: colors.ink, lineHeight: 23 },
+  entryText: { flex: 1, fontFamily: fonts.displayItalic, fontSize: 18, fontStyle: 'italic', color: colors.ink, lineHeight: 25 },
   entryIconBtn: {
     width: 27, height: 27, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.8)',
     borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)', alignItems: 'center', justifyContent: 'center',

@@ -316,7 +316,7 @@ const styles = StyleSheet.create({
   readBtn: { backgroundColor: colors.purpleMid, borderRadius: radii.pill, paddingVertical: 4, paddingHorizontal: 10 },
   readBtnText: { color: '#fff', fontSize: 10.5, fontWeight: '600' },
   iconText: { fontSize: 13, color: colors.mist },
-  expandedText: { fontFamily: fonts.displayItalic, fontSize: 13.5, color: colors.ink2, fontStyle: 'italic', lineHeight: 20, backgroundColor: 'rgba(255,255,255,0.4)', borderRadius: radii.sm, padding: 12, marginBottom: 8 },
+  expandedText: { fontFamily: fonts.displayItalic, fontSize: 14.5, color: colors.ink2, fontStyle: 'italic', lineHeight: 21, backgroundColor: 'rgba(255,255,255,0.4)', borderRadius: radii.sm, padding: 12, marginBottom: 8 },
 
   weekWrap: { marginBottom: 8 },
   weekHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(245,240,252,0.6)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.25)', borderRadius: radii.sm, paddingVertical: 9, paddingHorizontal: 12, marginBottom: 6 },
