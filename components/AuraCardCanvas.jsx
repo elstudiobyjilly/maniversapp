@@ -4,16 +4,19 @@ import {
   AURA_STYLES, CENTER_GLOW, STAR_DOTS, familyOn, COLOUR_FAMILIES,
 } from '../constants/auraCard';
 
-// The card's background should always be the FIRST toggled-on colour
-// (in COLOUR_FAMILIES order: purple, pink, blue, gold), using whatever
-// custom shade the user picked for it — never the named style's own
-// baked-in background wash, which used to show regardless of what
-// colours were actually selected/toggled (e.g. always a cream/yellow
-// backdrop even when the user picked 4 completely different hues).
+// The card's background is the FIRST custom-recoloured family (in
+// COLOUR_FAMILIES order: purple, pink, blue, gold) once the user has
+// actually picked their own shades via the colour picker -- only then
+// does the background follow "what the user picked" rather than the
+// named style's own designed background wash. A style that hasn't been
+// customised (no shadeOverrides at all -- the default right after
+// picking a Style, see handlePickStyle) always keeps its own baked-in
+// background, since the whole point of a named Style is to apply its
+// own complete look untouched.
 function firstOnColor(colours, shadeOverrides) {
-  const first = COLOUR_FAMILIES.find((f) => colours[f.key] !== false && colours[f.key] !== undefined);
-  if (!first) return null;
-  return shadeOverrides?.[first.key] || first.swatch;
+  if (!shadeOverrides || Object.keys(shadeOverrides).length === 0) return null;
+  const first = COLOUR_FAMILIES.find((f) => colours[f.key] !== false && shadeOverrides[f.key]);
+  return first ? shadeOverrides[first.key] : null;
 }
 import { fonts } from '../constants/theme';
 
@@ -26,11 +29,12 @@ function recolorOrb(orb, shadeOverrides) {
   return { ...orb, stops: orb.stops.map((st) => [st[0], hex, st[2]]) };
 }
 
-// Fallback positions (main + 3 corners) used for any toggled-on colour
-// family that the active named style doesn't already carry an orb for —
-// every named style only bakes in 3 fixed family/orb pairs, so without
-// this a 4th toggled family (or a family the style simply doesn't use)
-// would silently never render, no matter what the user picked.
+// Fallback positions (main + 3 corners) used for any colour family the
+// user explicitly picked a custom shade for that the active named style
+// doesn't already carry an orb for -- every named style only bakes in 3
+// fixed family/orb pairs, so without this a deliberately-picked 4th
+// colour (or a family the style simply doesn't use) would silently never
+// render, no matter what the user chose.
 const FAMILY_FALLBACK_POSITIONS = [
   { cx: 0.5, cy: 0.47, r: 0.5 },
   { cx: 0.15, cy: 0.18, r: 0.38 },
@@ -39,22 +43,27 @@ const FAMILY_FALLBACK_POSITIONS = [
 ];
 
 // Builds the full orb list for a style: the style's own baked-in orbs for
-// whichever families are toggled on, PLUS a generated orb (using the
-// family's own swatch/override colour) for any toggled-on family the style
-// doesn't define at all — so ALL currently-on colours always show, not just
-// whichever ones happen to intersect the named style's fixed 3 slots.
+// whichever families are toggled on, PLUS a generated orb for any family
+// the user explicitly picked a custom shade for that the style doesn't
+// already define. A named Style is a complete, designed look on its own --
+// picking one (which resets COLOURS to its all-on/no-overrides default,
+// see handlePickStyle) should render exactly as designed, not sprout
+// extra orbs just because all 4 families default to "on". Only a family
+// the user has actually customised via the colour picker (a real
+// shadeOverride) earns a synthesized orb of its own; merely being
+// toggled on with no override never adds anything the style didn't
+// already draw.
 function buildActiveOrbs(s, colours, shadeOverrides) {
   const slotOrbs = [s.mainOrb, s.orb1, s.orb2];
   const presentFamilies = new Set(slotOrbs.map((o) => o.family));
   const orbs = slotOrbs.filter((o) => familyOn(o, colours)).map((o) => recolorOrb(o, shadeOverrides));
 
   let posIdx = orbs.length;
-  COLOUR_FAMILIES.forEach(({ key, swatch }) => {
-    if (colours[key] !== false && colours[key] !== undefined && !presentFamilies.has(key)) {
+  COLOUR_FAMILIES.forEach(({ key }) => {
+    if (shadeOverrides?.[key] && colours[key] !== false && !presentFamilies.has(key)) {
       const pos = FAMILY_FALLBACK_POSITIONS[posIdx % FAMILY_FALLBACK_POSITIONS.length];
       posIdx += 1;
-      const color = shadeOverrides?.[key] || swatch;
-      orbs.push({ cx: pos.cx, cy: pos.cy, r: pos.r, family: key, stops: [[0, color, 0.55], [100, color, 0]] });
+      orbs.push({ cx: pos.cx, cy: pos.cy, r: pos.r, family: key, stops: [[0, shadeOverrides[key], 0.55], [100, shadeOverrides[key], 0]] });
     }
   });
   return orbs;
