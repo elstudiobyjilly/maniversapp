@@ -22,7 +22,6 @@ import { usePlanStore } from '../../store/planStore';
 import { colors, fonts, gradients, radii } from '../../constants/theme';
 import * as Linking from 'expo-linking';
 
-const AFF_STYLES = ['i_am', 'you_are', 'mix'];
 const VOICES = [
   { id: 'luna', label: '🌸 Luna' },
   { id: 'orion', label: '🌙 Orion' },
@@ -54,8 +53,6 @@ export default function Profile() {
   // Profile
   const [firstName, setFirstName] = useState('');
   const [primaryDesire, setPrimaryDesire] = useState('');
-  const [affStyle, setAffStyle] = useState('mix');
-  const [editingPrefs, setEditingPrefs] = useState(false);
   const [subStatus, setSubStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -94,7 +91,6 @@ export default function Profile() {
       const [profile, sub] = await Promise.all([getProfile(), getSubscriptionStatus()]);
       setFirstName(profile.first_name || '');
       setPrimaryDesire(profile.primary_desire || '');
-      setAffStyle(profile.affirmation_style || 'mix');
       setSubStatus(sub);
     } catch (e) {
       setError(e.message || 'Could not load profile');
@@ -167,7 +163,6 @@ export default function Profile() {
       await updateProfile({
         first_name: firstName,
         primary_desire: primaryDesire,
-        affirmation_style: affStyle,
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -237,9 +232,19 @@ export default function Profile() {
     } catch (e) { setFeedbackMsg(e.message || 'Could not send feedback'); } finally { setSendingFeedback(false); }
   };
 
-  const handlePreviewVoice = () => {
+  // Luna/Orion/Sage are server-rendered voices baked into generated audio —
+  // there's no local sound file for them to preview. The device's own TTS
+  // (Speech API) is the only voice this button can actually play, so it
+  // always speaks with the System voice regardless of which is selected,
+  // and says so when the pick isn't System.
+  const handlePreviewVoice = (which) => {
     Speech.stop();
-    Speech.speak('This is how your secondary voice sounds.', { rate: voiceSpeed });
+    const id = which === 'primary' ? voiceId : secondaryVoiceId;
+    const rate = which === 'primary' ? 1.0 : voiceSpeed;
+    const msg = id === 'system'
+      ? 'This is how your system voice sounds.'
+      : `${VOICES.find((v) => v.id === id)?.label.replace(/^\S+\s/, '') || 'Your voice'} is heard in your generated audio — this preview uses your device voice instead.`;
+    Speech.speak(msg, { rate });
   };
 
   if (loading) {
@@ -262,8 +267,7 @@ export default function Profile() {
             { value: 'profile', label: '🌸 Profile' },
             { value: 'voice', label: '🎙️ Voice' },
             { value: 'appearance', label: '🔤 Appearance' },
-            { value: 'plan', label: '⭐ Plan' },
-            { value: 'security', label: '🔒 Security' },
+            { value: 'plan', label: '⭐ Plan & Security' },
           ]}
         />
 
@@ -298,24 +302,28 @@ export default function Profile() {
               {error ? <Text style={styles.errorText}>{error}</Text> : null}
               {saved ? <Text style={styles.savedText}>Saved ✨</Text> : null}
               <Button title="💾 Save Profile" onPress={handleSave} loading={saving} size="sm" style={{ marginTop: 10, alignSelf: 'flex-start' }} />
+            </GlassCard>
 
-              <View style={styles.divider} />
-              <Text style={styles.label}>MY PREFERENCES</Text>
-              <View style={styles.prefRow}>
-                <Text style={styles.prefLabel}>Story / Affirmation Style</Text>
-                <Text style={styles.prefValue}>{affStyle.replace('_', ' ')}</Text>
+            <Text style={styles.sectionLabel}>🌸 ONBOARDING QUESTIONS</Text>
+            <GlassCard style={styles.cardMargin}>
+              <Text style={styles.helperText}>Revisit the questions you answered when you started — update them any time your focus shifts.</Text>
+              <Text style={styles.label}>WHAT ARE YOU CALLING IN?</Text>
+              <View style={[styles.inputBox, focusedField === 'onboardDesire' && styles.inputBoxFocused]}>
+                <TextInput
+                  style={styles.input} placeholder="Your primary desire" placeholderTextColor="rgba(46,37,48,0.4)"
+                  value={primaryDesire} onChangeText={setPrimaryDesire}
+                  onFocus={() => setFocusedField('onboardDesire')} onBlur={() => setFocusedField(null)}
+                />
               </View>
-              {editingPrefs ? (
-                <View style={styles.chipRow}>
-                  {AFF_STYLES.map((s) => (
-                    <Chip key={s} label={s.replace('_', ' ')} active={affStyle === s} onPress={() => { setAffStyle(s); setEditingPrefs(false); handleSave(); }} />
-                  ))}
-                </View>
-              ) : (
-                <TouchableOpacity style={styles.editPrefsBtn} onPress={() => setEditingPrefs(true)}>
-                  <Text style={styles.editPrefsBtnText}>✨ Edit Preferences</Text>
-                </TouchableOpacity>
-              )}
+              <Text style={[styles.label, { marginTop: 14 }]}>WHAT SHOULD WE CALL YOU?</Text>
+              <View style={[styles.inputBox, focusedField === 'onboardName' && styles.inputBoxFocused]}>
+                <TextInput
+                  style={styles.input} placeholder="Your name" placeholderTextColor="rgba(46,37,48,0.4)"
+                  value={firstName} onChangeText={setFirstName}
+                  onFocus={() => setFocusedField('onboardName')} onBlur={() => setFocusedField(null)}
+                />
+              </View>
+              <Button title="💾 Save Answers" onPress={handleSave} loading={saving} size="sm" style={{ marginTop: 12, alignSelf: 'flex-start' }} />
             </GlassCard>
           </>
         )}
@@ -346,6 +354,9 @@ export default function Profile() {
                 <View style={[styles.checkbox, lockVoice && styles.checkboxOn]}>{lockVoice && <Text style={styles.checkmark}>✓</Text>}</View>
                 <Text style={styles.checkLabel}>Lock a voice for all narration</Text>
               </TouchableOpacity>
+              <TouchableOpacity style={[styles.editPrefsBtn, { marginTop: 12 }]} onPress={() => handlePreviewVoice('primary')}>
+                <Text style={styles.editPrefsBtnText}>🎭 Preview Voice</Text>
+              </TouchableOpacity>
             </GlassCard>
 
             <Text style={styles.sectionLabel}>🎭 SECONDARY VOICE</Text>
@@ -368,7 +379,7 @@ export default function Profile() {
                   </TouchableOpacity>
                 ))}
               </View>
-              <TouchableOpacity style={styles.editPrefsBtn} onPress={handlePreviewVoice}>
+              <TouchableOpacity style={styles.editPrefsBtn} onPress={() => handlePreviewVoice('secondary')}>
                 <Text style={styles.editPrefsBtnText}>🎭 Preview Voice</Text>
               </TouchableOpacity>
             </GlassCard>
@@ -417,31 +428,29 @@ export default function Profile() {
         )}
 
         {tab === 'plan' && (
-          <GlassCard style={styles.cardMargin}>
-            <Text style={styles.label}>CURRENT PLAN</Text>
-            <Text style={styles.planText}>{subStatus?.plan?.toUpperCase()}</Text>
-            <Text style={styles.muted}>Status: {subStatus?.plan_status}</Text>
-            {subStatus?.renews_at && <Text style={styles.muted}>Renews {new Date(subStatus.renews_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</Text>}
-            {subStatus?.days_left_trial != null && <Text style={styles.muted}>{subStatus.days_left_trial} days left in trial</Text>}
-
-            {(!subStatus?.plan || subStatus.plan === 'free') && (
-              <Button title="Upgrade Plan ✨" onPress={() => setShowUpgrade(true)} fullWidth style={{ marginTop: 12 }} />
-            )}
-            {subStatus?.plan_status === 'active' && subStatus?.plan !== 'free' && (
-              <View style={styles.planBtnRow}>
-                <Button title="💳 Manage Billing" variant="ghost" size="sm" loading={portalLoading} onPress={handleManageBilling} />
-                <Button title="Cancel Plan" variant="danger" size="sm" onPress={handleCancelSub} />
-              </View>
-            )}
-            {subStatus?.plan_status === 'canceled' && (
-              <Button title="Reactivate Subscription" variant="ghost" fullWidth onPress={handleReactivateSub} style={{ marginTop: 10 }} />
-            )}
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
-          </GlassCard>
-        )}
-
-        {tab === 'security' && (
           <>
+            <Text style={styles.sectionLabel}>⭐ CURRENT PLAN</Text>
+            <GlassCard style={styles.cardMargin}>
+              <Text style={styles.planText}>{subStatus?.plan?.toUpperCase()}</Text>
+              <Text style={styles.muted}>Status: {subStatus?.plan_status}</Text>
+              {subStatus?.renews_at && <Text style={styles.muted}>Renews {new Date(subStatus.renews_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</Text>}
+              {subStatus?.days_left_trial != null && <Text style={styles.muted}>{subStatus.days_left_trial} days left in trial</Text>}
+
+              {(!subStatus?.plan || subStatus.plan === 'free') && (
+                <Button title="Upgrade Plan ✨" onPress={() => setShowUpgrade(true)} fullWidth style={{ marginTop: 12 }} />
+              )}
+              {subStatus?.plan_status === 'active' && subStatus?.plan !== 'free' && (
+                <View style={styles.planBtnRow}>
+                  <Button title="💳 Manage Billing" variant="ghost" size="sm" loading={portalLoading} onPress={handleManageBilling} />
+                  <Button title="Cancel Plan" variant="danger" size="sm" onPress={handleCancelSub} />
+                </View>
+              )}
+              {subStatus?.plan_status === 'canceled' && (
+                <Button title="Reactivate Subscription" variant="ghost" fullWidth onPress={handleReactivateSub} style={{ marginTop: 10 }} />
+              )}
+              {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            </GlassCard>
+
             <Text style={styles.sectionLabel}>CHANGE PASSWORD</Text>
             <GlassCard style={styles.cardMargin}>
               <View style={[styles.inputBox, focusedField === 'curPw' && styles.inputBoxFocused]}>
