@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Children, useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, Image, StyleSheet, ScrollView,
   RefreshControl, ActivityIndicator, Dimensions,
@@ -30,14 +30,33 @@ import {
 } from '../../services/api';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-// "Big boxes" per the home layout sketch — desire cards are roughly half the
-// screen wide with a tall cover, rather than the old small 150px thumbnails.
+// The layout sketch pairs widgets two-across. That's how it renders on a
+// tablet; on a phone there isn't room for two write-boxes side by side, so
+// pairs stack — the running ORDER stays identical either way.
+const IS_WIDE = SCREEN_WIDTH >= 600;
+
+// "Big boxes" per the sketch — desire cards are roughly half the screen wide
+// with a tall cover, rather than the old small 150px thumbnails.
 const DESIRE_CARD_W = Math.min(220, SCREEN_WIDTH * 0.56);
-const AURA_PREVIEW = Math.min(SCREEN_WIDTH - 88, 300);
+const DESIRE_CARD_H = DESIRE_CARD_W * 0.72 + 64;
+const DESIRE_ROWS = 2;
+const DESIRE_ROW_GAP = 12;
+const AURA_PREVIEW = Math.min((IS_WIDE ? SCREEN_WIDTH / 2 : SCREEN_WIDTH) - 96, 300);
 
 function dayOfYear(date) {
   const start = new Date(date.getFullYear(), 0, 0);
   return Math.floor((date - start) / 86400000);
+}
+
+// Lays its two children side by side on wide screens, stacked on phones.
+function PairRow({ children }) {
+  const items = Children.toArray(children);
+  if (!IS_WIDE) return <>{items}</>;
+  return (
+    <View style={styles.pairRow}>
+      {items.map((c, i) => <View key={i} style={{ flex: 1 }}>{c}</View>)}
+    </View>
+  );
 }
 
 // ─── Shared widget shell: big glass box with a title row + "open" chevron ──
@@ -468,54 +487,67 @@ export default function Dashboard() {
             <Button title="＋ New Desire" size="sm" onPress={() => router.push('/desire-hub')} style={{ marginTop: 12, alignSelf: 'flex-start' }} />
           </GlassCard>
         ) : (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 22 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }}>
-            {desires.slice(0, 8).map((d) => (
-              <TouchableOpacity key={d.id} style={styles.desireCard} onPress={() => router.push(`/desire/${d.id}`)}>
-                {d.images?.[0] ? (
-                  <Image source={{ uri: d.images[0] }} style={styles.desireCover} />
-                ) : (
-                  <LinearGradient colors={gradients.avatar} style={styles.desireCover} />
-                )}
-                <View style={styles.desireBody}>
-                  <Text style={styles.desireTitle} numberOfLines={1}>{d.title}</Text>
-                  {d.category ? <Text style={styles.desireCategory}>{categoryLabel(d.category)}</Text> : null}
-                </View>
+          // Two rows of big cards that scroll sideways together — column-wrap
+          // inside a fixed-height track is what gives the 2-row grid.
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 22 }} contentContainerStyle={{ paddingHorizontal: 20 }}>
+            <View style={styles.desireTrack}>
+              {desires.slice(0, 10).map((d) => (
+                <TouchableOpacity key={d.id} style={styles.desireCard} onPress={() => router.push(`/desire/${d.id}`)}>
+                  {d.images?.[0] ? (
+                    <Image source={{ uri: d.images[0] }} style={styles.desireCover} />
+                  ) : (
+                    <LinearGradient colors={gradients.avatar} style={styles.desireCover} />
+                  )}
+                  <View style={styles.desireBody}>
+                    <Text style={styles.desireTitle} numberOfLines={1}>{d.title}</Text>
+                    {d.category ? <Text style={styles.desireCategory}>{categoryLabel(d.category)}</Text> : null}
+                  </View>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity style={[styles.desireCard, styles.desireAddCard]} onPress={() => router.push('/desire-hub')}>
+                <Text style={styles.desireAddIcon}>＋</Text>
+                <Text style={styles.desireAddText}>New Desire</Text>
               </TouchableOpacity>
-            ))}
-            <TouchableOpacity style={styles.desireAddCard} onPress={() => router.push('/desire-hub')}>
-              <Text style={styles.desireAddIcon}>＋</Text>
-              <Text style={styles.desireAddText}>New Desire</Text>
-            </TouchableOpacity>
+            </View>
           </ScrollView>
         )}
 
-        {/* ── Interactive widget boxes ── */}
+        {/* Order follows the home layout sketch exactly:
+            desires → gratitude + desire action → mind movies + subliminal →
+            feel it / meditate / tools → daily + manifested → community +
+            read → aura card. */}
         <View style={styles.widgetsWrap}>
-          <GratitudeWidget
-            router={router}
-            entries={gratitude}
-            onSaved={(row) => setGratitude((prev) => [row, ...prev])}
-          />
-          <DesireActionWidget router={router} roadmaps={roadmaps} rawLogs={rawLogs} setRawLogs={setRawLogs} />
-          <MindMovieWidget router={router} movies={movies} />
-          <SubliminalWidget router={router} sessions={subs} locked={subsLocked} />
-          <DailyWidget router={router} />
-          <ManifestedWidget router={router} wins={wins} onSaved={(row) => setWins((prev) => [row, ...prev])} />
-          <AuraCardWidget router={router} />
-        </View>
+          <PairRow>
+            <GratitudeWidget
+              router={router}
+              entries={gratitude}
+              onSaved={(row) => setGratitude((prev) => [row, ...prev])}
+            />
+            <DesireActionWidget router={router} roadmaps={roadmaps} rawLogs={rawLogs} setRawLogs={setRawLogs} />
+          </PairRow>
 
-        {/* ── Everything else, one tap away ── */}
-        <View style={styles.shortcutsWrap}>
+          <PairRow>
+            <MindMovieWidget router={router} movies={movies} />
+            <SubliminalWidget router={router} sessions={subs} locked={subsLocked} />
+          </PairRow>
+
           <ShortcutRow router={router} items={[
             { icon: '💫', label: 'Feel It', route: '/feelit' },
             { icon: '🧘', label: 'Meditate', route: '/meditate' },
-            { icon: '🧰', label: 'Practice', route: '/practice' },
+            { icon: '🧰', label: 'Tools', route: '/practice' },
           ]} />
+
+          <PairRow>
+            <DailyWidget router={router} />
+            <ManifestedWidget router={router} wins={wins} onSaved={(row) => setWins((prev) => [row, ...prev])} />
+          </PairRow>
+
           <ShortcutRow router={router} items={[
             { icon: '🌸', label: 'Community', route: '/community' },
             { icon: '📖', label: 'Read', route: '/discover' },
-            { icon: '📊', label: 'Tracker', route: '/tracker' },
           ]} />
+
+          <AuraCardWidget router={router} />
         </View>
       </ScrollView>
     </GradientBackground>
@@ -536,9 +568,18 @@ const styles = StyleSheet.create({
   emptyLead: { fontFamily: fonts.displayMedium, fontSize: 16, color: colors.ink },
   emptyBody: { fontFamily: fonts.body, fontSize: 12.5, color: colors.mist, lineHeight: 19, marginTop: 6 },
 
-  // Big desire cards
+  // Big desire cards, laid out as two sideways-scrolling rows
+  desireTrack: {
+    // Column-wrap in a fixed-height track: cards fill row 1, wrap to row 2,
+    // then start a new column. rowGap spaces the two rows; the cards' own
+    // marginRight spaces the columns.
+    flexDirection: 'column', flexWrap: 'wrap', rowGap: DESIRE_ROW_GAP,
+    height: DESIRE_CARD_H * DESIRE_ROWS + DESIRE_ROW_GAP,
+    alignContent: 'flex-start',
+  },
   desireCard: {
-    width: DESIRE_CARD_W, backgroundColor: 'rgba(255,255,255,0.6)', borderWidth: 1,
+    width: DESIRE_CARD_W, height: DESIRE_CARD_H, marginRight: DESIRE_ROW_GAP,
+    backgroundColor: 'rgba(255,255,255,0.6)', borderWidth: 1,
     borderColor: 'rgba(201,168,201,0.25)', borderRadius: radii.md, overflow: 'hidden',
   },
   desireCover: { width: '100%', height: DESIRE_CARD_W * 0.72 },
@@ -546,14 +587,15 @@ const styles = StyleSheet.create({
   desireTitle: { fontFamily: fonts.displayMedium, fontSize: 15, color: colors.ink, fontWeight: '600' },
   desireCategory: { fontFamily: fonts.body, fontSize: 11, color: colors.mist, marginTop: 3 },
   desireAddCard: {
-    width: DESIRE_CARD_W * 0.62, borderWidth: 1.5, borderStyle: 'dashed', borderColor: 'rgba(201,168,201,0.5)',
-    borderRadius: radii.md, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.3)',
+    borderWidth: 1.5, borderStyle: 'dashed', borderColor: 'rgba(201,168,201,0.5)',
+    alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.3)',
   },
   desireAddIcon: { fontSize: 26, color: colors.purpleDark, marginBottom: 4 },
   desireAddText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.purpleDark, fontWeight: '600' },
 
   // Widget shell
   widgetsWrap: { paddingHorizontal: 20, gap: 14 },
+  pairRow: { flexDirection: 'row', gap: 14, alignItems: 'stretch' },
   widget: { padding: 18 },
   widgetHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   widgetTitle: { fontFamily: fonts.displayMedium, fontSize: 16, color: colors.ink, fontWeight: '600' },
@@ -584,6 +626,14 @@ const styles = StyleSheet.create({
   desirePillText: { fontFamily: fonts.body, fontSize: 12, color: colors.mist, fontStyle: 'italic' },
   desirePillTextOn: { color: '#fff' },
 
+  patPill: {
+    paddingVertical: 6, paddingHorizontal: 12, borderRadius: radii.pill, borderWidth: 1,
+    borderColor: 'rgba(154,95,168,0.25)', backgroundColor: 'rgba(255,255,255,0.6)',
+  },
+  patPillOn: { backgroundColor: colors.purpleMid, borderColor: colors.purpleMid },
+  patPillText: { fontFamily: fonts.body, fontSize: 11.5, color: colors.ink2 },
+  patPillTextOn: { color: '#fff', fontWeight: '700' },
+
   checkRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 7 },
   checkbox: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, borderColor: 'rgba(154,95,168,0.3)', alignItems: 'center', justifyContent: 'center' },
   checkboxOn: { backgroundColor: colors.purpleDark, borderColor: colors.purpleDark },
@@ -609,7 +659,6 @@ const styles = StyleSheet.create({
   auraBtnRow: { flexDirection: 'row', gap: 8, justifyContent: 'center', marginTop: 12 },
   infoText: { fontFamily: fonts.body, fontSize: 11.5, color: colors.purpleDark, textAlign: 'center', marginTop: 8 },
 
-  shortcutsWrap: { paddingHorizontal: 20, marginTop: 16, gap: 10 },
   shortcutRow: { flexDirection: 'row', gap: 10 },
   shortcutTile: {
     flex: 1, backgroundColor: 'rgba(255,255,255,0.6)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.25)',
