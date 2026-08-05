@@ -220,17 +220,9 @@ export default function Manifested() {
             <Button title="📤 Share to Story" size="sm" variant="ghost" onPress={handleShareToStory} loading={sharingStory} />
           </View>
 
-          <View style={styles.storyBgRow}>
-            <Text style={styles.storyBgLabel}>Story background:</Text>
-            <TouchableOpacity style={styles.storyBgBtn} onPress={handlePickStoryBg}>
-              <Text style={styles.storyBgBtnText}>{storyBgUri ? '🖼️ Change Image' : '🖼️ Add Image'}</Text>
-            </TouchableOpacity>
-            {storyBgUri && (
-              <TouchableOpacity style={styles.storyBgClearBtn} onPress={handleClearStoryBg}>
-                <Text style={styles.storyBgClearBtnText}>✕</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+          <TouchableOpacity style={styles.photoPill} onPress={storyBgUri ? handleClearStoryBg : handlePickStoryBg}>
+            <Text style={styles.photoPillText}>{storyBgUri ? '🖼️ Background photo added — tap to remove' : '🖼️ Add background photo (optional)'}</Text>
+          </TouchableOpacity>
         </GlassCard>
 
         {/* Off-screen branded card used only to capture "Share to Story" */}
@@ -318,12 +310,11 @@ const styles = StyleSheet.create({
   entryNote: { fontFamily: fonts.displayItalic, fontSize: 12.5, color: colors.mist, fontStyle: 'italic', lineHeight: 19, marginTop: 3 },
   readMore: { fontFamily: fonts.bodyMedium, fontSize: 11.5, color: colors.purpleDark, marginTop: 2 },
 
-  storyBgRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
-  storyBgLabel: { fontFamily: fonts.body, fontSize: 12, color: colors.mist },
-  storyBgBtn: { backgroundColor: 'rgba(255,255,255,0.6)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)', borderRadius: radii.pill, paddingVertical: 6, paddingHorizontal: 12 },
-  storyBgBtnText: { fontFamily: fonts.bodyMedium, fontSize: 11.5, color: colors.ink2, fontWeight: '600' },
-  storyBgClearBtn: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.dangerBg, alignItems: 'center', justifyContent: 'center' },
-  storyBgClearBtnText: { fontSize: 11, color: colors.danger },
+  photoPill: {
+    marginTop: 12, backgroundColor: 'rgba(201,168,201,0.12)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.25)',
+    borderRadius: radii.pill, paddingVertical: 11, paddingHorizontal: 16, alignItems: 'center',
+  },
+  photoPillText: { fontFamily: fonts.bodyMedium, fontSize: 12.5, color: colors.ink2, fontWeight: '500' },
 
   hiddenCaptureWrap: { position: 'absolute', top: -9999, left: -9999 },
   storyCard: { width: 320, padding: 28, backgroundColor: '#1a0f2e', alignItems: 'center', borderRadius: 24, overflow: 'hidden' },
