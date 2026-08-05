@@ -177,7 +177,7 @@ export default function Scripting() {
                 onChangeText={handleDailyChange}
                 placeholder="Today I woke up feeling deeply grateful. My life is beautiful..."
                 modalTitle="Today's Script"
-                minHeight={140}
+                minHeight={200}
               />
               <View style={styles.btnRow}>
                 <Button title="💾 Save" size="sm" onPress={handleSaveDaily} loading={savingDaily} />
@@ -252,7 +252,7 @@ export default function Scripting() {
                 onChangeText={setDreamBody}
                 placeholder="I am so grateful and happy now that I wake up every morning in my beautiful home by the ocean..."
                 modalTitle="Dream Life Script"
-                minHeight={220}
+                minHeight={260}
                 style={{ marginTop: 8 }}
               />
               <View style={styles.btnRow}>
