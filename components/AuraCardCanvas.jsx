@@ -3,6 +3,18 @@ import Svg, { Defs, RadialGradient, LinearGradient, Stop, Circle, Rect } from 'r
 import {
   AURA_STYLES, CENTER_GLOW, STAR_DOTS, familyOn, COLOUR_FAMILIES,
 } from '../constants/auraCard';
+
+// The card's background should always be the FIRST toggled-on colour
+// (in COLOUR_FAMILIES order: purple, pink, blue, gold), using whatever
+// custom shade the user picked for it — never the named style's own
+// baked-in background wash, which used to show regardless of what
+// colours were actually selected/toggled (e.g. always a cream/yellow
+// backdrop even when the user picked 4 completely different hues).
+function firstOnColor(colours, shadeOverrides) {
+  const first = COLOUR_FAMILIES.find((f) => colours[f.key] !== false && colours[f.key] !== undefined);
+  if (!first) return null;
+  return shadeOverrides?.[first.key] || first.swatch;
+}
 import { fonts } from '../constants/theme';
 
 // A picked custom shade replaces every stop's colour (keeping each stop's
@@ -56,10 +68,11 @@ export default function AuraCardSvg({ styleKey, size, pattern, colours, shadeOve
   const baseOrbs = buildActiveOrbs(s, colours, shadeOverrides);
   const showStars = pattern === 'cosmic' || (s.stars && pattern === 'radial');
 
-  const bgFill = s.bg.type === 'solid' ? s.bg.colors[0] : `url(#bg-${styleKey})`;
+  const firstColor = firstOnColor(colours, shadeOverrides);
+  const bgFill = firstColor || (s.bg.type === 'solid' ? s.bg.colors[0] : `url(#bg-${styleKey})`);
 
   if (pattern === 'solid') {
-    const solidColor = baseOrbs[0]?.stops?.[0]?.[1] || (s.bg.type === 'solid' ? s.bg.colors[0] : s.bg.colors[0]);
+    const solidColor = firstColor || baseOrbs[0]?.stops?.[0]?.[1] || s.bg.colors[0];
     return (
       <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
         <Rect x="0" y="0" width={size} height={size} fill={solidColor} />
@@ -108,7 +121,7 @@ export default function AuraCardSvg({ styleKey, size, pattern, colours, shadeOve
             </LinearGradient>
           ))}
         </Defs>
-        <Rect x="0" y="0" width={size} height={size} fill={s.bg.type === 'solid' ? s.bg.colors[0] : `url(#bg-${styleKey})`} />
+        <Rect x="0" y="0" width={size} height={size} fill={bgFill} />
         {stopColors.map((c, i) => (
           <Rect key={i} x="0" y="0" width={size} height={size} fill={`url(#aur-${styleKey}-${i})`} />
         ))}
