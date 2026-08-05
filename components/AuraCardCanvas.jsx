@@ -5,11 +5,21 @@ import {
 } from '../constants/auraCard';
 import { fonts } from '../constants/theme';
 
+// A picked custom shade replaces every stop's colour (keeping each stop's
+// original opacity/falloff) so the orb keeps its shape but reads as the
+// chosen hue instead of the style's baked-in one.
+function recolorOrb(orb, shadeOverrides) {
+  const hex = shadeOverrides?.[orb.family];
+  if (!hex) return orb;
+  return { ...orb, stops: orb.stops.map((st) => [st[0], hex, st[2]]) };
+}
+
 // ─── SVG composition — shape depends on `pattern`, colours depend on which
-// of the 4 colour families are toggled on.
-export default function AuraCardSvg({ styleKey, size, pattern, colours }) {
+// of the 4 colour families are toggled on (and optionally recoloured via
+// shadeOverrides: { purple/pink/blue/gold: hex }).
+export default function AuraCardSvg({ styleKey, size, pattern, colours, shadeOverrides }) {
   const s = AURA_STYLES[styleKey];
-  const baseOrbs = [s.mainOrb, s.orb1, s.orb2].filter((o) => familyOn(o, colours));
+  const baseOrbs = [s.mainOrb, s.orb1, s.orb2].filter((o) => familyOn(o, colours)).map((o) => recolorOrb(o, shadeOverrides));
   const showStars = pattern === 'cosmic' || (s.stars && pattern === 'radial');
 
   const bgFill = s.bg.type === 'solid' ? s.bg.colors[0] : `url(#bg-${styleKey})`;
@@ -74,7 +84,7 @@ export default function AuraCardSvg({ styleKey, size, pattern, colours }) {
 
   // radial / aura / mesh / cosmic all share the gradient-defs setup below
   const orbsForLayout =
-    pattern === 'aura' ? [s.mainOrb].filter((o) => familyOn(o, colours))
+    pattern === 'aura' ? [s.mainOrb].filter((o) => familyOn(o, colours)).map((o) => recolorOrb(o, shadeOverrides))
     : pattern === 'mesh' ? [...baseOrbs, ...baseOrbs].slice(0, 6).map((o, i) => ({ ...o, cx: (0.2 + (i * 0.28)) % 1, cy: (0.25 + i * 0.19 * (i % 2 === 0 ? 1 : -1) + 1) % 1, r: o.r * 0.6 }))
     : baseOrbs;
   const orbs = [...orbsForLayout, CENTER_GLOW];
@@ -114,11 +124,11 @@ export default function AuraCardSvg({ styleKey, size, pattern, colours }) {
 // ─── The complete, capture-ready card face: gradient canvas + the branded
 // text overlay. Shared by the Aura Card tool screen and the Home dashboard
 // widget so both always produce an identical downloadable card.
-export function AuraCardFace({ styleKey, size, pattern, colours, quote, innerRef }) {
+export function AuraCardFace({ styleKey, size, pattern, colours, shadeOverrides, quote, innerRef }) {
   const s = AURA_STYLES[styleKey];
   return (
     <View ref={innerRef} collapsable={false} style={[faceStyles.capture, { width: size, height: size }]}>
-      <AuraCardSvg styleKey={styleKey} size={size} pattern={pattern} colours={colours} />
+      <AuraCardSvg styleKey={styleKey} size={size} pattern={pattern} colours={colours} shadeOverrides={shadeOverrides} />
       <View style={faceStyles.overlay}>
         <Text style={[faceStyles.brand, { color: s.text.name, fontSize: size * 0.045 }]}>MANIVERS</Text>
         <Text style={[faceStyles.date, { color: s.text.subtitle, fontSize: size * 0.026 }]}>

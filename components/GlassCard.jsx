@@ -6,12 +6,12 @@ import { radii, shadows } from '../constants/theme';
 // blur+saturate, soft mauve-tinted shadow, r-lg (28px) radius, subtle
 // bright top inset border to read as "glass" rather than flat white.
 // tint: 'light' | 'dark' | 'default'
-export default function GlassCard({ children, style, tint = 'light', intensity = 40, noPadding = false }) {
+export default function GlassCard({ children, style, contentStyle, tint = 'light', intensity = 40, noPadding = false }) {
   return (
     <View style={[styles.wrapper, style]}>
       <BlurView intensity={intensity} tint={tint} style={StyleSheet.absoluteFill} />
       <View style={styles.tintOverlay} pointerEvents="none" />
-      <View style={[styles.content, noPadding && { padding: 0 }]}>{children}</View>
+      <View style={[styles.content, noPadding && { padding: 0 }, contentStyle]}>{children}</View>
     </View>
   );
 }

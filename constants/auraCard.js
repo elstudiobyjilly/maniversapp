@@ -232,6 +232,15 @@ export const COLOUR_FAMILIES = [
   { key: 'gold', swatch: '#e0c060' },
 ];
 
+// A handful of alternate shades per family — tapping a colour dot opens
+// this strip so the exact hue can be picked instead of only on/off.
+export const FAMILY_SHADES = {
+  purple: ['#9878d8', '#c9a8c9', '#7a5080', '#b888b8', '#6050e0'],
+  pink: ['#f090b0', '#e898b8', '#c85878', '#f28c95', '#d8305c'],
+  blue: ['#78a8e0', '#3ca8d8', '#40e0c0', '#5078ff', '#a8d8f0'],
+  gold: ['#e0c060', '#c8a040', '#f0a850', '#e86828', '#8ac878'],
+};
+
 // Keyword auto-match, extended with the crystal/calm mapping the website
 // table defines (previously omitted since this app had no crystal style yet).
 export function detectStyle(text) {

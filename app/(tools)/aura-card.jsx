@@ -12,7 +12,7 @@ import { AuraCardFace } from '../../components/AuraCardCanvas';
 import { colors, fonts, radii } from '../../constants/theme';
 import {
   hashStr, QUICK_ADD, AURA_AFFIRMATIONS, AURA_STYLES, STYLE_KEYS,
-  PATTERNS, PATTERN_LABELS, COLOUR_FAMILIES, detectStyle,
+  PATTERNS, PATTERN_LABELS, COLOUR_FAMILIES, FAMILY_SHADES, detectStyle,
 } from '../../constants/auraCard';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -24,6 +24,8 @@ export default function AuraCard() {
   const [manualStyle, setManualStyle] = useState(null); // null = Auto
   const [pattern, setPattern] = useState('radial');
   const [colours, setColours] = useState({ purple: true, pink: true, blue: true, gold: true });
+  const [shadeOverrides, setShadeOverrides] = useState({});
+  const [pickerFor, setPickerFor] = useState(null);
   // The preview is always live — it reacts to Style/Colours/Pattern as you
   // pick them, it doesn't wait for a "Generate" tap. Generate Card just
   // (re)rolls the footer quote; Clear Card hides the preview until you
@@ -83,8 +85,20 @@ export default function AuraCard() {
 
   const handleClearCard = () => setCardHidden(true);
 
-  const toggleColour = (key) => { setColours((prev) => ({ ...prev, [key]: !prev[key] })); setCardHidden(false); };
-  const handleResetColours = () => { setColours({ purple: true, pink: true, blue: true, gold: true }); setCardHidden(false); };
+  const toggleColour = (key) => { setColours((prev) => ({ ...prev, [key]: !prev[key] })); setPickerFor(null); setCardHidden(false); };
+  const openShadePicker = (key) => setPickerFor((cur) => (cur === key ? null : key));
+  const pickShade = (key, hex) => {
+    setShadeOverrides((prev) => ({ ...prev, [key]: hex }));
+    setColours((prev) => ({ ...prev, [key]: true }));
+    setPickerFor(null);
+    setCardHidden(false);
+  };
+  const handleResetColours = () => {
+    setColours({ purple: true, pink: true, blue: true, gold: true });
+    setShadeOverrides({});
+    setPickerFor(null);
+    setCardHidden(false);
+  };
 
   const handleDownload = async () => {
     setError(''); setInfo(''); setDownloading(true);
@@ -175,16 +189,26 @@ export default function AuraCard() {
               <Text style={styles.smallBtnText}>↺ Reset</Text>
             </TouchableOpacity>
           </View>
+          <Text style={styles.colourHint}>Tap the dot to pick its shade · tap on/off to toggle it</Text>
           <View style={styles.coloursRow}>
             {COLOUR_FAMILIES.map((f) => (
-              <TouchableOpacity key={f.key} style={styles.colourItem} onPress={() => toggleColour(f.key)}>
-                <View style={[styles.colourDot, { backgroundColor: f.swatch }, !colours[f.key] && styles.colourDotOff]} />
-                <View style={[styles.colourOnPill, !colours[f.key] && styles.colourOnPillOff]}>
+              <View key={f.key} style={styles.colourItem}>
+                <TouchableOpacity onPress={() => openShadePicker(f.key)}>
+                  <View style={[styles.colourDot, { backgroundColor: shadeOverrides[f.key] || f.swatch }, !colours[f.key] && styles.colourDotOff]} />
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.colourOnPill, !colours[f.key] && styles.colourOnPillOff]} onPress={() => toggleColour(f.key)}>
                   <Text style={styles.colourOnText}>{colours[f.key] ? 'on' : 'off'}</Text>
-                </View>
-              </TouchableOpacity>
+                </TouchableOpacity>
+              </View>
             ))}
           </View>
+          {pickerFor && (
+            <View style={styles.shadeRow}>
+              {FAMILY_SHADES[pickerFor].map((hex) => (
+                <TouchableOpacity key={hex} style={[styles.shadeSwatch, { backgroundColor: hex }]} onPress={() => pickShade(pickerFor, hex)} />
+              ))}
+            </View>
+          )}
 
           <Text style={[styles.label, { marginTop: 16 }]}>PATTERN</Text>
           <View style={styles.chipRow}>
@@ -205,6 +229,7 @@ export default function AuraCard() {
                 size={CARD_SIZE}
                 pattern={pattern}
                 colours={colours}
+                shadeOverrides={shadeOverrides}
                 quote={quote}
               />
             </View>
@@ -269,6 +294,7 @@ const styles = StyleSheet.create({
   styleGridScroll: { gap: 8, paddingBottom: 4, paddingRight: 4 },
   styleGridCol: { gap: 8 },
 
+  colourHint: { fontFamily: fonts.body, fontSize: 11, color: colors.mist, marginBottom: 10, fontStyle: 'italic' },
   coloursRow: { flexDirection: 'row', gap: 18, marginBottom: 4 },
   colourItem: { alignItems: 'center', gap: 6 },
   colourDot: { width: 26, height: 26, borderRadius: 13, borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)' },
@@ -276,6 +302,8 @@ const styles = StyleSheet.create({
   colourOnPill: { backgroundColor: 'rgba(201,168,201,0.2)', borderRadius: radii.pill, paddingVertical: 2, paddingHorizontal: 8 },
   colourOnPillOff: { backgroundColor: 'rgba(0,0,0,0.05)' },
   colourOnText: { fontFamily: fonts.bodyMedium, fontSize: 10, color: colors.ink2, fontWeight: '600' },
+  shadeRow: { flexDirection: 'row', gap: 10, marginTop: 10, marginBottom: 4 },
+  shadeSwatch: { width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(0,0,0,0.12)' },
 
   errorText: { color: '#c04040', fontSize: 13, marginBottom: 10, textAlign: 'center' },
   infoText: { color: '#9a5fa8', fontSize: 12, textAlign: 'center', marginBottom: 12 },

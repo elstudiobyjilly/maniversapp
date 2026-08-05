@@ -19,7 +19,7 @@ import { AuraCardFace } from '../../components/AuraCardCanvas';
 import { colors, fonts, gradients, radii } from '../../constants/theme';
 import { categoryLabel } from '../../constants/desires';
 import { DAILY_MESSAGES } from '../../constants/dailyContent';
-import { AURA_AFFIRMATIONS, PATTERNS, PATTERN_LABELS, COLOUR_FAMILIES, AURA_STYLES, STYLE_KEYS, detectStyle } from '../../constants/auraCard';
+import { AURA_AFFIRMATIONS, PATTERNS, PATTERN_LABELS, COLOUR_FAMILIES, FAMILY_SHADES, AURA_STYLES, STYLE_KEYS, detectStyle } from '../../constants/auraCard';
 import {
   START_KEY_PREFIX, toDateKey, addDays, buildLogsMap, dayNumberFor,
 } from '../../constants/desireAction';
@@ -50,7 +50,7 @@ const AURA_PREVIEW = Math.min((IS_WIDE ? SCREEN_WIDTH / 2 : SCREEN_WIDTH) - 96, 
 // rather than getting clipped (a fixed `height` was cutting off checkboxes
 // and tiles). A row's shorter box stretches to match its taller sibling.
 const WIDGET_H_TALL = 380;   // Gratitude / Desire Action
-const WIDGET_H_MEDIA = 340;  // Mind Movies / Subliminals — sized to exactly fit 2 tile rows, no dead space
+const WIDGET_H_MEDIA = 310;  // Mind Movies / Subliminals — sized to exactly fit 2 tile rows, no dead space
 const WIDGET_H_SHORT = 230;  // Message for the Day / Manifested
 
 function dayOfYear(date) {
@@ -70,9 +70,9 @@ function PairRow({ children }) {
 }
 
 // ─── Shared widget shell: big glass box with a title row + "open" chevron ──
-function Widget({ icon, title, onOpen, openLabel = 'Open', children, style }) {
+function Widget({ icon, title, onOpen, openLabel = 'Open', children, style, bodyStyle }) {
   return (
-    <GlassCard style={[styles.widget, style]}>
+    <GlassCard style={[styles.widget, style]} contentStyle={bodyStyle}>
       <View style={styles.widgetHead}>
         <Text style={styles.widgetTitle}>{icon} {title}</Text>
         {onOpen ? (
@@ -304,8 +304,14 @@ function SubliminalWidget({ router, sessions, locked }) {
 function DailyWidget({ router }) {
   const msg = DAILY_MESSAGES[dayOfYear(new Date()) % DAILY_MESSAGES.length];
   return (
-    <Widget icon="☀️" title="Message for the Day" onOpen={() => router.push('/daily')} openLabel="Daily" style={{ minHeight: WIDGET_H_SHORT }}>
-      <Text style={styles.dailyMsg}>"{msg}"</Text>
+    <Widget
+      icon="☀️" title="Message for the Day" onOpen={() => router.push('/daily')} openLabel="Daily"
+      style={{ minHeight: WIDGET_H_SHORT }}
+      bodyStyle={{ flex: 1 }}
+    >
+      <View style={styles.dailyMsgWrap}>
+        <Text style={styles.dailyMsg}>"{msg}"</Text>
+      </View>
     </Widget>
   );
 }
@@ -345,6 +351,8 @@ function AuraCardWidget({ router }) {
   const [manualStyle, setManualStyle] = useState(null);
   const [pattern, setPattern] = useState('radial');
   const [colours, setColours] = useState({ purple: true, pink: true, blue: true, gold: true });
+  const [shadeOverrides, setShadeOverrides] = useState({});
+  const [pickerFor, setPickerFor] = useState(null);
   const [busy, setBusy] = useState(false);
   const [info, setInfo] = useState('');
   const cardRef = useRef(null);
@@ -354,7 +362,18 @@ function AuraCardWidget({ router }) {
     ? words.trim().split('\n').filter(Boolean).pop()
     : AURA_AFFIRMATIONS[dayOfYear(new Date()) % AURA_AFFIRMATIONS.length];
 
-  const toggleColour = (key) => setColours((prev) => ({ ...prev, [key]: !prev[key] }));
+  // Tapping the dot opens a shade strip to pick the exact hue; the small
+  // ✕ badge is the separate on/off toggle so both actions stay distinct.
+  const openShadePicker = (key) => setPickerFor((cur) => (cur === key ? null : key));
+  const pickShade = (key, hex) => {
+    setShadeOverrides((prev) => ({ ...prev, [key]: hex }));
+    setColours((prev) => ({ ...prev, [key]: true }));
+    setPickerFor(null);
+  };
+  const toggleColourOff = (key) => {
+    setColours((prev) => ({ ...prev, [key]: !prev[key] }));
+    setPickerFor(null);
+  };
 
   const capture = async (mode) => {
     setBusy(true); setInfo('');
@@ -382,20 +401,31 @@ function AuraCardWidget({ router }) {
       />
 
       <Text style={styles.widgetSubLabel}>COLOURS</Text>
+      <Text style={styles.colourHint}>Tap a dot to pick its shade · tap ✕ to turn it off</Text>
       <View style={styles.colourRow}>
         {COLOUR_FAMILIES.map((c) => {
           const on = colours[c.key] !== false;
+          const dotColor = shadeOverrides[c.key] || c.swatch;
           return (
-            <TouchableOpacity
-              key={c.key}
-              style={[styles.colourDot, { backgroundColor: c.swatch }, !on && styles.colourDotOff]}
-              onPress={() => toggleColour(c.key)}
-            >
-              {on && <Text style={styles.colourDotTick}>✓</Text>}
-            </TouchableOpacity>
+            <View key={c.key} style={styles.colourDotWrap}>
+              <TouchableOpacity
+                style={[styles.colourDot, { backgroundColor: dotColor }, !on && styles.colourDotOff]}
+                onPress={() => openShadePicker(c.key)}
+              />
+              <TouchableOpacity style={styles.colourOffBadge} onPress={() => toggleColourOff(c.key)} hitSlop={6}>
+                <Text style={styles.colourOffBadgeText}>{on ? '✕' : '✓'}</Text>
+              </TouchableOpacity>
+            </View>
           );
         })}
       </View>
+      {pickerFor && (
+        <View style={styles.shadeRow}>
+          {FAMILY_SHADES[pickerFor].map((hex) => (
+            <TouchableOpacity key={hex} style={[styles.shadeSwatch, { backgroundColor: hex }]} onPress={() => pickShade(pickerFor, hex)} />
+          ))}
+        </View>
+      )}
 
       <Text style={styles.widgetSubLabel}>STYLE</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillRow}>
@@ -425,6 +455,7 @@ function AuraCardWidget({ router }) {
           size={AURA_PREVIEW}
           pattern={pattern}
           colours={colours}
+          shadeOverrides={shadeOverrides}
           quote={quote}
         />
       </View>
@@ -675,13 +706,21 @@ const styles = StyleSheet.create({
   widgetEmpty: { fontFamily: fonts.body, fontSize: 12.5, color: colors.mist, lineHeight: 19 },
   widgetMore: { fontFamily: fonts.body, fontSize: 11, color: colors.mist, marginTop: 4, fontStyle: 'italic' },
 
-  colourRow: { flexDirection: 'row', gap: 8, marginBottom: 4 },
+  colourHint: { fontFamily: fonts.body, fontSize: 10.5, color: colors.mist, marginBottom: 6, fontStyle: 'italic' },
+  colourRow: { flexDirection: 'row', gap: 14, marginBottom: 4 },
+  colourDotWrap: { width: 26, height: 26, position: 'relative' },
   colourDot: {
-    width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.6)',
+    width: 22, height: 22, borderRadius: 11, borderWidth: 1, borderColor: 'rgba(255,255,255,0.7)',
   },
-  colourDotOff: { opacity: 0.25 },
-  colourDotTick: { color: '#fff', fontSize: 10, fontWeight: '700' },
+  colourDotOff: { opacity: 0.22 },
+  colourOffBadge: {
+    position: 'absolute', top: -6, right: -6, width: 15, height: 15, borderRadius: 8,
+    backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: 'rgba(154,95,168,0.3)',
+  },
+  colourOffBadgeText: { fontSize: 8, color: colors.purpleDark, fontWeight: '700' },
+  shadeRow: { flexDirection: 'row', gap: 8, marginTop: 8, marginBottom: 2 },
+  shadeSwatch: { width: 24, height: 24, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.7)' },
 
   writeBox: {
     borderWidth: 1.5, borderColor: 'rgba(248,184,200,0.35)', borderRadius: radii.md,
@@ -722,18 +761,25 @@ const styles = StyleSheet.create({
   checkLabelDone: { textDecorationLine: 'line-through', color: colors.mist },
 
   tileGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  movieTile: { width: '47%', height: 118 },
-  movieThumb: { width: '100%', height: 78, borderRadius: radii.sm, marginBottom: 6 },
+  // Both tile types share the same bordered-rectangle shell so Mind Movies
+  // and Subliminals read as one uniform grid instead of the movie tiles
+  // floating without an outline.
+  movieTile: {
+    width: '47%', height: 106, borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)', borderRadius: radii.sm,
+    backgroundColor: 'rgba(255,255,255,0.6)', padding: 8, overflow: 'hidden',
+  },
+  movieThumb: { width: '100%', height: 64, borderRadius: radii.sm - 4, marginBottom: 6 },
   movieTitle: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.ink, fontWeight: '600' },
   subTile: {
-    width: '47%', height: 118, borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)', borderRadius: radii.sm,
+    width: '47%', height: 106, borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)', borderRadius: radii.sm,
     backgroundColor: 'rgba(255,255,255,0.6)', padding: 12, justifyContent: 'center',
   },
   subTilePlay: { fontSize: 15, color: colors.purpleDark, marginBottom: 4 },
   subTileTitle: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.ink, fontWeight: '600' },
   subTileMeta: { fontFamily: fonts.body, fontSize: 10, color: colors.mist, marginTop: 2 },
 
-  dailyMsg: { fontFamily: fonts.displayItalic, fontSize: 21, fontStyle: 'italic', color: colors.ink2, lineHeight: 30 },
+  dailyMsgWrap: { flex: 1, justifyContent: 'center' },
+  dailyMsg: { fontFamily: fonts.displayItalic, fontSize: 24, fontStyle: 'italic', color: colors.ink2, lineHeight: 34, textAlign: 'center' },
 
   auraWrap: { alignItems: 'center', marginTop: 12 },
   auraBtnRow: { flexDirection: 'row', gap: 8, justifyContent: 'center', marginTop: 12 },
