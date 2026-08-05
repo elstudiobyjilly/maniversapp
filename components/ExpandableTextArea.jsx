@@ -9,7 +9,7 @@ export default function ExpandableTextArea({
   value,
   onChangeText,
   placeholder,
-  minHeight = 110,
+  minHeight = 140,
   modalTitle = 'Write',
   style,
   onBlur,
@@ -88,7 +88,7 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 6,
   },
-  input: { fontFamily: fonts.body, fontSize: 14, color: colors.ink, flex: 1, lineHeight: 22 },
+  input: { fontFamily: fonts.body, fontSize: 16, color: colors.ink, flex: 1, lineHeight: 24 },
   expandBtn: { position: 'absolute', top: 8, right: 8, padding: 4 },
   expandIcon: { fontSize: 13, color: colors.mist2 },
 
