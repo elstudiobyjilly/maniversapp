@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import ScreenHeader from '../../components/ScreenHeader';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Button from '../../components/Button';
 import { colors, fonts, radii } from '../../constants/theme';
 import { usePlanStore } from '../../store/planStore';
@@ -55,6 +56,7 @@ function UsageBar({ label, used, limit, locked }) {
 }
 
 export default function Tracker() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { plan, limits, loaded, refresh } = usePlanStore();
   const isFree = plan === 'free';
@@ -96,7 +98,7 @@ export default function Tracker() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 24, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 16, paddingBottom: 40 }}>
         <ScreenHeader lead="Your" accent="Tracker" subtitle="Your practice, at a glance ✨" />
 
         {loading && !stats ? (

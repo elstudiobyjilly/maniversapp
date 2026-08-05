@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import ScreenHeader from '../../components/ScreenHeader';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Button from '../../components/Button';
 import { colors, fonts, radii } from '../../constants/theme';
 import { getSessionStats } from '../../services/api';
@@ -15,6 +16,7 @@ import { getSessionStats } from '../../services/api';
 // read-only view onto that same data, not a separate manual counter —
 // tapping a number here wouldn't correspond to anything you actually did.
 export default function Reps() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -40,7 +42,7 @@ export default function Reps() {
   return (
     <GradientBackground>
       <ScrollView
-        contentContainerStyle={{ padding: 16, paddingTop: 24, paddingBottom: 40 }}
+        contentContainerStyle={{ padding: 16, paddingTop: insets.top + 16, paddingBottom: 40 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.purpleMid} />}
       >
         <ScreenHeader lead="Your" accent="Reps" subtitle="Every time you repeat an affirmation or play a story, it counts here. 🔁" />

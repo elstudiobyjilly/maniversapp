@@ -16,6 +16,7 @@ import * as Speech from 'expo-speech';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import ScreenHeader from '../../components/ScreenHeader';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Dropdown from '../../components/Dropdown';
 import TabPill from '../../components/TabPill';
 import {
@@ -833,11 +834,12 @@ const TABS = [
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function FutureSelf() {
+  const insets = useSafeAreaInsets();
   const [tab, setTab] = useState('identity');
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 16 }]} keyboardShouldPersistTaps="handled">
 
         <ScreenHeader lead="Future" accent="Self" subtitle="Identity, portrait, bridge & letters from who you're becoming" />
 

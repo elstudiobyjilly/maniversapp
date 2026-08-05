@@ -6,6 +6,7 @@ import * as Sharing from 'expo-sharing';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import ScreenHeader from '../../components/ScreenHeader';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Button from '../../components/Button';
 import ExpandableTextArea from '../../components/ExpandableTextArea';
 import ColorPickerModal from '../../components/ColorPickerModal';
@@ -21,6 +22,7 @@ const CARD_SIZE = Math.min(SCREEN_WIDTH - 40, 400);
 
 
 export default function AuraCard() {
+  const insets = useSafeAreaInsets();
   const [wordsText, setWordsText] = useState('');
   const [manualStyle, setManualStyle] = useState(null); // null = Auto
   const [pattern, setPattern] = useState('radial');
@@ -73,8 +75,17 @@ export default function AuraCard() {
     setError('');
   };
 
+  // Each named Style is its own complete, designed look (own colours, own
+  // pattern) -- picking one should always render exactly as designed, not
+  // get filtered/recoloured by whatever the COLOURS row happened to be set
+  // to from a previous style. So selecting a style resets COLOURS back to
+  // its "everything on, no custom shades" default, letting the style's own
+  // baked-in palette apply untouched. (Manually toggling/recolouring a
+  // family afterwards still works as a deliberate override on top of it.)
   const handlePickStyle = (key) => {
     setManualStyle(key); // null when 'Auto' is tapped
+    setColours({ purple: true, pink: true, blue: true, gold: true });
+    setShadeOverrides({});
     setCardHidden(false);
   };
 
@@ -83,6 +94,8 @@ export default function AuraCard() {
     const nextPattern = PATTERNS[Math.floor(Math.random() * PATTERNS.length)];
     setManualStyle(nextStyle);
     setPattern(nextPattern);
+    setColours({ purple: true, pink: true, blue: true, gold: true });
+    setShadeOverrides({});
     setCardHidden(false);
   };
 
@@ -143,7 +156,7 @@ export default function AuraCard() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 16 }]} keyboardShouldPersistTaps="handled">
         <ScreenHeader lead="Your" accent="Aura Card" subtitle="A word, a list, an affirmation set — make it yours. Share it. Start the trend. ✨" />
 
         <GlassCard style={styles.mb20}>

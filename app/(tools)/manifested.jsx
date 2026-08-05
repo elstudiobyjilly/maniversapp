@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import ScreenHeader from '../../components/ScreenHeader';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Dropdown from '../../components/Dropdown';
 import Button from '../../components/Button';
 import ExpandableTextArea from '../../components/ExpandableTextArea';
@@ -77,6 +78,7 @@ function ManifestedEntry({ item, onDelete, onShareToStory }) {
 }
 
 export default function Manifested() {
+  const insets = useSafeAreaInsets();
   const [title, setTitle] = useState('');
   const [story, setStory] = useState('');
   const [category, setCategory] = useState('love');
@@ -139,7 +141,7 @@ export default function Manifested() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 16 }]} keyboardShouldPersistTaps="handled">
         <ScreenHeader lead="Manifested" accent="Log" subtitle="Your proof of power. Everything the universe delivered. 🎉" />
 
         {showIgCta && (

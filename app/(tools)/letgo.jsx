@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Activi
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import ScreenHeader from '../../components/ScreenHeader';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import TabPill from '../../components/TabPill';
 import Button from '../../components/Button';
 import Dropdown from '../../components/Dropdown';
@@ -36,6 +37,7 @@ function moodPrefix(mood) {
 }
 
 export default function LetGo() {
+  const insets = useSafeAreaInsets();
   const [tab, setTab] = useState('checkin'); // 'checkin' | 'log' | 'tips'
   const [mood, setMood] = useState(null);
   const [trigger, setTrigger] = useState('');
@@ -77,7 +79,7 @@ export default function LetGo() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 16 }]}>
         <ScreenHeader lead="Let" accent="Go" subtitle="Detachment is not giving up. It is trusting completely. 🌿" />
 
         <TabPill

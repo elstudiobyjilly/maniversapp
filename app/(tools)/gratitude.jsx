@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Activi
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import ScreenHeader from '../../components/ScreenHeader';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Dropdown from '../../components/Dropdown';
 import Button from '../../components/Button';
 import ExpandableTextArea from '../../components/ExpandableTextArea';
@@ -40,6 +41,7 @@ function startOfWeekMonday(d) {
 function fmtShort(d) { return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
 
 export default function Gratitude() {
+  const insets = useSafeAreaInsets();
   const [entry, setEntry] = useState('');
   const [mood, setMood] = useState('✨');
   const [list, setList] = useState([]);
@@ -158,7 +160,7 @@ export default function Gratitude() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 16 }]} keyboardShouldPersistTaps="handled">
         <ScreenHeader lead="Gratitude" accent="Log" subtitle="What you appreciate, appreciates. Write daily. 🙏" />
 
         <View style={styles.statsRow}>

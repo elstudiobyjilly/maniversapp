@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Activi
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import ScreenHeader from '../../components/ScreenHeader';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import TabPill from '../../components/TabPill';
 import Dropdown from '../../components/Dropdown';
 import Button from '../../components/Button';
@@ -46,6 +47,7 @@ function firstSentence(text, maxLen = 120) {
 }
 
 export default function Beliefs() {
+  const insets = useSafeAreaInsets();
   const [tab, setTab] = useState('identify'); // 'identify' | 'reframe'
   const [belief, setBelief] = useState('');
   const [activeCategory, setActiveCategory] = useState(null);
@@ -125,7 +127,7 @@ export default function Beliefs() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 16 }]} keyboardShouldPersistTaps="handled">
         <ScreenHeader lead="Limiting" accent="Beliefs" subtitle="Identify them. Reframe them. Watch them dissolve. 🔓" />
 
         <TabPill

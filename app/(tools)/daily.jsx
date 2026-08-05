@@ -7,6 +7,7 @@ import * as Sharing from 'expo-sharing';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import ScreenHeader from '../../components/ScreenHeader';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Button from '../../components/Button';
 import { colors, fonts, radii } from '../../constants/theme';
 import { DAILY_MESSAGES, ORACLE_CARDS, HOROSCOPE_30_DAYS } from '../../constants/dailyContent';
@@ -38,6 +39,7 @@ function shuffledIndices(n) {
 }
 
 export default function Daily() {
+  const insets = useSafeAreaInsets();
   const now = new Date();
   const todaysMessage = DAILY_MESSAGES[dayOfYear(now) % DAILY_MESSAGES.length];
   const todaysDate = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
@@ -114,7 +116,7 @@ export default function Daily() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 24, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 16, paddingBottom: 40 }}>
         <View ref={contentRef} collapsable={false}>
           <ScreenHeader lead="Daily" accent="Energy" subtitle="Your message for today. Your oracle pull. Your energy. ✨" />
 

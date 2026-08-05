@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import ScreenHeader from '../../components/ScreenHeader';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Dropdown from '../../components/Dropdown';
 import Chip from '../../components/Chip';
 import Button from '../../components/Button';
@@ -36,6 +37,7 @@ function DesireCover({ uri, style }) {
 }
 
 export default function DesireHub() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const [desires, setDesires] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -118,7 +120,7 @@ export default function DesireHub() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 20, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 16, paddingBottom: 40 }}>
         <View style={styles.headRow}>
           <ScreenHeader lead="My" accent="Desire Hub" style={{ marginBottom: 0, flex: 1 }} />
           <TouchableOpacity style={styles.newBtn} onPress={() => setAddOpen((v) => !v)}>

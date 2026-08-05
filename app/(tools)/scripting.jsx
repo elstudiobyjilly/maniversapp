@@ -4,6 +4,7 @@ import * as Speech from 'expo-speech';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import ScreenHeader from '../../components/ScreenHeader';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import TabPill from '../../components/TabPill';
 import Button from '../../components/Button';
 import ExpandableTextArea from '../../components/ExpandableTextArea';
@@ -42,6 +43,7 @@ function parseDream(item) {
 }
 
 export default function Scripting() {
+  const insets = useSafeAreaInsets();
   const [tab, setTab] = useState('daily'); // 'daily' | 'dream'
 
   // ── Daily Script ──────────────────────────────────────────────────────
@@ -155,7 +157,7 @@ export default function Scripting() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 16 }]} keyboardShouldPersistTaps="handled">
         <ScreenHeader lead="Your" accent="Scripting" subtitle="Write your desires as if they have already happened. ✨" />
 
         <TabPill

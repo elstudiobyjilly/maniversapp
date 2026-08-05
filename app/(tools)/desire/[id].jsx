@@ -14,6 +14,7 @@ import {
   getGratitudeList, getFeelItCards, getScripts,
 } from '../../../services/api';
 import { safeImageUri } from '../../../services/imageUri';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // One route per content type, for the section's "open full list" arrow.
 const TYPE_ROUTES = {
@@ -52,6 +53,7 @@ function DesireCover({ uri, style }) {
 }
 
 export default function DesireDetail() {
+  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const [desire, setDesire] = useState(null);
@@ -190,7 +192,7 @@ export default function DesireDetail() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 20, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 16, paddingBottom: 40 }}>
         <DesireCover uri={desire.images?.[0]} style={styles.coverImage} />
 
         {editing ? (
