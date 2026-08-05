@@ -194,7 +194,7 @@ function FeelFullScreen({ cards, index, onIndexChange, onClose, onEdit, onDelete
 
         <View style={styles.fsCardArea}>
           <GestureDetector gesture={pan}>
-            <Animated.View style={cardAnimatedStyle}>
+            <Animated.View style={[styles.fsCardAnimatedWrap, cardAnimatedStyle]}>
               <LinearGradient colors={pal.colors} start={{ x: 0.15, y: 0 }} end={{ x: 0.85, y: 1 }} style={[styles.fsCard, { borderColor: tc.border }]}>
                 {/* Heading pinned to the top of the CARD itself. */}
                 <Text style={[styles.fsDesire, { color: tc.accent }]}>✨ {card.state}</Text>
@@ -479,6 +479,11 @@ const styles = StyleSheet.create({
   // TOP of the card and the body centers within the card, rather than
   // floating anywhere across the whole screen.
   fsCardArea: { flex: 1, paddingHorizontal: 14, paddingBottom: 6 },
+  // The Animated.View wrapping the card needs its own flex:1 — the animated
+  // style object only carries transform/opacity, so without this the card's
+  // flex:1 below has no size to flex against and collapses to near-zero
+  // height (only its padding shows, as a thin bordered strip).
+  fsCardAnimatedWrap: { flex: 1 },
   fsCard: {
     flex: 1, borderRadius: radii.lg, borderWidth: 1.5,
     paddingHorizontal: 24, paddingTop: 24, paddingBottom: 20,
