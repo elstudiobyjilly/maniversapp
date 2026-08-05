@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Defs, RadialGradient, LinearGradient, Stop, Circle, Rect } from 'react-native-svg';
 import {
-  AURA_STYLES, CENTER_GLOW, STAR_DOTS, familyOn,
+  AURA_STYLES, CENTER_GLOW, STAR_DOTS, familyOn, COLOUR_FAMILIES,
 } from '../constants/auraCard';
 import { fonts } from '../constants/theme';
 
@@ -14,12 +14,46 @@ function recolorOrb(orb, shadeOverrides) {
   return { ...orb, stops: orb.stops.map((st) => [st[0], hex, st[2]]) };
 }
 
+// Fallback positions (main + 3 corners) used for any toggled-on colour
+// family that the active named style doesn't already carry an orb for —
+// every named style only bakes in 3 fixed family/orb pairs, so without
+// this a 4th toggled family (or a family the style simply doesn't use)
+// would silently never render, no matter what the user picked.
+const FAMILY_FALLBACK_POSITIONS = [
+  { cx: 0.5, cy: 0.47, r: 0.5 },
+  { cx: 0.15, cy: 0.18, r: 0.38 },
+  { cx: 0.85, cy: 0.82, r: 0.38 },
+  { cx: 0.82, cy: 0.2, r: 0.34 },
+];
+
+// Builds the full orb list for a style: the style's own baked-in orbs for
+// whichever families are toggled on, PLUS a generated orb (using the
+// family's own swatch/override colour) for any toggled-on family the style
+// doesn't define at all — so ALL currently-on colours always show, not just
+// whichever ones happen to intersect the named style's fixed 3 slots.
+function buildActiveOrbs(s, colours, shadeOverrides) {
+  const slotOrbs = [s.mainOrb, s.orb1, s.orb2];
+  const presentFamilies = new Set(slotOrbs.map((o) => o.family));
+  const orbs = slotOrbs.filter((o) => familyOn(o, colours)).map((o) => recolorOrb(o, shadeOverrides));
+
+  let posIdx = orbs.length;
+  COLOUR_FAMILIES.forEach(({ key, swatch }) => {
+    if (colours[key] !== false && colours[key] !== undefined && !presentFamilies.has(key)) {
+      const pos = FAMILY_FALLBACK_POSITIONS[posIdx % FAMILY_FALLBACK_POSITIONS.length];
+      posIdx += 1;
+      const color = shadeOverrides?.[key] || swatch;
+      orbs.push({ cx: pos.cx, cy: pos.cy, r: pos.r, family: key, stops: [[0, color, 0.55], [100, color, 0]] });
+    }
+  });
+  return orbs;
+}
+
 // ─── SVG composition — shape depends on `pattern`, colours depend on which
 // of the 4 colour families are toggled on (and optionally recoloured via
 // shadeOverrides: { purple/pink/blue/gold: hex }).
 export default function AuraCardSvg({ styleKey, size, pattern, colours, shadeOverrides }) {
   const s = AURA_STYLES[styleKey];
-  const baseOrbs = [s.mainOrb, s.orb1, s.orb2].filter((o) => familyOn(o, colours)).map((o) => recolorOrb(o, shadeOverrides));
+  const baseOrbs = buildActiveOrbs(s, colours, shadeOverrides);
   const showStars = pattern === 'cosmic' || (s.stars && pattern === 'radial');
 
   const bgFill = s.bg.type === 'solid' ? s.bg.colors[0] : `url(#bg-${styleKey})`;
