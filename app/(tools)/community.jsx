@@ -167,8 +167,8 @@ export default function Community() {
           <Text style={styles.charCount}>{content.length} / 500</Text>
 
           <View style={styles.intentionRow}>
-            <View style={{ flex: 1 }}><Dropdown label="Type" value={postType} options={TYPE_OPTIONS} onSelect={setPostType} fullWidth /></View>
-            <View style={{ flex: 1 }}><Dropdown label="Category" value={category} options={CATEGORY_OPTIONS} onSelect={setCategory} fullWidth /></View>
+            <View style={{ flex: 1 }}><Dropdown label="Type" value={postType} options={TYPE_OPTIONS} onSelect={setPostType} fullWidth compact /></View>
+            <View style={{ flex: 1 }}><Dropdown label="Category" value={category} options={CATEGORY_OPTIONS} onSelect={setCategory} fullWidth compact /></View>
           </View>
 
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
