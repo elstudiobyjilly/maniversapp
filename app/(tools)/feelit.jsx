@@ -309,7 +309,7 @@ export default function FeelIt() {
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [upgradeMsg, setUpgradeMsg] = useState('');
 
-  const [tab, setTab] = useState('generate');
+  const [tab, setTab] = useState('library');
 
   // Generate tab state — untouched, matches the website's "Feeling" tab
   const [stateInput, setStateInput] = useState('');
@@ -624,16 +624,16 @@ const styles = StyleSheet.create({
   // Card area — bounded box (not full screen) so the heading pins to the
   // TOP of the card and the body centers within the card, rather than
   // floating anywhere across the whole screen.
-  fsCardArea: { flex: 1, paddingHorizontal: 20, paddingBottom: 6, justifyContent: 'center' },
+  fsCardArea: { flex: 1, paddingHorizontal: 14, paddingBottom: 6 },
   fsCard: {
-    minHeight: SCREEN_H * 0.5, maxHeight: SCREEN_H * 0.62, borderRadius: radii.lg, borderWidth: 1.5,
-    paddingHorizontal: 26, paddingTop: 26, paddingBottom: 22,
+    flex: 1, borderRadius: radii.lg, borderWidth: 1.5,
+    paddingHorizontal: 24, paddingTop: 24, paddingBottom: 20,
     shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.12, shadowRadius: 20, elevation: 6,
   },
-  fsDesire: { fontFamily: fonts.bodyMedium, fontSize: 11, fontWeight: '700', letterSpacing: 1.4, textTransform: 'uppercase' },
+  fsDesire: { fontFamily: fonts.bodyMedium, fontSize: 12, fontWeight: '700', letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: 4 },
   fsBody: { flex: 1 },
-  fsBodyScroll: { flexGrow: 1, justifyContent: 'center', paddingVertical: 16 },
-  fsText: { fontFamily: fonts.displayItalic, fontSize: 20, fontStyle: 'italic', fontWeight: '300', lineHeight: 32 },
+  fsBodyScroll: { flexGrow: 1, paddingVertical: 10 },
+  fsText: { fontFamily: fonts.displayItalic, fontSize: 20, fontStyle: 'italic', fontWeight: '300', lineHeight: 30 },
   fsSwipeHint: { textAlign: 'center', fontFamily: fonts.body, fontSize: 11, color: colors.mist, marginBottom: 6, opacity: 0.7 },
 
   fsBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16 },
