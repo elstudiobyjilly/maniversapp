@@ -218,7 +218,31 @@ export default function DesireHub() {
         {loading ? (
           <ActivityIndicator color={colors.purpleMid} style={{ marginTop: 20 }} />
         ) : filtered.length === 0 ? (
-          <Text style={styles.muted}>No desires here yet — create your first one ✨</Text>
+          <View style={styles.emptyWrap}>
+            <Text style={styles.emptyIcon}>🌙</Text>
+            <Text style={styles.emptyTitle}>
+              {desires.length === 0 ? 'Your first desire starts here' : 'Nothing in this category yet'}
+            </Text>
+            <Text style={styles.emptyBody}>
+              {desires.length === 0
+                ? 'Name what you\'re calling in. Every affirmation, script, mind movie and vision board image can link back to it — so your whole practice points one way.'
+                : 'Try another category, or create a desire here.'}
+            </Text>
+            {desires.length === 0 && (
+              <View style={styles.emptySteps}>
+                <Text style={styles.emptyStep}>✨  Name it — one clear sentence</Text>
+                <Text style={styles.emptyStep}>🗓️  Give it a target date, if it has one</Text>
+                <Text style={styles.emptyStep}>🖼️  Add a vision image from your board</Text>
+              </View>
+            )}
+            {!addOpen && (
+              <Button
+                title="＋ Create your first desire"
+                onPress={() => setAddOpen(true)}
+                style={{ marginTop: 18 }}
+              />
+            )}
+          </View>
         ) : (
           <View style={styles.grid}>
             {filtered.map((d) => (
@@ -267,6 +291,17 @@ const styles = StyleSheet.create({
   imgPickerCell: { width: 80, height: 80, borderRadius: radii.sm },
 
   muted: { fontFamily: fonts.body, color: colors.mist, fontSize: 13, textAlign: 'center', marginTop: 20 },
+
+  emptyWrap: {
+    alignItems: 'center', paddingVertical: 34, paddingHorizontal: 26, marginTop: 8,
+    borderWidth: 1.5, borderStyle: 'dashed', borderColor: 'rgba(201,168,201,0.45)',
+    borderRadius: radii.lg, backgroundColor: 'rgba(255,255,255,0.35)',
+  },
+  emptyIcon: { fontSize: 38, marginBottom: 12 },
+  emptyTitle: { fontFamily: fonts.displayMedium, fontSize: 18, color: colors.ink, textAlign: 'center' },
+  emptyBody: { fontFamily: fonts.body, fontSize: 12.5, color: colors.mist, textAlign: 'center', lineHeight: 20, marginTop: 8 },
+  emptySteps: { marginTop: 18, gap: 9, alignSelf: 'stretch' },
+  emptyStep: { fontFamily: fonts.body, fontSize: 12.5, color: colors.ink2, lineHeight: 18 },
 
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: '2%' },
   card: { backgroundColor: 'rgba(255,255,255,0.55)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.25)', borderRadius: radii.sm, overflow: 'hidden', marginBottom: 12 },

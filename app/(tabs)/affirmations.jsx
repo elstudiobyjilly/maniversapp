@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
@@ -7,7 +7,7 @@ import {
   generateAffirmation, getAffirmations, getAffirmationAudio,
   favoriteAffirmation, pinAffirmation, deleteAffirmation, getPinnedSets,
   saveOwnAffirmationSet, getAffirmationAudioStatus, createCheckout,
-  getDailyIntention, saveDailyIntention,
+  getDailyIntention, saveDailyIntention, startSession, completeSession,
 } from '../../services/api';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
@@ -86,6 +86,9 @@ export default function Affirmations() {
   const [error, setError] = useState('');
   const [sound, setSound] = useState(null);
   const [playing, setPlaying] = useState(false);
+  // Open /sessions row for the run currently playing, completed when the
+  // audio finishes naturally (matching the website's activeSessId).
+  const activeSessionId = useRef(null);
 
   // Write-your-own state
   const [ownTitle, setOwnTitle] = useState('');
@@ -138,7 +141,13 @@ export default function Affirmations() {
 
   useEffect(() => { if (topTab === 'hub') loadLibrary(); }, [topTab]);
 
-  const stopSound = async () => { if (sound) { try { await sound.unloadAsync(); } catch (_) {} } setSound(null); setPlaying(false); };
+  // Stopping early leaves the session row open-but-incomplete, exactly like
+  // the website — total_sessions still counts it, completed_sessions doesn't.
+  const stopSound = async () => {
+    if (sound) { try { await sound.unloadAsync(); } catch (_) {} }
+    activeSessionId.current = null;
+    setSound(null); setPlaying(false);
+  };
 
   const markRecentlyPlayed = useCallback(async (id) => {
     if (!id) return;
@@ -229,7 +238,25 @@ export default function Affirmations() {
       }
       const { sound: newSound } = await Audio.Sound.createAsync({ uri }, { shouldPlay: true });
       setSound(newSound);
-      newSound.setOnPlaybackStatusUpdate((status) => { if (status.didJustFinish) setPlaying(false); });
+
+      // Open a tracked listening session — this is what feeds the Tracker's
+      // totals, streak and days-practiced. Best-effort: a failure here must
+      // never stop playback.
+      try {
+        const sess = await startSession({ affirmationId: itemId || null, repeatTarget: repeatCount });
+        activeSessionId.current = sess?.id ?? null;
+      } catch (_) { activeSessionId.current = null; }
+
+      newSound.setOnPlaybackStatusUpdate((status) => {
+        if (status.didJustFinish) {
+          setPlaying(false);
+          const id = activeSessionId.current;
+          if (id) {
+            activeSessionId.current = null;
+            completeSession(id, repeatCount).catch(() => {});
+          }
+        }
+      });
       if (itemId) markRecentlyPlayed(itemId);
     } catch (e) {
       setError(e.message || 'Could not play audio');

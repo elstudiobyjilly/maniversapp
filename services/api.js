@@ -733,6 +733,34 @@ export async function getSessionStats() {
   return req('GET', '/sessions/stats');
 }
 
+// A "session" is one affirmation listening run. The Tracker's totals,
+// streak and days-practiced all derive from these rows, so the player must
+// start one when playback begins and complete it when playback finishes --
+// exactly what the website does in life.js.
+export async function startSession({ affirmationId = null, repeatTarget = 1, mode = 'listen' }) {
+  return req('POST', '/sessions/start', {
+    affirmation_id: affirmationId,
+    repeat_target: Math.max(1, Math.min(108, repeatTarget || 1)),
+    mode,
+  });
+}
+
+export async function completeSession(sessionId, repeatDone) {
+  return req('PUT', `/sessions/${sessionId}/complete`, { repeat_done: repeatDone });
+}
+
+// ── VOICE LOCK (Basic / Founding switchable voice) ───────────────────
+// Free is locked to Luna and Pro has every voice, so /voice/select only
+// applies to the single-voice plans -- getVoiceStatus() says which case
+// the current user is in, plus the 30-day switch cooldown.
+export async function getVoiceStatus() {
+  return req('GET', '/voice/status');
+}
+
+export async function selectVoice(voiceId) {
+  return req('PATCH', '/voice/select', { voice_id: voiceId });
+}
+
 // ── SUBSCRIPTIONS ─────────────────────────────────────────────────────
 export async function getSubscriptionStatus() {
   return req('GET', '/subscriptions/status');

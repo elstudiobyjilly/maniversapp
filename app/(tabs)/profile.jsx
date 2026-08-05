@@ -9,6 +9,7 @@ import { useAuthStore } from '../../store/authStore';
 import {
   getProfile, updateProfile, getSubscriptionStatus, cancelSubscription, reactivateSubscription,
   openBillingPortal, createCheckout, changePassword, deleteAccount, submitFeedback,
+  getVoiceStatus, selectVoice,
 } from '../../services/api';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
@@ -61,8 +62,14 @@ export default function Profile() {
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
 
-  // Voice
+  // Voice. The narration voice is a real server-side setting for the
+  // single-voice plans (Basic / Founding) — /voice/status says whether this
+  // account can switch and when. Free is locked to Luna, Pro has all three,
+  // so for them the picker is display-only. The secondary (device TTS) voice
+  // and its speed are genuinely local-only, so those stay in AsyncStorage.
   const [voiceId, setVoiceId] = useState('luna');
+  const [voiceState, setVoiceState] = useState(null);
+  const [voiceMsg, setVoiceMsg] = useState('');
   const [lockVoice, setLockVoice] = useState(true);
   const [secondaryVoiceId, setSecondaryVoiceId] = useState('system');
   const [voiceSpeed, setVoiceSpeed] = useState(1.0);
@@ -104,6 +111,44 @@ export default function Profile() {
         if (p.colorTheme) setColorTheme(p.colorTheme);
       }
     } catch (_) {}
+    // Server truth wins over the cached local pick for the narration voice.
+    try {
+      const vs = await getVoiceStatus();
+      setVoiceState(vs);
+      if (vs?.current_voice) setVoiceId(vs.current_voice);
+    } catch (_) {}
+  };
+
+  const handlePickVoice = async (id) => {
+    setVoiceMsg('');
+    // Device-TTS "System" isn't a server voice — it stays a local preference.
+    if (id === 'system') { setVoiceId(id); persistPrefs({ voiceId: id }); return; }
+
+    if (voiceState && !voiceState.switchable) {
+      if (voiceState.reason === 'free_plan') {
+        setVoiceMsg('Free plan is set to Luna — upgrade to choose another voice ✨');
+      } else {
+        // Pro: all voices are available per-generation, nothing to lock.
+        setVoiceId(id); persistPrefs({ voiceId: id });
+      }
+      return;
+    }
+    if (voiceState && !voiceState.can_switch_now) {
+      setVoiceMsg(`You can switch again in ${voiceState.days_until_next_switch} day${voiceState.days_until_next_switch === 1 ? '' : 's'}.`);
+      return;
+    }
+    const prev = voiceId;
+    setVoiceId(id);
+    try {
+      await selectVoice(id);
+      persistPrefs({ voiceId: id });
+      setVoiceMsg('Voice updated ✨');
+      try { setVoiceState(await getVoiceStatus()); } catch (_) {}
+      setTimeout(() => setVoiceMsg(''), 2500);
+    } catch (e) {
+      setVoiceId(prev);
+      setVoiceMsg(e.message || 'Could not change your voice.');
+    }
   };
 
   useEffect(() => { load().finally(() => setLoading(false)); }, []);
@@ -282,9 +327,21 @@ export default function Profile() {
               <Text style={styles.helperText}>One voice for all narration — Affirmations, Stories & Mind Movies — so you never have to pick each time.</Text>
               <View style={styles.chipRow}>
                 {VOICES.map((v) => (
-                  <Chip key={v.id} label={v.label} active={voiceId === v.id} onPress={() => { setVoiceId(v.id); persistPrefs({ voiceId: v.id }); }} />
+                  <Chip key={v.id} label={v.label} active={voiceId === v.id} onPress={() => handlePickVoice(v.id)} />
                 ))}
               </View>
+              {voiceMsg ? <Text style={styles.voiceMsg}>{voiceMsg}</Text> : null}
+              {voiceState?.switchable ? (
+                <Text style={styles.helperText}>
+                  {voiceState.can_switch_now
+                    ? `Your plan locks one narration voice — you can change it once every ${voiceState.cooldown_days} days.`
+                    : `Locked to ${voiceState.current_voice_label || voiceState.current_voice} — switch again in ${voiceState.days_until_next_switch} day${voiceState.days_until_next_switch === 1 ? '' : 's'}.`}
+                </Text>
+              ) : voiceState?.reason === 'free_plan' ? (
+                <Text style={styles.helperText}>🔒 Free plan narrates with Luna — upgrade to unlock Orion and Sage.</Text>
+              ) : voiceState?.reason === 'all_voices' ? (
+                <Text style={styles.helperText}>✨ Your plan includes every voice — switch anytime, no cooldown.</Text>
+              ) : null}
               <TouchableOpacity style={styles.checkRow} onPress={() => { const next = !lockVoice; setLockVoice(next); persistPrefs({ lockVoice: next }); }}>
                 <View style={[styles.checkbox, lockVoice && styles.checkboxOn]}>{lockVoice && <Text style={styles.checkmark}>✓</Text>}</View>
                 <Text style={styles.checkLabel}>Lock a voice for all narration</Text>
@@ -464,6 +521,7 @@ const styles = StyleSheet.create({
   label: { fontFamily: fonts.bodyMedium, fontSize: 10.5, color: colors.purpleDark, fontWeight: '700', letterSpacing: 0.6, marginBottom: 8, textTransform: 'uppercase' },
   sectionLabel: { fontFamily: fonts.bodyMedium, fontSize: 11, color: colors.purpleDark, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 10, marginTop: 4 },
   helperText: { fontFamily: fonts.body, fontSize: 12, color: colors.mist, lineHeight: 17, marginBottom: 12 },
+  voiceMsg: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.purpleDark, marginTop: 10, fontWeight: '600' },
   muted: { fontFamily: fonts.body, color: colors.mist, fontSize: 12 },
 
   avatar: { width: 72, height: 72, borderRadius: 36, alignSelf: 'center', alignItems: 'center', justifyContent: 'center', marginBottom: 10 },

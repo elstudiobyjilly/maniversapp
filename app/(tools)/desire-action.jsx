@@ -15,62 +15,13 @@ import {
 import UpgradeModal from '../../components/UpgradeModal';
 import { usePlanStore } from '../../store/planStore';
 import * as Linking from 'expo-linking';
+// Shared with the Home dashboard's Desire Action widget so both read/write
+// the same /roadmap + /roadmap/log records with identical day bridging.
+import {
+  CURRENT_KEY, START_KEY_PREFIX, DURATIONS, PRACTICE_OPTIONS, DEFAULT_PRACTICES,
+  DAY_LETTERS, toDateKey, startOfDay, addDays, fmtShort, buildLogsMap, dayNumberFor,
+} from '../../constants/desireAction';
 
-// Roadmap (the desire + duration + practice list) and its day logs live on
-// the real /roadmap + /roadmap/log backend, matching the website. The
-// backend has no "start date" field for a roadmap, so we anchor each one's
-// calendar grid locally -- this is the only thing still stored on-device.
-const CURRENT_KEY = 'mv_dt_current';
-const START_KEY_PREFIX = 'mv_dt_start_';
-
-const DURATIONS = [7, 21, 30, 40, 66];
-const PRACTICE_OPTIONS = [
-  'Scripting', 'Visualisation', '369 Method', 'Gratitude', 'Meditation', 'Feel It',
-  'Mirror Work', "Ho'oponopono", 'Affirmations', '5×55 Method', 'Pillow Method',
-  'Two Cup Method', 'Water Manifestation', 'EFT Tapping', 'Future Self Journaling',
-  'Subliminal Listening', 'Vision Board',
-];
-const DEFAULT_PRACTICES = ['Scripting', 'Visualisation', 'Gratitude'];
-const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-
-function toDateKey(d) {
-  return d.toISOString().slice(0, 10);
-}
-function startOfDay(d) {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
-function addDays(d, n) {
-  const x = new Date(d);
-  x.setDate(x.getDate() + n);
-  return x;
-}
-function fmtShort(d) {
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-}
-
-// Map { [dateKey]: {id, practices:{name:true}, note} } derived from the raw
-// /roadmap/log/ list, keeping only logs whose `desire` text matches the
-// given roadmap's title (the backend has no roadmap_id FK, so text is the
-// only association it stores).
-function buildLogsMap(rawLogs, desireTitle) {
-  const map = {};
-  for (const log of rawLogs) {
-    if (log.desire !== desireTitle) continue;
-    const dateKey = (log.log_date || '').slice(0, 10);
-    if (!dateKey) continue;
-    const practices = {};
-    (log.practices || []).forEach((p) => { practices[p] = true; });
-    map[dateKey] = { id: log.id, practices, note: log.action || '' };
-  }
-  return map;
-}
-
-function dayNumberFor(dateKey, startDate) {
-  const diff = Math.round((startOfDay(new Date(dateKey)) - startOfDay(new Date(startDate))) / 86400000) + 1;
-  return Math.max(1, Math.min(40, diff)); // backend day logs are capped 1-40
-}
 
 export default function DesireActionTool() {
   const { refresh } = usePlanStore();
