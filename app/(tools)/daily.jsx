@@ -118,7 +118,7 @@ export default function Daily() {
         <View ref={contentRef} collapsable={false}>
           <ScreenHeader lead="Daily" accent="Energy" subtitle="Your message for today. Your oracle pull. Your energy. ✨" />
 
-          <GlassCard style={styles.cardMargin}>
+          <GlassCard style={styles.cardMargin} contentStyle={styles.messageCardContent}>
             <Text style={styles.label}>✨ TODAY'S MESSAGE</Text>
             <Text style={styles.messageText}>"{todaysMessage}"</Text>
             <Text style={styles.dateText}>{todaysDate}</Text>
@@ -130,7 +130,7 @@ export default function Daily() {
 
           <Text style={styles.sectionHeading}>🔮 Oracle Pull</Text>
           <Text style={styles.sectionSub}>Quiet your mind. Hold your question. Then tap a card.</Text>
-          <View style={styles.btnRow}>
+          <View style={[styles.btnRow, styles.oracleControlsRow]}>
             <Button title="🔀 Shuffle Deck" size="sm" variant="ghost" onPress={handleShuffleOracle} />
             <Button title="✕ Clear" size="sm" variant="ghost" onPress={handleClearOracle} />
           </View>
@@ -207,7 +207,7 @@ export default function Daily() {
               </View>
             </GlassCard>
           ) : horoscope ? (
-            <View style={styles.horoscopeCard}>
+            <GlassCard style={styles.horoscopeCard} tint="light">
               <View style={styles.horoscopeHead}>
                 <Text style={styles.horoscopeGlyph}>{STAR_SIGNS.find((s) => s.name === starSign)?.glyph}</Text>
                 <View style={{ flex: 1 }}>
@@ -246,7 +246,7 @@ export default function Daily() {
                   <Text style={styles.horoscopeActionBtnText}>🔊 Read Aloud</Text>
                 </TouchableOpacity>
               </View>
-            </View>
+            </GlassCard>
           ) : null}
         </View>
 
@@ -258,10 +258,12 @@ export default function Daily() {
 
 const styles = StyleSheet.create({
   cardMargin: { marginBottom: 20 },
+  messageCardContent: { paddingVertical: 28, paddingHorizontal: 24 },
   label: { fontFamily: fonts.bodyMedium, fontSize: 10.5, color: colors.purpleDark, fontWeight: '700', letterSpacing: 0.6, marginBottom: 10, textTransform: 'uppercase', textAlign: 'center' },
-  messageText: { fontFamily: fonts.displayItalic, fontSize: 18, color: colors.ink, fontStyle: 'italic', textAlign: 'center', lineHeight: 27, marginBottom: 10 },
+  messageText: { fontFamily: fonts.displayItalic, fontSize: 22, color: colors.ink, fontStyle: 'italic', textAlign: 'center', lineHeight: 32, marginBottom: 12 },
   dateText: { fontFamily: fonts.body, fontSize: 11.5, color: colors.mist, textAlign: 'center', marginBottom: 14 },
   btnRow: { flexDirection: 'row', gap: 8 },
+  oracleControlsRow: { marginBottom: 16 },
 
   sectionHeading: { fontFamily: fonts.displayMedium, fontSize: 18, color: colors.ink, fontWeight: '600', marginBottom: 4 },
 
@@ -287,30 +289,30 @@ const styles = StyleSheet.create({
   oracleRevealIcon: { fontSize: 34, textAlign: 'center', marginBottom: 6 },
   oracleRevealName: { fontFamily: fonts.display, fontSize: 20, color: colors.ink, textAlign: 'center', marginBottom: 2 },
   oracleRevealKeyword: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.purpleDark, textAlign: 'center', marginBottom: 12, fontWeight: '600' },
-  oracleRevealMsg: { fontFamily: fonts.body, fontSize: 14, color: colors.ink2, lineHeight: 21, marginBottom: 12 },
-  oracleRevealAction: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.purpleDark, lineHeight: 19, marginBottom: 14, fontWeight: '600' },
+  oracleRevealMsg: { fontFamily: fonts.body, fontSize: 14, color: colors.ink2, lineHeight: 21, marginBottom: 12, textAlign: 'center' },
+  oracleRevealAction: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.purpleDark, lineHeight: 19, marginBottom: 14, fontWeight: '600', textAlign: 'center' },
 
   horoscopeAwaits: { fontFamily: fonts.displayMedium, fontSize: 17, color: colors.ink, textAlign: 'center', marginBottom: 6 },
   signGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center', marginTop: 8 },
   signChip: { backgroundColor: 'rgba(255,255,255,0.6)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.35)', borderRadius: radii.pill, paddingVertical: 9, paddingHorizontal: 14 },
   signChipText: { fontFamily: fonts.bodyMedium, fontSize: 12.5, color: colors.ink2, fontWeight: '500' },
 
-  horoscopeCard: { backgroundColor: '#1a0f2e', borderRadius: radii.lg, padding: 20, marginBottom: 20 },
+  horoscopeCard: { marginBottom: 20, backgroundColor: 'rgba(255,209,232,0.16)', borderColor: 'rgba(248,184,200,0.35)' },
   horoscopeHead: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
-  horoscopeGlyph: { fontSize: 30, color: '#fff' },
-  horoscopeSign: { fontFamily: fonts.display, fontSize: 19, color: '#fff', fontWeight: '400' },
-  horoscopeDate: { fontFamily: fonts.body, fontSize: 10, color: 'rgba(255,255,255,0.5)', letterSpacing: 1, marginTop: 2 },
-  changeBtn: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', borderRadius: radii.pill, paddingVertical: 5, paddingHorizontal: 12 },
-  changeBtnText: { fontFamily: fonts.bodyMedium, fontSize: 11, color: 'rgba(255,255,255,0.6)' },
+  horoscopeGlyph: { fontSize: 30, color: colors.purpleDark },
+  horoscopeSign: { fontFamily: fonts.display, fontSize: 19, color: colors.ink, fontWeight: '400' },
+  horoscopeDate: { fontFamily: fonts.body, fontSize: 10, color: colors.mist, letterSpacing: 1, marginTop: 2 },
+  changeBtn: { borderWidth: 1, borderColor: 'rgba(154,95,168,0.25)', borderRadius: radii.pill, paddingVertical: 5, paddingHorizontal: 12 },
+  changeBtnText: { fontFamily: fonts.bodyMedium, fontSize: 11, color: colors.purpleDark },
 
-  horoscopeLabel: { fontFamily: fonts.bodyMedium, fontSize: 10.5, color: 'rgba(220,160,255,0.8)', fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 5, marginTop: 12 },
-  horoscopeEnergy: { fontFamily: fonts.displayItalic, fontSize: 15.5, color: '#fff', fontStyle: 'italic', lineHeight: 23 },
-  horoscopeBody: { fontFamily: fonts.body, fontSize: 13.5, color: 'rgba(255,255,255,0.85)', lineHeight: 20 },
-  horoscopeQuoteBox: { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: radii.sm, padding: 14, marginTop: 14, marginBottom: 14 },
-  horoscopeQuote: { fontFamily: fonts.displayItalic, fontSize: 16, color: '#fff', fontStyle: 'italic', textAlign: 'center', lineHeight: 23 },
+  horoscopeLabel: { fontFamily: fonts.bodyMedium, fontSize: 10.5, color: colors.purpleDark, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 5, marginTop: 12 },
+  horoscopeEnergy: { fontFamily: fonts.displayItalic, fontSize: 15.5, color: colors.ink, fontStyle: 'italic', lineHeight: 23 },
+  horoscopeBody: { fontFamily: fonts.body, fontSize: 13.5, color: colors.ink2, lineHeight: 20 },
+  horoscopeQuoteBox: { backgroundColor: 'rgba(255,255,255,0.5)', borderRadius: radii.sm, padding: 14, marginTop: 14, marginBottom: 14 },
+  horoscopeQuote: { fontFamily: fonts.displayItalic, fontSize: 16, color: colors.ink, fontStyle: 'italic', textAlign: 'center', lineHeight: 23 },
   horoscopeMetaRow: { flexDirection: 'row', gap: 18, marginBottom: 16 },
-  horoscopeMeta: { fontFamily: fonts.body, fontSize: 12.5, color: 'rgba(255,255,255,0.75)' },
-  horoscopeMetaBold: { fontFamily: fonts.bodyMedium, fontWeight: '700', color: '#fff' },
-  horoscopeActionBtn: { flex: 1, backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', borderRadius: radii.pill, paddingVertical: 8, alignItems: 'center' },
-  horoscopeActionBtnText: { fontFamily: fonts.bodyMedium, fontSize: 11.5, color: '#fff', fontWeight: '600' },
+  horoscopeMeta: { fontFamily: fonts.body, fontSize: 12.5, color: colors.ink2 },
+  horoscopeMetaBold: { fontFamily: fonts.bodyMedium, fontWeight: '700', color: colors.ink },
+  horoscopeActionBtn: { flex: 1, backgroundColor: 'rgba(255,255,255,0.5)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.35)', borderRadius: radii.pill, paddingVertical: 8, alignItems: 'center' },
+  horoscopeActionBtnText: { fontFamily: fonts.bodyMedium, fontSize: 11.5, color: colors.purpleDark, fontWeight: '600' },
 });
