@@ -311,16 +311,16 @@ const styles = StyleSheet.create({
   subHeading: { fontFamily: fonts.bodyMedium, fontSize: 10.5, color: colors.mist, fontWeight: '600', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 },
 
   dayRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.6)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.2)', borderRadius: radii.sm, paddingVertical: 16, paddingHorizontal: 14, marginBottom: 3, minHeight: 58 },
-  dayRowLabel: { fontFamily: fonts.body, fontSize: 12.5, color: colors.ink2 },
+  dayRowLabel: { fontFamily: fonts.body, fontSize: 14, color: colors.ink2 },
   dayRowActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   readBtn: { backgroundColor: colors.purpleMid, borderRadius: radii.pill, paddingVertical: 4, paddingHorizontal: 10 },
   readBtnText: { color: '#fff', fontSize: 10.5, fontWeight: '600' },
   iconText: { fontSize: 13, color: colors.mist },
-  expandedText: { fontFamily: fonts.displayItalic, fontSize: 14.5, color: colors.ink2, fontStyle: 'italic', lineHeight: 21, backgroundColor: 'rgba(255,255,255,0.4)', borderRadius: radii.sm, padding: 12, marginBottom: 8 },
+  expandedText: { fontFamily: fonts.displayItalic, fontSize: 16, color: colors.ink2, fontStyle: 'italic', lineHeight: 23, backgroundColor: 'rgba(255,255,255,0.4)', borderRadius: radii.sm, padding: 12, marginBottom: 8 },
 
   weekWrap: { marginBottom: 8 },
   weekHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(245,240,252,0.6)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.25)', borderRadius: radii.sm, paddingVertical: 9, paddingHorizontal: 12, marginBottom: 6 },
-  weekLabel: { fontFamily: fonts.displayMedium, fontSize: 13, color: colors.purpleDark },
+  weekLabel: { fontFamily: fonts.displayMedium, fontSize: 14.5, color: colors.purpleDark },
   weekChevron: { fontSize: 12, color: colors.mist },
 
   dreamIntro: { fontFamily: fonts.displayMedium, fontSize: 17, color: colors.ink, marginBottom: 4 },
