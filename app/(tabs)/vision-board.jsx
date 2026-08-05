@@ -17,12 +17,18 @@ import { colors, fonts, radii, shadows } from '../../constants/theme';
 import * as Linking from 'expo-linking';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
+const SCREEN_HEIGHT = Dimensions.get('window').height;
 const CANVAS_WIDTH = SCREEN_WIDTH * 1.6;
 const CANVAS_HEIGHT = 1000;
 // The board's visible frame — fixed size, matches the website. Zooming
 // scales/pans the content inside this frame; the frame itself never resizes.
 const VIEWPORT_WIDTH = SCREEN_WIDTH - 32;
-const VIEWPORT_HEIGHT = 500;
+// Was a flat 500px regardless of screen size, which left a large dead strip
+// of empty space below the board on taller phones and tablets. Now fills
+// the space actually left after the header/toolbar/controls above it and
+// the "+ Add Image" bar below, with sane floor/ceiling so it never gets
+// too cramped or absurdly tall.
+const VIEWPORT_HEIGHT = Math.max(420, Math.min(900, SCREEN_HEIGHT - 380));
 const ITEM_SIZE = 120;
 // Zoom range for the board viewport. Max was 2x, which wasn't enough to
 // actually inspect a busy board.
@@ -38,7 +44,12 @@ const CATEGORIES = ['💰 Wealth', '💕 Love', '🌿 Health', '🚀 Career', '�
 // picker hands over `image`. Reading only `url` left website-authored
 // items rendering blank, so accept all three like the site does.
 function itemUri(item) {
-  return item?.url || item?.src || item?.image || '';
+  const candidate = item?.url || item?.src || item?.image || '';
+  // Guard against a non-string value (e.g. a nested {url,...} object under
+  // `image`) reaching <Image>, which fails to load immediately with no
+  // useful error — every tile would show the fallback at once, which is
+  // exactly the "nothing loads" symptom this was likely causing.
+  return typeof candidate === 'string' ? candidate : (candidate?.url || candidate?.src || '');
 }
 
 // An item's image URL can 404 or expire (R2 objects are replaceable) — show
