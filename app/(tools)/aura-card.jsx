@@ -32,6 +32,7 @@ export default function AuraCard() {
   // touch a control again.
   const [quote, setQuote] = useState(AURA_AFFIRMATIONS[0]);
   const [cardHidden, setCardHidden] = useState(false);
+  const [customHex, setCustomHex] = useState('');
   const [error, setError] = useState('');
   const [downloading, setDownloading] = useState(false);
   const [sharing, setSharing] = useState(false);
@@ -92,6 +93,18 @@ export default function AuraCard() {
     setColours((prev) => ({ ...prev, [key]: true }));
     setPickerFor(null);
     setCardHidden(false);
+    setCustomHex('');
+  };
+
+  const handleApplyCustomHex = () => {
+    if (!pickerFor) return;
+    const hex = customHex.trim().replace(/^#?/, '#');
+    if (!/^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/.test(hex)) {
+      setError('Enter a valid hex colour, e.g. #ff8cba');
+      return;
+    }
+    setError('');
+    pickShade(pickerFor, hex);
   };
   const handleResetColours = () => {
     setColours({ purple: true, pink: true, blue: true, gold: true });
@@ -203,11 +216,31 @@ export default function AuraCard() {
             ))}
           </View>
           {pickerFor && (
-            <View style={styles.shadeRow}>
-              {FAMILY_SHADES[pickerFor].map((hex) => (
-                <TouchableOpacity key={hex} style={[styles.shadeSwatch, { backgroundColor: hex }]} onPress={() => pickShade(pickerFor, hex)} />
-              ))}
-            </View>
+            <>
+              <View style={styles.shadeRow}>
+                {FAMILY_SHADES[pickerFor].map((hex) => (
+                  <TouchableOpacity key={hex} style={[styles.shadeSwatch, { backgroundColor: hex }]} onPress={() => pickShade(pickerFor, hex)} />
+                ))}
+              </View>
+              {/* Presets are a fixed palette — this lets you pick literally
+                  any colour instead of being limited to those swatches. */}
+              <View style={styles.customHexRow}>
+                <View style={[styles.customHexPreview, /^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/.test(customHex.trim()) && { backgroundColor: customHex.trim() }]} />
+                <TextInput
+                  style={styles.customHexInput}
+                  value={customHex}
+                  onChangeText={setCustomHex}
+                  placeholder="Any colour — #ff8cba"
+                  placeholderTextColor={colors.mist2}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  maxLength={7}
+                />
+                <TouchableOpacity style={styles.customHexApply} onPress={handleApplyCustomHex}>
+                  <Text style={styles.customHexApplyText}>Use</Text>
+                </TouchableOpacity>
+              </View>
+            </>
           )}
 
           <Text style={[styles.label, { marginTop: 16 }]}>PATTERN</Text>
@@ -304,6 +337,15 @@ const styles = StyleSheet.create({
   colourOnText: { fontFamily: fonts.bodyMedium, fontSize: 10, color: colors.ink2, fontWeight: '600' },
   shadeRow: { flexDirection: 'row', gap: 10, marginTop: 10, marginBottom: 4 },
   shadeSwatch: { width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(0,0,0,0.12)' },
+  customHexRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
+  customHexPreview: { width: 26, height: 26, borderRadius: 13, borderWidth: 1, borderColor: 'rgba(0,0,0,0.12)', backgroundColor: 'rgba(0,0,0,0.05)' },
+  customHexInput: {
+    flex: 1, fontFamily: fonts.body, fontSize: 13, color: colors.ink,
+    backgroundColor: 'rgba(255,255,255,0.5)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)',
+    borderRadius: radii.pill, paddingVertical: 7, paddingHorizontal: 14,
+  },
+  customHexApply: { backgroundColor: 'rgba(201,168,201,0.25)', borderRadius: radii.pill, paddingVertical: 7, paddingHorizontal: 14 },
+  customHexApplyText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.purpleDark, fontWeight: '700' },
 
   errorText: { color: '#c04040', fontSize: 13, marginBottom: 10, textAlign: 'center' },
   infoText: { color: '#9a5fa8', fontSize: 12, textAlign: 'center', marginBottom: 12 },
