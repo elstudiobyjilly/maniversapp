@@ -166,9 +166,9 @@ export default function Community() {
           />
           <Text style={styles.charCount}>{content.length} / 500</Text>
 
-          <View style={{ gap: 8, marginTop: 12 }}>
-            <Dropdown label="Type" value={postType} options={TYPE_OPTIONS} onSelect={setPostType} fullWidth />
-            <Dropdown label="Category" value={category} options={CATEGORY_OPTIONS} onSelect={setCategory} fullWidth />
+          <View style={styles.intentionRow}>
+            <View style={{ flex: 1 }}><Dropdown label="Type" value={postType} options={TYPE_OPTIONS} onSelect={setPostType} fullWidth /></View>
+            <View style={{ flex: 1 }}><Dropdown label="Category" value={category} options={CATEGORY_OPTIONS} onSelect={setCategory} fullWidth /></View>
           </View>
 
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -180,13 +180,13 @@ export default function Community() {
         </GlassCard>
 
         <View style={styles.filterTopRow}>
-          <TouchableOpacity style={[styles.filterPill, typeFilter === 'all' && categoryFilter === 'all' && !mineOnly && styles.filterPillActive]} onPress={() => { setTypeFilter('all'); setCategoryFilter('all'); setMineOnly(false); }}>
-            <Text style={[styles.filterPillText, typeFilter === 'all' && categoryFilter === 'all' && !mineOnly && styles.filterPillTextActive]}>All</Text>
+          <TouchableOpacity style={[styles.filterPillSm, typeFilter === 'all' && categoryFilter === 'all' && !mineOnly && styles.filterPillActive]} onPress={() => { setTypeFilter('all'); setCategoryFilter('all'); setMineOnly(false); }}>
+            <Text style={[styles.filterPillTextSm, typeFilter === 'all' && categoryFilter === 'all' && !mineOnly && styles.filterPillTextActive]}>All</Text>
           </TouchableOpacity>
-          <View style={styles.filterGridItem}><Dropdown label="🎉 Type" value={typeFilter} options={TYPE_FILTER_OPTIONS} onSelect={setTypeFilter} fullWidth /></View>
-          <View style={styles.filterGridItem}><Dropdown label="🌸 Category" value={categoryFilter} options={CATEGORY_FILTER_OPTIONS} onSelect={setCategoryFilter} fullWidth /></View>
-          <TouchableOpacity style={[styles.filterPill, mineOnly && styles.filterPillActive]} onPress={() => setMineOnly(!mineOnly)}>
-            <Text style={[styles.filterPillText, mineOnly && styles.filterPillTextActive]}>Mine</Text>
+          <View style={styles.filterGridItem}><Dropdown label="Type" value={typeFilter} options={TYPE_FILTER_OPTIONS} onSelect={setTypeFilter} fullWidth compact /></View>
+          <View style={styles.filterGridItem}><Dropdown label="Category" value={categoryFilter} options={CATEGORY_FILTER_OPTIONS} onSelect={setCategoryFilter} fullWidth compact /></View>
+          <TouchableOpacity style={[styles.filterPillSm, mineOnly && styles.filterPillActive]} onPress={() => setMineOnly(!mineOnly)}>
+            <Text style={[styles.filterPillTextSm, mineOnly && styles.filterPillTextActive]}>Mine</Text>
           </TouchableOpacity>
         </View>
 
@@ -246,12 +246,15 @@ const styles = StyleSheet.create({
   charCount: { fontFamily: fonts.body, fontSize: 11, color: colors.mist2, textAlign: 'right', marginTop: 6 },
   errorText: { fontFamily: fonts.body, color: colors.danger, fontSize: 13, marginTop: 10, textAlign: 'center' },
   shareRow: { flexDirection: 'row', gap: 8, marginTop: 14 },
-  filterTopRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16, justifyContent: 'center' },
-  filterGridItem: { width: '48%' },
+  intentionRow: { flexDirection: 'row', gap: 8, marginTop: 12, alignItems: 'center' },
+  filterTopRow: { flexDirection: 'row', flexWrap: 'nowrap', gap: 6, marginBottom: 16 },
+  filterGridItem: { flex: 1.3, minWidth: 0 },
   filterPill: { width: '48%', backgroundColor: 'rgba(255,255,255,0.55)', borderRadius: 50, paddingVertical: 8, paddingHorizontal: 14, borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)', alignItems: 'center' },
   filterPillActive: { backgroundColor: '#c9a8c9', borderColor: '#c9a8c9' },
   filterPillText: { color: '#2e2530', fontSize: 11.5, fontWeight: '500' },
   filterPillTextActive: { color: '#fff', fontWeight: '700' },
+  filterPillSm: { flex: 0.7, backgroundColor: 'rgba(255,255,255,0.55)', borderRadius: 50, paddingVertical: 7, paddingHorizontal: 8, borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)', alignItems: 'center', minWidth: 0 },
+  filterPillTextSm: { color: '#2e2530', fontSize: 10.5, fontWeight: '500' },
   muted: { color: '#6b5c66', fontSize: 13, textAlign: 'center', marginTop: 20 },
 
   feedCard: { marginBottom: 12 },

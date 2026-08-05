@@ -6,7 +6,7 @@ import { colors, fonts, radii, shadows } from '../constants/theme';
 // popover positioned just below it, on top of the page (matches the
 // website's floating panel). It never pushes surrounding content down like
 // an inline accordion would.
-export default function Dropdown({ label, value, options, onSelect, fullWidth, disabled }) {
+export default function Dropdown({ label, value, options, onSelect, fullWidth, disabled, compact }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
   const triggerRef = useRef(null);
@@ -27,12 +27,12 @@ export default function Dropdown({ label, value, options, onSelect, fullWidth, d
     <View style={fullWidth ? { width: '100%' } : undefined}>
       <TouchableOpacity
         ref={triggerRef}
-        style={[styles.trigger, fullWidth && styles.triggerFullWidth, disabled && styles.triggerDisabled]}
+        style={[styles.trigger, fullWidth && styles.triggerFullWidth, compact && styles.triggerCompact, disabled && styles.triggerDisabled]}
         onPress={openMenu}
         disabled={disabled}
       >
-        <Text style={[styles.triggerText, disabled && styles.triggerTextDisabled]} numberOfLines={1}>{selectedLabel}</Text>
-        {!disabled && <Text style={[styles.chevron, open && styles.chevronOpen]}>▾</Text>}
+        <Text style={[styles.triggerText, compact && styles.triggerTextCompact, disabled && styles.triggerTextDisabled]} numberOfLines={1}>{selectedLabel}</Text>
+        {!disabled && <Text style={[styles.chevron, compact && styles.chevronCompact, open && styles.chevronOpen]}>▾</Text>}
       </TouchableOpacity>
 
       {open && pos && (
@@ -79,10 +79,13 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)',
   },
   triggerFullWidth: { width: '100%' },
+  triggerCompact: { paddingVertical: 6, paddingHorizontal: 10, gap: 3 },
   triggerDisabled: { opacity: 0.55 },
   triggerText: { fontFamily: fonts.bodyMedium, color: colors.ink, fontSize: 12.5, fontWeight: '500' },
+  triggerTextCompact: { fontSize: 10.5 },
   triggerTextDisabled: { color: colors.mist2 },
   chevron: { color: colors.mist2, fontSize: 12 },
+  chevronCompact: { fontSize: 10 },
   chevronOpen: { transform: [{ rotate: '180deg' }] },
   panel: {
     backgroundColor: '#fff', borderRadius: radii.sm,
