@@ -5,6 +5,7 @@ import GradientBackground from '../../components/GradientBackground';
 import ScreenHeader from '../../components/ScreenHeader';
 import TabPill from '../../components/TabPill';
 import Button from '../../components/Button';
+import Dropdown from '../../components/Dropdown';
 import ExpandableTextArea from '../../components/ExpandableTextArea';
 import { colors, fonts, radii } from '../../constants/theme';
 import { getLetGo, addLetGo, deleteLetGo } from '../../services/api';
@@ -17,6 +18,7 @@ const MOODS = [
   { id: 'trusting', ic: '✨', label: 'Trusting' },
   { id: 'detached', ic: '🍃', label: 'Detached' },
 ];
+const MOOD_OPTIONS = MOODS.map((m) => ({ value: m.id, label: `${m.ic} ${m.label}` }));
 
 const TIPS = [
   { title: 'The Paradox of Detachment', body: 'The universe gives most freely to those who no longer need it to. Detachment is not giving up on your desire — it is giving up your grip on it. The tighter you hold, the more it slips away. Open your hands and see what lands in them.' },
@@ -95,18 +97,6 @@ export default function LetGo() {
               <Text style={styles.intro}>How are you feeling about your desire today?</Text>
               <Text style={styles.introSub}>Be honest. No judgment. This is your space.</Text>
 
-              <View style={styles.moodRow}>
-                {MOODS.map((m) => (
-                  <TouchableOpacity
-                    key={m.id}
-                    style={[styles.moodChip, mood === m.id && styles.moodChipActive]}
-                    onPress={() => setMood(m.id)}
-                  >
-                    <Text style={[styles.moodChipText, mood === m.id && styles.moodChipTextActive]}>{m.ic} {m.label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
               <ExpandableTextArea
                 value={trigger}
                 onChangeText={setTrigger}
@@ -115,7 +105,13 @@ export default function LetGo() {
               />
               {!!error && <Text style={styles.errorText}>{error}</Text>}
               {logged && <Text style={styles.loggedText}>Logged ✨</Text>}
-              <Button title="+ Log This Moment" size="sm" onPress={handleLog} loading={saving} style={{ marginTop: 4, alignSelf: 'flex-start' }} />
+
+              <View style={styles.moodActionRow}>
+                <View style={{ flex: 1 }}>
+                  <Dropdown label="How are you feeling?" value={mood} options={MOOD_OPTIONS} onSelect={setMood} fullWidth />
+                </View>
+                <Button title="+ Log this moment" size="sm" onPress={handleLog} loading={saving} style={{ flex: 1 }} />
+              </View>
             </GlassCard>
 
             <GlassCard>
@@ -184,11 +180,7 @@ const styles = StyleSheet.create({
   intro: { color: '#2e2530', fontSize: 16, fontWeight: '600', marginBottom: 4 },
   introSub: { color: '#6b5c66', fontSize: 12.5, marginBottom: 16 },
 
-  moodRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
-  moodChip: { paddingVertical: 9, paddingHorizontal: 14, borderRadius: radii.pill, borderWidth: 1, borderColor: 'rgba(201,168,201,0.35)', backgroundColor: 'rgba(255,255,255,0.6)' },
-  moodChipActive: { backgroundColor: '#c9a8c9', borderColor: '#c9a8c9' },
-  moodChipText: { fontFamily: fonts.bodyMedium, fontSize: 12.5, color: colors.ink2, fontWeight: '500' },
-  moodChipTextActive: { color: '#fff', fontWeight: '700' },
+  moodActionRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-end', marginTop: 12 },
 
   input: {
     backgroundColor: 'rgba(255,255,255,0.5)',
