@@ -231,7 +231,7 @@ export default function DesireDetail() {
             </View>
             <Text style={[styles.fieldLbl, { marginTop: 12 }]}>Intention</Text>
             <View style={[styles.inputBox, { minHeight: 70 }]}>
-              <TextInput style={styles.input} value={description} onChangeText={setDescription} multiline placeholderTextColor="rgba(46,37,48,0.4)" />
+              <TextInput style={[styles.input, { minHeight: 46 }]} value={description} onChangeText={setDescription} multiline textAlignVertical="top" placeholderTextColor="rgba(46,37,48,0.4)" />
             </View>
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
             <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>

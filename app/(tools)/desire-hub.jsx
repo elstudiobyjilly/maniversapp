@@ -178,12 +178,13 @@ export default function DesireHub() {
             <Text style={[styles.fieldLbl, { marginTop: 12 }]}>Intention (optional)</Text>
             <View style={[styles.inputBox, { minHeight: 70 }]}>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { minHeight: 46 }]}
                 placeholder="Feel into it... describe how it feels to already have this 🌸"
                 placeholderTextColor="rgba(46,37,48,0.4)"
                 value={description}
                 onChangeText={setDescription}
                 multiline
+                textAlignVertical="top"
               />
             </View>
 
