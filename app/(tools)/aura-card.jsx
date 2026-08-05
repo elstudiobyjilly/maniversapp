@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Dimensions } from 'react-native';
+import { useRouter } from 'expo-router';
 import Svg, { Defs, RadialGradient, LinearGradient, Stop, Circle, Rect } from 'react-native-svg';
 import { captureRef } from 'react-native-view-shot';
 import * as MediaLibrary from 'expo-media-library';
@@ -8,6 +9,7 @@ import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import ScreenHeader from '../../components/ScreenHeader';
 import Button from '../../components/Button';
+import { useAuthStore } from '../../store/authStore';
 import { colors, fonts, radii } from '../../constants/theme';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -160,6 +162,8 @@ function AuraCardSvg({ styleKey, size }) {
 }
 
 export default function AuraCard() {
+  const router = useRouter();
+  const logout = useAuthStore((s) => s.logout);
   const [nameInput, setNameInput] = useState('');
   const [manualStyle, setManualStyle] = useState(null);
   const [card, setCard] = useState(null);
@@ -223,6 +227,11 @@ export default function AuraCard() {
     } catch (e) {
       setError(e.message || 'Could not share your aura card');
     } finally { setSharing(false); }
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    router.replace('/(auth)/login');
   };
 
   const activeStyle = activeStyleKey ? AURA_STYLES[activeStyleKey] : null;
@@ -310,6 +319,8 @@ export default function AuraCard() {
             </View>
           </>
         )}
+
+        <Button title="Log out" variant="danger" onPress={handleLogout} style={{ alignSelf: 'center', marginTop: 24 }} />
 
       </ScrollView>
     </GradientBackground>
