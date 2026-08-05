@@ -19,7 +19,7 @@ import * as Linking from 'expo-linking';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const SCREEN_HEIGHT = Dimensions.get('window').height;
-const CANVAS_WIDTH = SCREEN_WIDTH * 1.6;
+const CANVAS_WIDTH = SCREEN_WIDTH * 1.15;
 // The board's visible frame — fixed size, matches the website. Zooming
 // scales/pans the content inside this frame; the frame itself never resizes.
 const VIEWPORT_WIDTH = SCREEN_WIDTH - 32;
@@ -37,7 +37,7 @@ const VIEWPORT_HEIGHT = Math.max(420, Math.min(900, SCREEN_HEIGHT - 380));
 // That's the exact "left/right pans, up/down doesn't, can't reach the
 // bottom" symptom. Scaling it off the viewport the same way width does
 // guarantees vertical pan room always exists, on every screen size.
-const CANVAS_HEIGHT = VIEWPORT_HEIGHT * 1.6;
+const CANVAS_HEIGHT = VIEWPORT_HEIGHT * 1.15;
 const ITEM_SIZE = 120;
 // Zoom range for the board viewport. Max was 2x, which wasn't enough to
 // actually inspect a busy board.
@@ -724,9 +724,7 @@ const styles = StyleSheet.create({
     width: VIEWPORT_WIDTH,
     height: VIEWPORT_HEIGHT,
     alignSelf: 'center',
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: 'rgba(200,120,180,0.35)',
+    borderRadius: 16,
     overflow: 'hidden',
     marginTop: 10,
     // The board's own white surface — always fills the frame edge to edge,
@@ -735,12 +733,13 @@ const styles = StyleSheet.create({
     // shrank visually smaller than the frame and the page's pink
     // background showed through around it like a mat/border, instead of
     // the board looking like a solid page the way it does on the website.
+    // No visible border/shadow now either — the website's board is a flush
+    // white surface with no frame around it.
     backgroundColor: '#fff',
-    ...shadows.card,
   },
   viewportFullscreen: { flex: 1, width: '100%', height: '100%', borderRadius: 0, marginTop: 0 },
   canvas: {
-    backgroundColor: 'rgba(255,255,255,0.6)',
+    backgroundColor: '#fff',
     position: 'absolute',
     left: (VIEWPORT_WIDTH - CANVAS_WIDTH) / 2,
     top: (VIEWPORT_HEIGHT - CANVAS_HEIGHT) / 2,
