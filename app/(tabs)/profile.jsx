@@ -541,11 +541,14 @@ const styles = StyleSheet.create({
   planBadge: { alignSelf: 'center', backgroundColor: 'rgba(201,168,201,0.2)', borderRadius: radii.pill, paddingVertical: 4, paddingHorizontal: 12, marginTop: 10 },
   planBadgeText: { fontFamily: fonts.bodyMedium, fontSize: 11, color: colors.purpleDark, fontWeight: '700' },
 
-  inputBox: { borderWidth: 1, borderColor: 'rgba(154,95,168,0.22)', borderRadius: radii.sm, paddingVertical: 16, paddingHorizontal: 16, backgroundColor: 'rgba(255,255,255,0.5)' },
+  // borderWidth fixed at 2 in both states -- widening it only on focus
+  // shifts this View's layout at the exact moment its child TextInput
+  // becomes first responder, which can make iOS glitch the keyboard
+  // (pops up, immediately retracts). See ExpandableTextArea.jsx.
+  inputBox: { borderWidth: 2, borderColor: 'rgba(154,95,168,0.22)', borderRadius: radii.sm, paddingVertical: 16, paddingHorizontal: 16, backgroundColor: 'rgba(255,255,255,0.5)' },
   // Same neon glow as ExpandableTextArea's focus state, for parity across
   // every writing box in the app.
   inputBoxFocused: {
-    borderWidth: 2,
     borderColor: colors.pinkAccent,
     shadowColor: colors.pinkAccent,
     shadowOffset: { width: 0, height: 0 },

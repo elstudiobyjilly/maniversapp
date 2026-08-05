@@ -33,8 +33,11 @@ const REFRAME_STARTERS = [
 ];
 const CATEGORY_NAMES = Object.keys(BELIEF_PRESETS);
 
-// Show only the first sentence of a belief in the reframe view — long
-// beliefs shouldn't dominate the screen while you're writing the reframe.
+// Show only the first sentence of a belief -- used for the reframe
+// dropdown's option list, where a full multi-line belief would look
+// wrong crammed into a picker row. Once a belief is actually selected for
+// reframing, the full text is shown in full (see reframeQuote below) so
+// there's something real to read and write a reframe against.
 function firstSentence(text, maxLen = 120) {
   if (!text) return '';
   const match = text.match(/^[^.!?]*[.!?]/);
@@ -118,7 +121,7 @@ export default function Beliefs() {
   };
 
   const reframeBelief = list.find((b) => b.id === reframeId);
-  const reframeOptions = list.map((b) => ({ value: b.id, label: b.belief }));
+  const reframeOptions = list.map((b) => ({ value: b.id, label: firstSentence(b.belief) }));
 
   return (
     <GradientBackground>
@@ -209,7 +212,7 @@ export default function Beliefs() {
               <>
                 <Text style={styles.label}>CHOOSE A BELIEF TO REFRAME</Text>
                 <Dropdown value={reframeId} options={reframeOptions} onSelect={handleSelectReframeBelief} fullWidth />
-                <Text style={styles.reframeQuote}>"{firstSentence(reframeBelief?.belief)}"</Text>
+                <Text style={styles.reframeQuote}>"{reframeBelief?.belief}"</Text>
 
                 <Text style={[styles.label, { marginTop: 14 }]}>BUT NOW I KNOW...</Text>
                 <ExpandableTextArea

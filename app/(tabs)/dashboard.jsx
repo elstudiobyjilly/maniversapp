@@ -739,12 +739,16 @@ const styles = StyleSheet.create({
   shadeRow: { flexDirection: 'row', gap: 8, marginTop: 8, marginBottom: 2 },
   shadeSwatch: { width: 24, height: 24, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.7)' },
 
+  // borderWidth is fixed across focus states (see ExpandableTextArea.jsx
+  // for why: changing an ancestor View's layout the instant a TextInput
+  // becomes first responder is a known iOS trigger for the keyboard
+  // popping up and immediately retracting).
   writeBox: {
-    borderWidth: 1.5, borderColor: 'rgba(248,184,200,0.35)', borderRadius: radii.md,
+    borderWidth: 2, borderColor: 'rgba(248,184,200,0.35)', borderRadius: radii.md,
     paddingVertical: 12, paddingHorizontal: 14, backgroundColor: 'rgba(255,255,255,0.9)',
   },
   writeBoxFocused: {
-    borderWidth: 2, borderColor: colors.pinkAccent, shadowColor: colors.pinkAccent,
+    borderColor: colors.pinkAccent, shadowColor: colors.pinkAccent,
     shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 10, elevation: 6,
   },
   writeInput: { fontFamily: fonts.body, fontSize: 14, color: colors.ink, flex: 1, lineHeight: 21 },

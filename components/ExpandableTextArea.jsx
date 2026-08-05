@@ -82,15 +82,22 @@ const styles = StyleSheet.create({
   // website's barely-there .inp border) — a heavy border read as boxy/
   // square rather than a clean rectangle.
   box: {
-    borderWidth: 1, borderColor: 'rgba(201,168,201,0.22)', borderRadius: radii.sm,
+    // Border width is fixed (never changes on focus, see boxFocused below)
+    // -- it used to jump 1 -> 1.5 the instant onFocus fired, which changes
+    // this View's layout on the exact ancestor of the TextInput at the
+    // exact moment it becomes first responder. On iOS that's a known
+    // trigger for the responder chain glitching: the keyboard starts
+    // sliding up, the layout shift underneath it gets treated like the
+    // input was removed/re-added, and the keyboard immediately retracts.
+    // That's the "opens partway then closes" bug reported on every screen
+    // using this shared box. Only colour/shadow change now, never size.
+    borderWidth: 1.5, borderColor: 'rgba(201,168,201,0.22)', borderRadius: radii.sm,
     paddingVertical: 14, paddingHorizontal: 16, paddingRight: 36, backgroundColor: 'rgba(255,255,255,0.9)',
   },
   // Neon glow ring on focus -- matches the website's .inp:focus (mauve
-  // border + soft pink halo). RN shadow doesn't render a crisp uniform
-  // ring like CSS box-shadow, so this leans on a thicker vivid border
-  // plus a wide, saturated shadow to read as a glow on both platforms.
+  // border + soft pink halo). Colour/shadow only; borderWidth stays fixed
+  // (see comment on `box` above) so focusing never shifts this View's layout.
   boxFocused: {
-    borderWidth: 1.5,
     borderColor: colors.pinkAccent,
     shadowColor: colors.pinkAccent,
     shadowOffset: { width: 0, height: 0 },
