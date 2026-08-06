@@ -330,7 +330,7 @@ export default function MindMovie() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 14, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 14, paddingBottom: 130 }}>
         <ScreenHeader lead="Mind" accent="Movie" subtitle="Write your dream life. Watch it. Feel it. Become it. 🎬" />
 
         <TabPill

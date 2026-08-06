@@ -471,7 +471,7 @@ export default function Subliminal() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 14, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 14, paddingBottom: 130 }}>
         <ScreenHeader lead="Sublimin" accent="al" subtitle="Affirmations layered silently beneath sound — your subconscious listens while you rest. 🎧" />
 
         {/* Preloaded samples — always visible, free on every plan */}

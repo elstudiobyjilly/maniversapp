@@ -420,20 +420,20 @@ function IdentityTab() {
                 <GlassCard style={styles.identityBlock} noPadding>
                   <View style={styles.identityBlockHeader}>
                     <GestureDetector gesture={gesture}>
-                      <View style={styles.identityBlockHeaderDrag}>
-                        <Text style={styles.accordionIcon}>{area.ic}</Text>
-                        <Text style={styles.accordionLabel} numberOfLines={1}>{area.label}</Text>
-                        {stmts.length > 0 && (
-                          <View style={styles.accordionBadge}>
-                            <Text style={styles.accordionBadgeText}>{stmts.length}</Text>
-                          </View>
-                        )}
+                      <View style={styles.dragHandleWrap} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                        <Text style={styles.dragHandleIcon}>☰</Text>
                       </View>
                     </GestureDetector>
+                    <Text style={styles.accordionIcon}>{area.ic}</Text>
+                    <Text style={styles.accordionLabel} numberOfLines={1}>{area.label}</Text>
+                    {stmts.length > 0 && (
+                      <View style={styles.accordionBadge}>
+                        <Text style={styles.accordionBadgeText}>{stmts.length}</Text>
+                      </View>
+                    )}
                     <TouchableOpacity onPress={() => setAddingTo(addingTo === area.id ? null : area.id)} style={styles.identityAddPill}>
                       <Text style={styles.identityAddPillText}>+ Add</Text>
                     </TouchableOpacity>
-                    <Text style={styles.dragHandleIcon}>☰</Text>
                     <TouchableOpacity onPress={() => isCustom ? removeCustomArea(area.id) : clearArea(area.id)} style={styles.identityRemoveBtn}>
                       <Text style={styles.identityRemoveBtnText}>✕</Text>
                     </TouchableOpacity>
@@ -593,6 +593,18 @@ function PortraitTab() {
   );
 }
 
+// Entries saved before the short "6 Aug 2026" format existed stored a raw
+// new Date().toISOString() string ("2026-04-27T19:00:32.435Z") -- reformat
+// anything that still looks like that instead of only formatting new saves,
+// so old entries don't keep showing a raw timestamp forever.
+function formatBridgeDate(e) {
+  if (e.date && !e.date.includes('T')) return e.date;
+  const raw = e.date || (e.id ? new Date(e.id) : null);
+  const d = raw ? new Date(raw) : null;
+  if (!d || Number.isNaN(d.getTime())) return e.date || '';
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
 // Bridge history is rendered inline in the same component that owns the
 // actively-typed "I am now.../I am becoming..." ExpandableTextAreas --
 // same anti-pattern as Community Wall's feed. Isolated here so typing
@@ -608,7 +620,7 @@ const BridgeHistoryList = memo(function BridgeHistoryList({ history, onEdit, onD
           </View>
           <Text style={styles.topicPillText}>{meta.label}</Text>
           <View style={{ flex: 1 }} />
-          <Text style={styles.bridgeDate}>{e.date}</Text>
+          <Text style={styles.bridgeDate}>{formatBridgeDate(e)}</Text>
           <View style={styles.bridgeHeaderActions}>
             <TouchableOpacity onPress={() => onEdit(idx)} style={styles.iconActionBtn} hitSlop={6}>
               <Text style={styles.iconActionBtnText}>✎</Text>
@@ -758,13 +770,11 @@ const SavedLettersList = memo(function SavedLettersList({ letters, expandedId, o
   }
   return letters.map(letter => {
     const isOpen = expandedId === letter.id;
-    const preview = letter.body.length > 80 ? letter.body.slice(0, 80) + '…' : letter.body;
     return (
       <GlassCard key={letter.id} style={styles.mb12}>
         <View style={styles.letterHeader}>
           <TouchableOpacity style={{ flex: 1 }} onPress={() => onToggleExpand(letter.id)} activeOpacity={0.8}>
-            {!!letter.heading && <Text style={styles.letterHeading}>{letter.heading}</Text>}
-            {!isOpen && <Text style={styles.letterPreview}>{preview}</Text>}
+            <Text style={styles.letterHeading}>{letter.heading || 'Untitled Letter'}</Text>
           </TouchableOpacity>
           <View style={styles.letterHeaderRight}>
             <View style={styles.letterHeaderActions}>
@@ -1131,8 +1141,8 @@ const styles = StyleSheet.create({
   // Identity — in-place drag to reorder
   reorderHintInline: { fontSize: 12, color: '#9a8896', textAlign: 'center', marginTop: -10, marginBottom: 14, fontStyle: 'italic' },
   draggableAreaWrap: { left: 0, right: 0 },
-  identityBlockHeaderDrag: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  dragHandleIcon: { fontSize: 14, color: '#c9a8c9', marginLeft: 4 },
+  dragHandleWrap: { paddingRight: 4 },
+  dragHandleIcon: { fontSize: 15, color: '#c9a8c9' },
 
   // Identity accordion
   accordionHeader: { flexDirection: 'row', alignItems: 'center' },
