@@ -8,6 +8,12 @@
 // calendar anchor is stored on-device under this key prefix.
 export const CURRENT_KEY = 'mv_dt_current';
 export const START_KEY_PREFIX = 'mv_dt_start_';
+// The backend doesn't reliably echo the `practices` array back on GET
+// /roadmap/ (only sometimes on the create response), so the daily practice
+// checklist a desire was set up with is mirrored on-device too -- otherwise
+// the checkbox list a user just picked in "New Desire" silently disappears
+// the moment the screen reloads the roadmap list from the server.
+export const PRACTICES_KEY_PREFIX = 'mv_dt_practices_';
 
 export const DURATIONS = [7, 21, 30, 40, 66];
 export const PRACTICE_OPTIONS = [

@@ -19,7 +19,7 @@ import * as Linking from 'expo-linking';
 // Shared with the Home dashboard's Desire Action widget so both read/write
 // the same /roadmap + /roadmap/log records with identical day bridging.
 import {
-  CURRENT_KEY, START_KEY_PREFIX, DURATIONS, PRACTICE_OPTIONS, DEFAULT_PRACTICES,
+  CURRENT_KEY, START_KEY_PREFIX, PRACTICES_KEY_PREFIX, DURATIONS, PRACTICE_OPTIONS, DEFAULT_PRACTICES,
   DAY_LETTERS, toDateKey, startOfDay, addDays, fmtShort, buildLogsMap, dayNumberFor,
 } from '../../constants/desireAction';
 
@@ -59,7 +59,14 @@ export default function DesireActionTool() {
         try { startDate = await AsyncStorage.getItem(START_KEY_PREFIX + r.id); } catch (e) {}
         if (!startDate) startDate = (r.created_at || '').slice(0, 10) || toDateKey(new Date());
         const endDate = toDateKey(addDays(new Date(startDate), (r.days || 21) - 1));
-        return { id: r.id, title: r.desire, days: r.days, practices: r.practices || [], startDate, endDate };
+        let practices = r.practices || [];
+        if (!practices.length) {
+          try {
+            const stored = await AsyncStorage.getItem(PRACTICES_KEY_PREFIX + r.id);
+            if (stored) practices = JSON.parse(stored);
+          } catch (e) {}
+        }
+        return { id: r.id, title: r.desire, days: r.days, practices, startDate, endDate };
       }));
       setDesires(withStart);
       setRawLogs(logsList);
@@ -224,6 +231,7 @@ export default function DesireActionTool() {
     try {
       const created = await createRoadmap({ desire: title, days: addDur, weeks: [], practices });
       try { await AsyncStorage.setItem(START_KEY_PREFIX + created.id, addStart); } catch (e) {}
+      try { await AsyncStorage.setItem(PRACTICES_KEY_PREFIX + created.id, JSON.stringify(practices)); } catch (e) {}
       await loadAll(created.id);
       setAddOpen(false);
       Alert.alert('Desire tracker started ✨');
@@ -266,6 +274,7 @@ export default function DesireActionTool() {
     try {
       const created = await createRoadmap({ desire: title, days: editDur, weeks: [], practices: editPracs });
       try { await AsyncStorage.setItem(START_KEY_PREFIX + created.id, editStart); } catch (e) {}
+      try { await AsyncStorage.setItem(PRACTICES_KEY_PREFIX + created.id, JSON.stringify(editPracs)); } catch (e) {}
 
       for (const l of oldLogs) {
         try {
@@ -279,6 +288,7 @@ export default function DesireActionTool() {
 
       try { await deleteRoadmap(oldId); } catch (e) {}
       try { await AsyncStorage.removeItem(START_KEY_PREFIX + oldId); } catch (e) {}
+      try { await AsyncStorage.removeItem(PRACTICES_KEY_PREFIX + oldId); } catch (e) {}
 
       await loadAll(created.id);
       setEditOpen(false);
@@ -299,6 +309,7 @@ export default function DesireActionTool() {
         for (const l of toRemove) { try { await deleteRoadmapDayLog(l.id); } catch (e) {} }
         try { await deleteRoadmap(id); } catch (e) {}
         try { await AsyncStorage.removeItem(START_KEY_PREFIX + id); } catch (e) {}
+        try { await AsyncStorage.removeItem(PRACTICES_KEY_PREFIX + id); } catch (e) {}
         const remaining = desires.filter((d) => d.id !== id);
         await loadAll(remaining.length ? remaining[0].id : null);
         Alert.alert('Desire removed');

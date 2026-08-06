@@ -21,7 +21,7 @@ import { categoryLabel } from '../../constants/desires';
 import { DAILY_MESSAGES } from '../../constants/dailyContent';
 import { AURA_AFFIRMATIONS, PATTERNS, PATTERN_LABELS, COLOUR_FAMILIES, FAMILY_SHADES, AURA_STYLES, STYLE_KEYS, detectStyle } from '../../constants/auraCard';
 import {
-  START_KEY_PREFIX, toDateKey, addDays, buildLogsMap, dayNumberFor,
+  START_KEY_PREFIX, PRACTICES_KEY_PREFIX, toDateKey, addDays, buildLogsMap, dayNumberFor,
 } from '../../constants/desireAction';
 import {
   getDesires, getGratitudeList, addGratitude,
@@ -548,11 +548,18 @@ export default function Dashboard() {
         let startDate = null;
         try { startDate = await AsyncStorage.getItem(START_KEY_PREFIX + r.id); } catch (_) {}
         if (!startDate) startDate = (r.created_at || '').slice(0, 10) || toDateKey(new Date());
+        let practices = r.practices || [];
+        if (!practices.length) {
+          try {
+            const stored = await AsyncStorage.getItem(PRACTICES_KEY_PREFIX + r.id);
+            if (stored) practices = JSON.parse(stored);
+          } catch (_) {}
+        }
         return {
           id: r.id,
           title: r.desire,
           days: r.days,
-          practices: r.practices || [],
+          practices,
           startDate,
           endDate: toDateKey(addDays(new Date(startDate), (r.days || 21) - 1)),
         };
