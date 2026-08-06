@@ -33,6 +33,8 @@ export default function DesireActionTool() {
   const [desires, setDesires] = useState([]);
   const [rawLogs, setRawLogs] = useState([]); // full /roadmap/log/ list, all desires
   const [currentId, setCurrentId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDay, setSelectedDay] = useState(null);
   const [noteText, setNoteText] = useState('');
@@ -52,8 +54,14 @@ export default function DesireActionTool() {
   const [editPracs, setEditPracs] = useState([]);
 
   // ── Load ──────────────────────────────────────────────────────────────
+  // Previously a bare `catch (e) {}` -- any failure (network blip, an
+  // expired session, a backend error) left desires/currentId at their
+  // empty defaults with zero indication anything went wrong, which looks
+  // identical to "you genuinely have no desires yet". Now a real failure
+  // shows an error with a Retry button instead of the empty-state prompt.
   const loadAll = useCallback(async (preferId) => {
     refresh();
+    setLoadError('');
     try {
       const [roadmaps, logsList] = await Promise.all([getRoadmaps(), getRoadmapDayLogs()]);
       const withStart = await Promise.all(roadmaps.map(async (r) => {
@@ -75,7 +83,11 @@ export default function DesireActionTool() {
       const localCur = await AsyncStorage.getItem(CURRENT_KEY).catch(() => null);
       const cur = preferId ?? (withStart.find((d) => d.id === localCur * 1) ? localCur * 1 : withStart[0]?.id) ?? null;
       setCurrentId(cur);
-    } catch (e) {}
+    } catch (e) {
+      setLoadError(e.message || 'Could not load your desires — check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
   }, [refresh]);
 
   useEffect(() => { loadAll(); }, []);
@@ -345,7 +357,14 @@ export default function DesireActionTool() {
           )}
         </GlassCard>
 
-        {!currentDesire && (
+        {loadError ? (
+          <View style={styles.emptyWrap}>
+            <Text style={styles.emptyIc}>⚠️</Text>
+            <Text style={styles.emptyTitle}>Couldn't load your desires</Text>
+            <Text style={styles.emptyDesc}>{loadError}</Text>
+            <Button title="Retry" size="sm" onPress={() => loadAll()} style={{ marginTop: 12 }} />
+          </View>
+        ) : !loading && !currentDesire && (
           <View style={styles.emptyWrap}>
             <Text style={styles.emptyIc}>🗺️</Text>
             <Text style={styles.emptyTitle}>Start tracking a desire</Text>
