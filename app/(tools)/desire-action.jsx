@@ -10,7 +10,7 @@ import ExpandableTextArea from '../../components/ExpandableTextArea';
 import { colors, fonts, radii } from '../../constants/theme';
 import {
   createCheckout,
-  getRoadmaps, createRoadmap, deleteRoadmap,
+  getRoadmaps, createRoadmap, updateRoadmap, deleteRoadmap,
   getRoadmapDayLogs, createRoadmapDayLog, deleteRoadmapDayLog,
 } from '../../services/api';
 import UpgradeModal from '../../components/UpgradeModal';
@@ -266,39 +266,24 @@ export default function DesireActionTool() {
   };
   const editEndDate = useMemo(() => toDateKey(addDays(new Date(editStart || new Date()), editDur - 1)), [editStart, editDur]);
 
-  // The backend has no update endpoint for a roadmap's desire/days/practices
-  // (only /check and /note, which belong to the unrelated week-checklist
-  // flow) -- so "editing" recreates the roadmap and migrates its day logs.
+  // PATCH /roadmap/{id} updates desire/days/practices in place and keeps
+  // the roadmap's id and day logs intact server-side (the backend migrates
+  // any day logs itself when the desire text changes). Start date has no
+  // backend field, so it stays a local-only override same as on create.
   const handleSaveEditDesire = async () => {
-    if (editSaving) return; // guards against a double-tap firing two POSTs
+    if (editSaving) return; // guards against a double-tap firing two PATCHes
     if (!currentDesire) return;
     if (!editTitle.trim()) { Alert.alert('Enter your desire ✨'); return; }
     const title = editTitle.trim();
-    const oldId = currentDesire.id;
-    const oldTitle = currentDesire.title;
-    const oldLogs = rawLogs.filter((l) => l.desire === oldTitle);
+    const id = currentDesire.id;
 
     setEditSaving(true);
     try {
-      const created = await createRoadmap({ desire: title, days: editDur, weeks: [], practices: editPracs });
-      try { await AsyncStorage.setItem(START_KEY_PREFIX + created.id, editStart); } catch (e) {}
-      try { await AsyncStorage.setItem(PRACTICES_KEY_PREFIX + created.id, JSON.stringify(editPracs)); } catch (e) {}
+      await updateRoadmap(id, { desire: title, days: editDur, practices: editPracs });
+      try { await AsyncStorage.setItem(START_KEY_PREFIX + id, editStart); } catch (e) {}
+      try { await AsyncStorage.setItem(PRACTICES_KEY_PREFIX + id, JSON.stringify(editPracs)); } catch (e) {}
 
-      for (const l of oldLogs) {
-        try {
-          await deleteRoadmapDayLog(l.id);
-          await createRoadmapDayLog({
-            day: dayNumberFor((l.log_date || '').slice(0, 10), editStart),
-            desire: title, practices: l.practices || [], action: l.action || '', date: (l.log_date || '').slice(0, 10),
-          });
-        } catch (e) {}
-      }
-
-      try { await deleteRoadmap(oldId); } catch (e) {}
-      try { await AsyncStorage.removeItem(START_KEY_PREFIX + oldId); } catch (e) {}
-      try { await AsyncStorage.removeItem(PRACTICES_KEY_PREFIX + oldId); } catch (e) {}
-
-      await loadAll(created.id);
+      await loadAll(id);
       setEditOpen(false);
       Alert.alert('Desire updated ✨');
     } catch (e) {

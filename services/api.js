@@ -569,6 +569,16 @@ export async function createRoadmap({ desire, days, weeks, practices = [] }) {
   return req('POST', '/roadmap/', { desire, days, weeks, practices });
 }
 
+// Updates a roadmap's desire/days/practices in place -- keeps its id and
+// day logs intact, unlike the old delete+recreate+migrate-logs dance.
+export async function updateRoadmap(rmId, { desire, days, practices } = {}) {
+  const body = {};
+  if (desire !== undefined) body.desire = desire;
+  if (days !== undefined) body.days = days;
+  if (practices !== undefined) body.practices = practices;
+  return req('PATCH', `/roadmap/${rmId}`, body);
+}
+
 export async function checkRoadmapAction(rmId, week, actionIdx, checked) {
   return req('PATCH', `/roadmap/${rmId}/check`, { week, action_idx: actionIdx, checked });
 }
