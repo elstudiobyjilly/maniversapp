@@ -400,7 +400,12 @@ export default function DesireActionTool() {
                   {new Date(selectedDay).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
                 </Text>
                 {(currentDesire.practices || []).length === 0 ? (
-                  <Text style={styles.noPracsText}>No practices set for this desire.</Text>
+                  <View style={styles.noPracsWrap}>
+                    <Text style={styles.noPracsText}>No practices set for this desire — pick some to see checkboxes here.</Text>
+                    <TouchableOpacity style={styles.noPracsBtn} onPress={openEdit}>
+                      <Text style={styles.noPracsBtnText}>✏️ Choose Daily Practices</Text>
+                    </TouchableOpacity>
+                  </View>
                 ) : (
                   (currentDesire.practices || []).map((p, i) => {
                     const checked = !!(logs[selectedDay]?.practices && logs[selectedDay].practices[p]);
@@ -616,6 +621,9 @@ const styles = StyleSheet.create({
 
   dayDetailTitle: { fontSize: 16, fontStyle: 'italic', fontWeight: '400', color: '#2e2530', marginBottom: 12 },
   noPracsText: { fontSize: 13, color: '#6b5c66', marginBottom: 10 },
+  noPracsWrap: { marginBottom: 10 },
+  noPracsBtn: { alignSelf: 'flex-start', paddingVertical: 9, paddingHorizontal: 14, borderRadius: 50, backgroundColor: 'rgba(154,95,168,0.12)', borderWidth: 1, borderColor: 'rgba(154,95,168,0.3)' },
+  noPracsBtnText: { fontSize: 12.5, color: '#9a5fa8', fontWeight: '600' },
   pracRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
   pracRowDivider: { borderBottomWidth: 1, borderBottomColor: 'rgba(154,95,168,0.12)' },
   checkbox: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, borderColor: 'rgba(154,95,168,0.3)', justifyContent: 'center', alignItems: 'center' },
