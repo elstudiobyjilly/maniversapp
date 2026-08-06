@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Audio } from 'expo-av';
+import { BlurView } from 'expo-blur';
 import {
   getMindMovies, createMindMovie, deleteMindMovie,
   uploadImage, finalizeMindMovie, generateMindMovieAudio, createCheckout,
@@ -487,6 +488,20 @@ export default function MindMovie() {
       <Modal visible={!!playingMovie} animationType="fade" onRequestClose={closePlayback}>
         {playingMovie && (
           <View style={styles.playerContainer}>
+            {/* Frosted-glass backdrop -- blurred, colour-matched to the
+                current scene instead of flat black letterbox bars above
+                and below the (contain-fitted) image. */}
+            {!!safeImageUri(playingMovie.scenes[sceneIndex]?.img) && (
+              <Image
+                source={{ uri: safeImageUri(playingMovie.scenes[sceneIndex]?.img) }}
+                style={StyleSheet.absoluteFill}
+                blurRadius={35}
+                resizeMode="cover"
+              />
+            )}
+            <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
+            <View style={[StyleSheet.absoluteFill, styles.playerScrim]} />
+
             <View style={[styles.playerTopBar, { paddingTop: insets.top + 10 }]}>
               <Text style={styles.playerTitle} numberOfLines={1}>{playingMovie.title}</Text>
               <View style={styles.playerTopActions}>
@@ -578,20 +593,35 @@ const styles = StyleSheet.create({
   movieTitle: { fontFamily: fonts.displayMedium, fontSize: 18, fontWeight: '600', color: colors.purpleDark, marginBottom: 4 },
   thumb: { width: 56, height: 56, borderRadius: 10, marginRight: 8, backgroundColor: 'rgba(255,255,255,0.35)' },
   playerContainer: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
-  playerImage: { width: '100%', height: '70%', resizeMode: 'contain' },
+  // Bigger than before (was 70%) -- the frosted-glass backdrop means the
+  // letterbox space around it no longer reads as dead black bars, so the
+  // image can afford to take up more of the screen. Still 'contain' so
+  // nobody's actual photo gets cropped.
+  playerImage: { width: '100%', height: '80%', resizeMode: 'contain' },
+  playerScrim: { backgroundColor: 'rgba(10,6,14,0.28)' },
   playerTopBar: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 18, zIndex: 2 },
-  playerTitle: { fontFamily: fonts.displayMedium, color: '#fff', fontSize: 15, fontWeight: '600', flex: 1, marginRight: 10 },
+  playerTitle: { fontFamily: fonts.displayMedium, color: '#fff', fontSize: 15, fontWeight: '600', flex: 1, marginRight: 10, textShadowColor: 'rgba(0,0,0,0.4)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
   playerTopActions: { flexDirection: 'row', gap: 8 },
-  playerIconButton: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: radii.pill, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
+  playerIconButton: {
+    paddingVertical: 8, paddingHorizontal: 13, borderRadius: radii.pill,
+    backgroundColor: 'rgba(255,255,255,0.16)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.28)',
+    justifyContent: 'center', alignItems: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 6, elevation: 3,
+  },
   playerIconButtonText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   playerCaptionWrap: { position: 'absolute', bottom: 80, left: 0, right: 0, paddingHorizontal: 30, minHeight: 40, justifyContent: 'center' },
-  playerCaption: { fontFamily: fonts.displayItalic, color: '#fff', fontSize: 19, textAlign: 'center', fontWeight: '500', fontStyle: 'italic' },
+  playerCaption: { fontFamily: fonts.displayItalic, color: '#fff', fontSize: 19, textAlign: 'center', fontWeight: '500', fontStyle: 'italic', textShadowColor: 'rgba(0,0,0,0.45)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 6 },
   playerProgressTrack: { height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.25)', marginTop: 14, overflow: 'hidden' },
   playerProgressFill: { height: '100%', backgroundColor: '#fff', borderRadius: 2 },
   playerBottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, zIndex: 2 },
-  playerCounter: { color: 'rgba(255,255,255,0.85)', fontFamily: fonts.bodyMedium, fontSize: 13, fontWeight: '600' },
+  playerCounter: { color: 'rgba(255,255,255,0.9)', fontFamily: fonts.bodyMedium, fontSize: 13, fontWeight: '600', textShadowColor: 'rgba(0,0,0,0.4)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
   playerNavGroup: { flexDirection: 'row', gap: 12 },
-  playerNavButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
+  playerNavButton: {
+    width: 42, height: 42, borderRadius: 21,
+    backgroundColor: 'rgba(255,255,255,0.16)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.28)',
+    justifyContent: 'center', alignItems: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 6, elevation: 3,
+  },
   playerNavButtonDisabled: { opacity: 0.35 },
   playerNavButtonText: { color: '#fff', fontSize: 20, fontWeight: '700' },
 });

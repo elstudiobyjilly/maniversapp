@@ -28,10 +28,6 @@ const VOICES = [
   { id: 'sage', label: '✨ Sage' },
   { id: 'system', label: '🤖 System' },
 ];
-const TEXT_SIZES = [
-  { pct: 85, label: 'A' }, { pct: 92, label: 'A' }, { pct: 100, label: 'A' },
-  { pct: 110, label: 'A' }, { pct: 120, label: 'A' }, { pct: 130, label: 'A' },
-];
 const THEMES = [
   { key: 'blush', label: 'Blush Reverie', desc: 'Pink · Lavender · White', swatches: ['#f8b8c8', '#c9a8c9', '#fdf5e0'], available: true },
   { key: 'soleil', label: 'Soleil Dream', desc: 'Blue · Pink · Yellow', swatches: ['#a8c8f0', '#f8b8c8', '#f5e090'], available: false },
@@ -68,11 +64,20 @@ export default function Profile() {
   const [voiceState, setVoiceState] = useState(null);
   const [voiceMsg, setVoiceMsg] = useState('');
   const [lockVoice, setLockVoice] = useState(true);
-  const [secondaryVoiceId, setSecondaryVoiceId] = useState('system');
+  // Secondary voice is genuinely just the device's own TTS -- there's no
+  // real "Luna/Orion/Sage" audio to switch to here (preview always spoke
+  // with the system voice regardless of which was picked, since those are
+  // server-rendered voices with no local sound file). So this now stores
+  // an actual device voice identifier from Speech.getAvailableVoicesAsync()
+  // instead of a fake 'luna'/'orion'/'sage'/'system' id.
+  const [secondaryVoiceId, setSecondaryVoiceId] = useState(null);
+  const [deviceVoices, setDeviceVoices] = useState([]);
   const [voiceSpeed, setVoiceSpeed] = useState(1.0);
 
-  // Appearance
-  const [textSizePct, setTextSizePct] = useState(100);
+  // Appearance -- theme now lives on the Voice tab (see render), text size
+  // removed entirely: it was never wired to actually resize anything
+  // anywhere in the app, so it was a setting that did nothing. Device-level
+  // text size (iOS/Android accessibility settings) is the real control.
   const [colorTheme, setColorTheme] = useState('blush');
 
   // Security
@@ -103,9 +108,15 @@ export default function Profile() {
         if (typeof p.lockVoice === 'boolean') setLockVoice(p.lockVoice);
         if (p.secondaryVoiceId) setSecondaryVoiceId(p.secondaryVoiceId);
         if (p.voiceSpeed) setVoiceSpeed(p.voiceSpeed);
-        if (p.textSizePct) setTextSizePct(p.textSizePct);
         if (p.colorTheme) setColorTheme(p.colorTheme);
       }
+    } catch (_) {}
+    try {
+      const voices = await Speech.getAvailableVoicesAsync();
+      setDeviceVoices(voices || []);
+      // Default to the device's first voice if nothing was saved yet, so
+      // the picker isn't left showing nothing selected.
+      setSecondaryVoiceId((prev) => prev || (voices && voices[0]?.identifier) || null);
     } catch (_) {}
     // Server truth wins over the cached local pick for the narration voice.
     try {
@@ -150,7 +161,7 @@ export default function Profile() {
   useEffect(() => { load().finally(() => setLoading(false)); }, []);
 
   const persistPrefs = async (patch) => {
-    const next = { voiceId, lockVoice, secondaryVoiceId, voiceSpeed, textSizePct, colorTheme, ...patch };
+    const next = { voiceId, lockVoice, secondaryVoiceId, voiceSpeed, colorTheme, ...patch };
     try { await AsyncStorage.setItem(PREFS_KEY, JSON.stringify(next)); } catch (_) {}
     // Best-effort: also try to sync to the backend profile in case it
     // accepts these fields -- harmless no-op if it doesn't recognize them.
@@ -233,18 +244,17 @@ export default function Profile() {
   };
 
   // Luna/Orion/Sage are server-rendered voices baked into generated audio —
-  // there's no local sound file for them to preview. The device's own TTS
-  // (Speech API) is the only voice this button can actually play, so it
-  // always speaks with the System voice regardless of which is selected,
-  // and says so when the pick isn't System.
+  // there's no local sound file for them to preview, so the primary-voice
+  // preview always speaks with the device's own TTS regardless of which is
+  // picked. Secondary voice IS a real device voice now, so its preview
+  // actually uses the selected identifier.
   const handlePreviewVoice = (which) => {
     Speech.stop();
-    const id = which === 'primary' ? voiceId : secondaryVoiceId;
-    const rate = which === 'primary' ? 1.0 : voiceSpeed;
-    const msg = id === 'system'
-      ? 'This is how your system voice sounds.'
-      : `${VOICES.find((v) => v.id === id)?.label.replace(/^\S+\s/, '') || 'Your voice'} is heard in your generated audio — this preview uses your device voice instead.`;
-    Speech.speak(msg, { rate });
+    if (which === 'primary') {
+      Speech.speak('This is a preview — your generated audio actually narrates in your chosen voice, not this device voice.', { rate: 1.0 });
+      return;
+    }
+    Speech.speak('This is how this voice sounds.', { rate: voiceSpeed, voice: secondaryVoiceId || undefined });
   };
 
   if (loading) {
@@ -266,7 +276,6 @@ export default function Profile() {
           options={[
             { value: 'profile', label: '🌸 Profile' },
             { value: 'voice', label: '🎙️ Voice' },
-            { value: 'appearance', label: '🔤 Appearance' },
             { value: 'plan', label: '⭐ Plan & Security' },
           ]}
         />
@@ -281,6 +290,9 @@ export default function Profile() {
               <Text style={styles.usernameText}>@{user?.username}</Text>
               <Text style={styles.emailText}>{user?.email}</Text>
               <View style={styles.planBadge}><Text style={styles.planBadgeText}>{planLabel}</Text></View>
+              <TouchableOpacity style={styles.signOutLink} onPress={handleLogout}>
+                <Text style={styles.signOutLinkText}>↩ Sign Out</Text>
+              </TouchableOpacity>
             </GlassCard>
 
             <Text style={styles.sectionLabel}>EDIT PROFILE</Text>
@@ -361,13 +373,27 @@ export default function Profile() {
 
             <Text style={styles.sectionLabel}>🎭 SECONDARY VOICE</Text>
             <GlassCard style={styles.cardMargin}>
-              <Text style={styles.helperText}>Used for Portrait, Letters, Scripts, Oracle, Horoscope & Feel It. Your main voice handles affirmations, subliminals & stories.</Text>
-              <Text style={styles.label}>VOICE</Text>
-              <View style={styles.chipRow}>
-                {VOICES.map((v) => (
-                  <Chip key={v.id} label={v.label} active={secondaryVoiceId === v.id} onPress={() => { setSecondaryVoiceId(v.id); persistPrefs({ secondaryVoiceId: v.id }); }} />
-                ))}
-              </View>
+              <Text style={styles.helperText}>Used for Portrait, Letters, Scripts, Oracle, Horoscope & Feel It. Your main voice handles affirmations, subliminals & stories. This is your device's own voice — pick which one it speaks with.</Text>
+              <Text style={styles.label}>DEVICE VOICE</Text>
+              {deviceVoices.length === 0 ? (
+                <Text style={styles.helperText}>No device voices found — your system's default will be used.</Text>
+              ) : (
+                <ScrollView style={styles.deviceVoiceList} nestedScrollEnabled>
+                  {deviceVoices.map((v) => (
+                    <TouchableOpacity
+                      key={v.identifier}
+                      style={[styles.deviceVoiceRow, secondaryVoiceId === v.identifier && styles.deviceVoiceRowOn]}
+                      onPress={() => { setSecondaryVoiceId(v.identifier); persistPrefs({ secondaryVoiceId: v.identifier }); }}
+                    >
+                      <Text style={[styles.deviceVoiceName, secondaryVoiceId === v.identifier && styles.deviceVoiceNameOn]} numberOfLines={1}>
+                        {v.name || v.identifier}
+                      </Text>
+                      <Text style={styles.deviceVoiceLang}>{v.language}</Text>
+                      {secondaryVoiceId === v.identifier && <Text style={styles.deviceVoiceCheck}>✓</Text>}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
               <View style={styles.speedRow}>
                 <Text style={styles.label}>SPEED</Text>
                 <Text style={styles.speedValue}>{voiceSpeed.toFixed(2)}</Text>
@@ -382,23 +408,6 @@ export default function Profile() {
               <TouchableOpacity style={styles.editPrefsBtn} onPress={() => handlePreviewVoice('secondary')}>
                 <Text style={styles.editPrefsBtnText}>🎭 Preview Voice</Text>
               </TouchableOpacity>
-            </GlassCard>
-          </>
-        )}
-
-        {tab === 'appearance' && (
-          <>
-            <Text style={styles.sectionLabel}>TEXT SIZE</Text>
-            <GlassCard style={styles.cardMargin}>
-              <Text style={styles.helperText}>Adjust text across all of Manivers — scripts, affirmations, journal, and every screen.</Text>
-              <View style={styles.textSizeRow}>
-                {TEXT_SIZES.map((t) => (
-                  <TouchableOpacity key={t.pct} style={[styles.textSizeBtn, textSizePct === t.pct && styles.textSizeBtnActive]} onPress={() => { setTextSizePct(t.pct); persistPrefs({ textSizePct: t.pct }); }}>
-                    <Text style={[styles.textSizeLetter, { fontSize: 12 + (t.pct - 85) / 10 }, textSizePct === t.pct && styles.textSizeLetterActive]}>{t.label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <Text style={styles.textSizeCaption}>{textSizePct === 100 ? 'Default' : textSizePct < 100 ? 'Smaller' : 'Larger'} · {textSizePct}%</Text>
             </GlassCard>
 
             <Text style={styles.sectionLabel}>COLOUR THEME ✨</Text>
@@ -540,6 +549,16 @@ const styles = StyleSheet.create({
   emailText: { fontFamily: fonts.body, fontSize: 11.5, color: colors.mist, textAlign: 'center', marginTop: 1 },
   planBadge: { alignSelf: 'center', backgroundColor: 'rgba(201,168,201,0.2)', borderRadius: radii.pill, paddingVertical: 4, paddingHorizontal: 12, marginTop: 10 },
   planBadgeText: { fontFamily: fonts.bodyMedium, fontSize: 11, color: colors.purpleDark, fontWeight: '700' },
+  signOutLink: { alignSelf: 'center', marginTop: 14 },
+  signOutLinkText: { fontFamily: fonts.bodyMedium, fontSize: 12.5, color: colors.mist2, fontWeight: '600' },
+
+  deviceVoiceList: { maxHeight: 180, marginBottom: 4 },
+  deviceVoiceRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 12, borderRadius: radii.sm, backgroundColor: 'rgba(255,255,255,0.5)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.2)', marginBottom: 6 },
+  deviceVoiceRowOn: { backgroundColor: 'rgba(201,168,201,0.18)', borderColor: colors.purpleMid },
+  deviceVoiceName: { flex: 1, fontFamily: fonts.body, fontSize: 13, color: colors.ink },
+  deviceVoiceNameOn: { fontFamily: fonts.bodyMedium, fontWeight: '600', color: colors.purpleDark },
+  deviceVoiceLang: { fontFamily: fonts.body, fontSize: 10.5, color: colors.mist2 },
+  deviceVoiceCheck: { color: colors.purpleDark, fontSize: 13, fontWeight: '700' },
 
   // borderWidth fixed at 2 in both states -- widening it only on focus
   // shifts this View's layout at the exact moment its child TextInput
@@ -582,12 +601,6 @@ const styles = StyleSheet.create({
   speedPillText: { fontFamily: fonts.bodyMedium, fontSize: 11.5, color: colors.ink2 },
   speedPillTextActive: { color: '#fff', fontWeight: '700' },
 
-  textSizeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
-  textSizeBtn: { flex: 1, minWidth: 44, paddingVertical: 12, borderRadius: radii.sm, borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)', backgroundColor: 'rgba(255,255,255,0.6)', alignItems: 'center' },
-  textSizeBtnActive: { backgroundColor: colors.purpleMid, borderColor: colors.purpleMid },
-  textSizeLetter: { fontFamily: fonts.bodyMedium, color: colors.ink },
-  textSizeLetterActive: { color: '#fff' },
-  textSizeCaption: { fontFamily: fonts.body, fontSize: 12, color: colors.purpleDark, textAlign: 'center' },
 
   themeRow: { flexDirection: 'row', gap: 10 },
   themeCard: { flex: 1, borderWidth: 1.5, borderColor: 'rgba(201,168,201,0.25)', borderRadius: radii.md, padding: 12, backgroundColor: 'rgba(255,255,255,0.5)' },
