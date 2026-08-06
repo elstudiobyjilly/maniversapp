@@ -17,6 +17,7 @@ import { colors, fonts, radii } from '../constants/theme';
 import { safeImageUri } from '../services/imageUri';
 
 const SPEEDS = [0.75, 1, 1.25, 1.5];
+const REPEAT_PRESETS = [1, 3, 7, 33, 100];
 
 function fmtTime(ms) {
   if (!ms || ms < 0 || !isFinite(ms)) return '00:00';
@@ -102,7 +103,10 @@ export default function NowPlayingPlayer({
   const [loading, setLoading] = useState(false);
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [loopOne, setLoopOne] = useState(false);
+  // Repeat = how many times the current track plays before advancing —
+  // matches the website's REPEAT stepper (×1/×3/×7/×33/×100), not a plain
+  // on/off loop toggle.
+  const [repeatTarget, setRepeatTarget] = useState(1);
   const [shuffle, setShuffle] = useState(false);
   const [volume, setVolume] = useState(1);
   const [rate, setRate] = useState(1);
@@ -113,6 +117,10 @@ export default function NowPlayingPlayer({
   const soundRef = useRef(null);
   const currentIndexRef = useRef(currentIndex);
   currentIndexRef.current = currentIndex;
+  const repeatTargetRef = useRef(repeatTarget);
+  repeatTargetRef.current = repeatTarget;
+  // How many times the current track has already played this cycle.
+  const repeatDoneRef = useRef(0);
 
   const item = queue[currentIndex] || null;
 
@@ -127,6 +135,7 @@ export default function NowPlayingPlayer({
     if (!queue.length) return;
     const clamped = ((idx % queue.length) + queue.length) % queue.length;
     await unload();
+    repeatDoneRef.current = 0;
     setCurrentIndex(clamped);
     setPosition(0); setDuration(0); setLoading(true);
     try {
@@ -144,8 +153,9 @@ export default function NowPlayingPlayer({
         setDuration(status.durationMillis || 0);
         setIsPlaying(status.isPlaying);
         if (status.didJustFinish) {
-          if (loopOne) { sound.replayAsync(); }
-          else { onTrackFinish?.(queue[clamped], clamped); goNextRef.current?.(); }
+          repeatDoneRef.current += 1;
+          if (repeatDoneRef.current < repeatTargetRef.current) { sound.replayAsync(); }
+          else { repeatDoneRef.current = 0; onTrackFinish?.(queue[clamped], clamped); goNextRef.current?.(); }
         }
       });
     } catch (e) {
@@ -153,7 +163,7 @@ export default function NowPlayingPlayer({
     } finally {
       setLoading(false);
     }
-  }, [queue, getAudioUri, unload, volume, rate, loopOne, onTrackStart, onTrackFinish]);
+  }, [queue, getAudioUri, unload, volume, rate, onTrackStart, onTrackFinish]);
 
   // goNext/goPrev captured in a ref so the onPlaybackStatusUpdate closure
   // (created once per load) always calls the latest version.
@@ -211,6 +221,14 @@ export default function NowPlayingPlayer({
   const handleShare = () => {
     if (!item) return;
     Share.share({ message: item.content || item.title || '', title: item.title }).catch(() => {});
+  };
+
+  // Restarts the current track from the top without changing the queue
+  // position — matches the website's Reset button alongside Shuffle.
+  const handleReset = async () => {
+    repeatDoneRef.current = 0;
+    setPosition(0);
+    if (soundRef.current) { try { await soundRef.current.setPositionAsync(0); } catch (_) {} }
   };
 
   const handleClose = async () => {
@@ -298,9 +316,14 @@ export default function NowPlayingPlayer({
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={styles.shareBtn} onPress={handleShare}>
-            <Text style={styles.shareBtnText}>⬆ Share</Text>
-          </TouchableOpacity>
+          <View style={styles.shareRow}>
+            <TouchableOpacity style={styles.shareBtn} onPress={handleShare}>
+              <Text style={styles.shareBtnText}>⬆ Share</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.shareBtn} onPress={handleReset}>
+              <Text style={styles.shareBtnText}>↺ Reset</Text>
+            </TouchableOpacity>
+          </View>
 
           {queue.length > 1 && (
             <TouchableOpacity style={styles.queueHandle} onPress={() => setQueueOpen(true)}>
@@ -328,12 +351,23 @@ export default function NowPlayingPlayer({
                 ))}
               </View>
 
-              <TouchableOpacity style={styles.loopRow} onPress={() => setLoopOne((v) => !v)}>
-                <Text style={styles.sheetLabel}>LOOP THIS {kicker === 'Now Playing — Affirmations' ? 'SET' : 'TRACK'}</Text>
-                <View style={[styles.toggleTrack, loopOne && styles.toggleTrackOn]}>
-                  <View style={[styles.toggleThumb, loopOne && styles.toggleThumbOn]} />
-                </View>
-              </TouchableOpacity>
+              <Text style={styles.sheetLabel}>REPEAT — PLAY THIS {kicker === 'Now Playing — Affirmations' ? 'SET' : 'TRACK'}...</Text>
+              <View style={styles.repeatStepperRow}>
+                <TouchableOpacity style={styles.repeatStepBtn} onPress={() => setRepeatTarget((n) => Math.max(1, n - 1))}>
+                  <Text style={styles.repeatStepBtnText}>−</Text>
+                </TouchableOpacity>
+                <Text style={styles.repeatValue}>{repeatTarget}×</Text>
+                <TouchableOpacity style={styles.repeatStepBtn} onPress={() => setRepeatTarget((n) => Math.min(1000, n + 1))}>
+                  <Text style={styles.repeatStepBtnText}>+</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.speedRow}>
+                {REPEAT_PRESETS.map((n) => (
+                  <TouchableOpacity key={n} style={[styles.speedChip, repeatTarget === n && styles.speedChipOn]} onPress={() => setRepeatTarget(n)}>
+                    <Text style={[styles.speedChipText, repeatTarget === n && styles.speedChipTextOn]}>{n}×</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
 
               <TouchableOpacity style={styles.sheetCloseBtn} onPress={() => setSettingsOpen(false)}>
                 <Text style={styles.sheetCloseText}>Done</Text>
@@ -398,7 +432,8 @@ const styles = StyleSheet.create({
   playBtn: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
   playBtnText: { color: '#1e1220', fontSize: 24 },
 
-  shareBtn: { alignSelf: 'center', marginTop: 22, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: radii.pill, paddingVertical: 10, paddingHorizontal: 18 },
+  shareRow: { flexDirection: 'row', justifyContent: 'center', gap: 10, marginTop: 22 },
+  shareBtn: { backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: radii.pill, paddingVertical: 10, paddingHorizontal: 18 },
   shareBtnText: { color: '#fff', fontSize: 13, fontFamily: fonts.bodyMedium },
 
   queueHandle: { alignItems: 'center', marginTop: 22 },
@@ -416,11 +451,10 @@ const styles = StyleSheet.create({
   speedChipText: { fontFamily: fonts.bodyMedium, fontSize: 12.5, color: colors.ink2 },
   speedChipTextOn: { color: '#fff', fontWeight: '700' },
 
-  loopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
-  toggleTrack: { width: 44, height: 26, borderRadius: 13, backgroundColor: 'rgba(154,95,168,0.2)', padding: 3 },
-  toggleTrackOn: { backgroundColor: colors.purpleMid },
-  toggleThumb: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff' },
-  toggleThumbOn: { transform: [{ translateX: 18 }] },
+  repeatStepperRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 10 },
+  repeatStepBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(154,95,168,0.12)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(154,95,168,0.25)' },
+  repeatStepBtnText: { fontFamily: fonts.bodyMedium, fontSize: 16, color: colors.purpleDark, fontWeight: '700' },
+  repeatValue: { fontFamily: fonts.displayMedium, fontSize: 16, color: colors.ink, fontWeight: '600', minWidth: 44, textAlign: 'center' },
 
   sheetCloseBtn: { marginTop: 22, alignSelf: 'center', paddingVertical: 10, paddingHorizontal: 24, borderRadius: radii.pill, backgroundColor: colors.purpleMid },
   sheetCloseText: { color: '#fff', fontFamily: fonts.bodyMedium, fontWeight: '600' },

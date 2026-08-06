@@ -674,7 +674,7 @@ export default function Affirmations() {
           onClose={closePlayer}
           isFavorited={(item) => !!item.raw.is_favorite}
           onToggleFavorite={(item) => item.raw.id && handleFavorite(item.raw.id)}
-          onReadFull={(item) => setReadItem({ title: item.title, content: item.content })}
+          onReadFull={(item) => setReadItem({ title: item.title, content: item.content, lines: item.raw.affirmations || [] })}
         />
       )}
 
@@ -683,6 +683,7 @@ export default function Affirmations() {
         onClose={() => setReadItem(null)}
         title={readItem?.title}
         content={readItem?.content}
+        lines={readItem?.lines}
         kicker="Affirmations"
         onListen={() => setReadItem(null)}
       />
