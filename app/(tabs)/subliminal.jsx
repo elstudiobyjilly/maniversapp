@@ -272,11 +272,21 @@ export default function Subliminal() {
 
   const startSession = async (session) => {
     // Silent playback streams from the backend's ultrasonic-shift endpoint,
-    // which is currently failing (AVPlayerItem -1100 / NSURLErrorDomain) --
-    // block it with a clear message instead of letting people hit a dead
-    // player with no explanation. Audible sessions are unaffected.
+    // which is currently failing on-device (AVPlayerItem -1100 /
+    // NSURLErrorDomain) -- block it with a clear message instead of
+    // letting people hit a dead player with no explanation. It works fine
+    // on the website (that's where the DSB-SC modulation was proven out),
+    // so point people there instead of just saying "not available."
+    // Audible sessions are unaffected.
     if (session.volume_level === 'subliminal') {
-      setError('Silent Subliminal is launching after the App Store release — try Audible in the meantime ✨');
+      Alert.alert(
+        'Silent Subliminal',
+        'This can\'t play inside the app yet — you can play it on manivers.com instead. Audible works great in the meantime ✨',
+        [
+          { text: 'OK', style: 'cancel' },
+          { text: 'Open Website', onPress: () => Linking.openURL('https://manivers.com/#subliminal') },
+        ]
+      );
       return;
     }
     await stopAll();
@@ -660,10 +670,10 @@ export default function Subliminal() {
                             <Text style={styles.presetIcon}>{p.icon}</Text>
                             <Text style={styles.presetLabel}>{p.label}</Text>
                             {disabled ? (
-                              <View style={styles.presetSoonBadge}><Text style={styles.presetSoonBadgeText}>Coming Soon</Text></View>
+                              <View style={styles.presetSoonBadge}><Text style={styles.presetSoonBadgeText}>Website Only</Text></View>
                             ) : preset === key && <Text style={styles.presetCheck}>✓</Text>}
                           </View>
-                          <Text style={styles.presetDesc}>{disabled ? 'Launching after the App Store release — audible works great in the meantime.' : p.desc}</Text>
+                          <Text style={styles.presetDesc}>{disabled ? 'Not available in the app yet — play it on manivers.com instead. Audible works great in the meantime.' : p.desc}</Text>
                           {!disabled && (
                             <View style={styles.chipRow}>
                               {p.tags.map((tag) => <View key={tag} style={styles.presetTag}><Text style={styles.presetTagText}>{tag}</Text></View>)}
@@ -844,7 +854,7 @@ export default function Subliminal() {
                             <Text style={styles.libName}>{sessionName(s)}{s.locked ? ' 🔒 Manifestor' : ''}</Text>
                             <Text style={styles.libMeta}>
                               {p ? `${p.icon} ${p.label}` : '✨ Subliminal'} · {s.aff_count ?? '?'} affs
-                              {s.volume_level === 'subliminal' ? ' · Coming Soon' : ''}
+                              {s.volume_level === 'subliminal' ? ' · Website Only' : ''}
                             </Text>
                           </View>
                           {!selectMode && (
