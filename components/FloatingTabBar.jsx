@@ -51,7 +51,12 @@ export default function FloatingTabBar({ state, descriptors, navigation }) {
 
   return (
     <View style={[styles.pill, { bottom: 22 + Math.max(0, insets.bottom - 12) }]}>
-      <BlurView intensity={50} tint="light" style={StyleSheet.absoluteFill} />
+      {/* borderRadius set directly on the BlurView, not just relying on
+          the parent's overflow:hidden -- on iOS, BlurView clipped only by
+          an ancestor's overflow can render past the intended rounded
+          corners depending on RN/Expo version, which reads as "not
+          actually glassy" even when the blur itself is working. */}
+      <BlurView intensity={80} tint="extraLight" style={[StyleSheet.absoluteFill, { borderRadius: 31 }]} />
       <View style={styles.pillTint} pointerEvents="none" />
       <View style={styles.row} onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}>
         {barWidth > 0 && (
@@ -105,7 +110,7 @@ const styles = StyleSheet.create({
   // A light translucent wash over the BlurView -- true frosted glass
   // (blurred content showing through) rather than a flat near-opaque
   // background colour, matching GlassCard's own glass treatment.
-  pillTint: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255,255,255,0.45)' },
+  pillTint: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255,255,255,0.16)' },
   row: { flex: 1, flexDirection: 'row', alignItems: 'center' },
   item: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   indicatorWrap: { position: 'absolute', top: 6, bottom: 6, left: 0 },
