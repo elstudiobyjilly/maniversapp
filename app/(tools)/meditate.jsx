@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
+import { LinearGradient } from 'expo-linear-gradient';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import ScreenHeader from '../../components/ScreenHeader';
 import Button from '../../components/Button';
 import { startSession, completeSession } from '../../services/api';
+import { gradients } from '../../constants/theme';
 
 export default function Meditate() {
   const insets = useSafeAreaInsets();
@@ -104,7 +106,7 @@ function BreathTimer() {
   };
 
   return (
-    <GlassCard style={{ alignItems: 'center', paddingVertical: 40, marginBottom: 16 }}>
+    <GlassCard style={{ marginBottom: 16 }} contentStyle={{ alignItems: 'center', paddingVertical: 40 }}>
       <Animated.View style={[styles.breathCircle, { transform: [{ scale }] }]}>
         <Text style={styles.breathLabel}>{phaseLabel}</Text>
       </Animated.View>
@@ -186,7 +188,7 @@ function MedTimer() {
   const ss = String(secondsLeft % 60).padStart(2, '0');
 
   return (
-    <GlassCard style={{ alignItems: 'center', paddingVertical: 36, marginBottom: 16 }}>
+    <GlassCard style={{ marginBottom: 16 }} contentStyle={{ alignItems: 'center', paddingVertical: 36 }}>
       <Text style={styles.timerDisplay}>{mm}:{ss}</Text>
       <View style={styles.row}>
         {DURATIONS.map((d) => (
@@ -210,13 +212,18 @@ function MantraCounter() {
   const malas = Math.floor(count / 108);
 
   return (
-    <GlassCard style={{ alignItems: 'center', paddingVertical: 36, marginBottom: 16 }}>
+    <GlassCard style={{ marginBottom: 16 }} contentStyle={{ alignItems: 'center', paddingVertical: 36 }}>
       <Text style={styles.mantraCount}>{count}</Text>
       <Text style={styles.hintText}>taps · 108 = one mala{malas > 0 ? ` · ${malas} mala${malas > 1 ? 's' : ''} complete` : ''}</Text>
-      <TouchableOpacity style={styles.mantraTapBar} onPress={() => setCount((c) => c + 1)}>
-        <Text style={styles.mantraTapEmoji}>🙏</Text>
+      <TouchableOpacity activeOpacity={0.85} onPress={() => setCount((c) => c + 1)} style={styles.mantraTapShadow}>
+        <LinearGradient colors={gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.mantraTapBar}>
+          <View style={styles.mantraTapInnerRing}>
+            <Text style={styles.mantraTapEmoji}>🙏</Text>
+          </View>
+        </LinearGradient>
       </TouchableOpacity>
-      <Button title="↺ Reset" variant="ghost" size="sm" onPress={() => setCount(0)} style={{ marginTop: 14, alignSelf: 'flex-start' }} />
+      <Text style={styles.mantraTapHint}>Tap to count</Text>
+      <Button title="↺ Reset" variant="ghost" size="sm" onPress={() => setCount(0)} style={{ marginTop: 16 }} />
     </GlassCard>
   );
 }
@@ -240,8 +247,24 @@ const styles = StyleSheet.create({
   durationTextActive: { color: '#fff', fontWeight: '700' },
   hintText: { fontSize: 12, color: '#6b5c66', marginTop: 14, textAlign: 'center', fontStyle: 'italic' },
   mantraCount: { fontSize: 56, color: '#9a5fa8', fontWeight: '300', marginBottom: 6, fontFamily: 'serif', textAlign: 'center', alignSelf: 'center' },
-  mantraTapBar: { width: '100%', backgroundColor: '#c9a8c9', borderRadius: 20, paddingVertical: 28, alignItems: 'center', marginTop: 18 },
-  mantraTapEmoji: { fontSize: 32 },
+  mantraTapShadow: {
+    marginTop: 22, borderRadius: 90,
+    shadowColor: '#a878b8', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.35, shadowRadius: 20,
+    elevation: 10,
+  },
+  mantraTapBar: {
+    width: 148, height: 148, borderRadius: 74,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.55)',
+  },
+  mantraTapInnerRing: {
+    width: 120, height: 120, borderRadius: 60,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)',
+  },
+  mantraTapEmoji: { fontSize: 46 },
+  mantraTapHint: { fontSize: 11, color: '#9a8896', marginTop: 10, fontStyle: 'italic' },
   modeRow: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.5)', borderRadius: 50, padding: 4, marginBottom: 16 },
   modePill: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 50 },
   modePillActive: { backgroundColor: '#fff' },
