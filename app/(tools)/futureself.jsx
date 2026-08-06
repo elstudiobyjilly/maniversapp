@@ -167,100 +167,95 @@ const StatementsList = memo(function StatementsList({ areaId, stmts, onRemove })
 // user drags them into on-device is mirrored under this key (same
 // on-device-workaround pattern used for Desire Action's start dates).
 const IDENTITY_ORDER_KEY = 'mv_fs_identity_order';
-const REORDER_ROW_HEIGHT = 60;
+// Estimate used for a card's height before its first onLayout measurement
+// fires (cards vary a lot -- 0 statements vs 5 -- so this is only a
+// placeholder until the real height is known).
+const DEFAULT_AREA_HEIGHT = 90;
 
-// A single draggable row inside the reorder modal. `positions` is a shared
-// value holding { [id]: currentSlotIndex } for every row -- dragging this
-// row updates its own slot and swaps whichever row currently occupies the
-// slot it crosses into, so every other row animates out of the way.
-function ReorderRow({ id, icon, label, index, positions, count, onReorder }) {
-  const translateY = useSharedValue(index * REORDER_ROW_HEIGHT);
+// Sum of every id's height up to (not including) `slot`, given the current
+// slot assignment. Cards have very different heights (0 vs 5 statements),
+// so position is computed from cumulative real heights rather than a fixed
+// row height.
+function offsetForSlot(positions, heights, slot) {
+  'worklet';
+  let y = 0;
+  const ids = Object.keys(positions);
+  for (let i = 0; i < ids.length; i++) {
+    if (positions[ids[i]] < slot) y += heights[ids[i]] ?? DEFAULT_AREA_HEIGHT;
+  }
+  return y;
+}
+
+// One draggable identity-area card. `positions`/`heights` are shared values
+// owned by the parent list ({ [id]: slotIndex } / { [id]: measuredHeight }).
+// Dragging the header continuously re-derives where `id` should sit among
+// the *other* cards by comparing the dragged card's center against their
+// cumulative offsets, then reassigns every id's slot from that -- so cards
+// smoothly reflow around the one being dragged regardless of height.
+function DraggableAreaCard({ id, positions, heights, onReorderCommit, onMeasured, children }) {
+  const translateY = useSharedValue(offsetForSlot(positions.value, heights.value, positions.value[id] ?? 0));
   const isDragging = useSharedValue(false);
+  const startY = useSharedValue(0);
 
   useAnimatedReaction(
-    () => positions.value[id],
-    (cur, prev) => {
-      if (cur !== prev && !isDragging.value) {
-        translateY.value = withSpring(cur * REORDER_ROW_HEIGHT, { damping: 20, stiffness: 220 });
+    () => ({ pos: positions.value, h: heights.value }),
+    (cur) => {
+      if (!isDragging.value) {
+        const target = offsetForSlot(cur.pos, cur.h, cur.pos[id] ?? 0);
+        translateY.value = withSpring(target, { damping: 22, stiffness: 220 });
       }
     }
   );
 
   const gesture = Gesture.Pan()
-    .onStart(() => { isDragging.value = true; })
+    .activateAfterLongPress(220)
+    .onStart(() => {
+      isDragging.value = true;
+      startY.value = offsetForSlot(positions.value, heights.value, positions.value[id] ?? 0);
+    })
     .onUpdate((e) => {
-      translateY.value = positions.value[id] * REORDER_ROW_HEIGHT + e.translationY;
-      const newIndex = Math.min(count - 1, Math.max(0, Math.round(translateY.value / REORDER_ROW_HEIGHT)));
-      const oldIndex = positions.value[id];
-      if (newIndex !== oldIndex) {
-        const otherEntry = Object.entries(positions.value).find(([, v]) => v === newIndex);
-        const next = { ...positions.value, [id]: newIndex };
-        if (otherEntry) next[otherEntry[0]] = oldIndex;
-        positions.value = next;
+      translateY.value = startY.value + e.translationY;
+      const heightsV = heights.value;
+      const positionsV = positions.value;
+      const myHeight = heightsV[id] ?? DEFAULT_AREA_HEIGHT;
+      const myCenter = translateY.value + myHeight / 2;
+
+      const others = Object.keys(positionsV).filter((k) => k !== id).sort((a, b) => positionsV[a] - positionsV[b]);
+      let cursor = 0;
+      let insertAt = others.length;
+      for (let i = 0; i < others.length; i++) {
+        const oh = heightsV[others[i]] ?? DEFAULT_AREA_HEIGHT;
+        if (myCenter < cursor + oh / 2) { insertAt = i; break; }
+        cursor += oh;
       }
+
+      const next = [...others];
+      next.splice(insertAt, 0, id);
+      const nextPositions = {};
+      next.forEach((oid, idx) => { nextPositions[oid] = idx; });
+      positions.value = nextPositions;
     })
     .onEnd(() => {
-      translateY.value = withSpring(positions.value[id] * REORDER_ROW_HEIGHT, { damping: 20, stiffness: 220 });
+      translateY.value = withSpring(offsetForSlot(positions.value, heights.value, positions.value[id] ?? 0), { damping: 22, stiffness: 220 });
       isDragging.value = false;
-      runOnJS(onReorder)(positions.value);
+      runOnJS(onReorderCommit)(positions.value);
     });
 
   const style = useAnimatedStyle(() => ({
     position: 'absolute', left: 0, right: 0, top: 0,
     transform: [{ translateY: translateY.value }],
-    zIndex: isDragging.value ? 10 : 1,
-    shadowOpacity: isDragging.value ? 0.18 : 0,
+    zIndex: isDragging.value ? 50 : 1,
+    shadowOpacity: isDragging.value ? 0.22 : 0,
+    shadowRadius: isDragging.value ? 14 : 0,
   }));
 
   return (
-    <GestureDetector gesture={gesture}>
-      <Animated.View style={[styles.reorderRow, style]}>
-        <Text style={styles.reorderIcon}>{icon}</Text>
-        <Text style={styles.reorderLabel} numberOfLines={1}>{label}</Text>
-        <Text style={styles.reorderHandle}>☰</Text>
-      </Animated.View>
-    </GestureDetector>
-  );
-}
-
-function ReorderAreasModal({ visible, areas, onClose, onSave }) {
-  const positions = useSharedValue({});
-  const [localOrder, setLocalOrder] = useState([]);
-
-  useEffect(() => {
-    if (visible) {
-      positions.value = Object.fromEntries(areas.map((a, i) => [a.id, i]));
-      setLocalOrder(areas.map(a => a.id));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible]);
-
-  const handleReorder = (posMap) => {
-    setLocalOrder(Object.entries(posMap).sort((a, b) => a[1] - b[1]).map(([rid]) => rid));
-  };
-
-  const handleDone = () => { onSave(localOrder); onClose(); };
-
-  return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
-        <View style={styles.reorderSheet}>
-          <View style={styles.reorderSheetHeader}>
-            <Text style={styles.reorderSheetTitle}>Reorder Life Areas</Text>
-            <TouchableOpacity onPress={onClose} hitSlop={8}><Text style={styles.modalCloseText}>✕</Text></TouchableOpacity>
-          </View>
-          <Text style={styles.reorderHint}>Hold ☰ and drag to set the order you want ✨</Text>
-          <View style={{ height: areas.length * REORDER_ROW_HEIGHT }}>
-            {areas.map((a, i) => (
-              <ReorderRow key={a.id} id={a.id} icon={a.ic} label={a.label} index={i} positions={positions} count={areas.length} onReorder={handleReorder} />
-            ))}
-          </View>
-          <TouchableOpacity style={styles.primaryBtn} onPress={handleDone}>
-            <Text style={styles.primaryBtnText}>Save Order ✨</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
+    <Animated.View
+      style={[styles.draggableAreaWrap, style]}
+      onLayout={(e) => onMeasured(id, e.nativeEvent.layout.height)}
+    >
+      {children(gesture)}
+    </Animated.View>
   );
 }
 
@@ -278,7 +273,9 @@ function IdentityTab() {
   const [newAreaIc, setNewAreaIc] = useState('');
   const [newAreaLabel, setNewAreaLabel] = useState('');
   const [order, setOrder] = useState(null);
-  const [reorderOpen, setReorderOpen] = useState(false);
+  const [heights, setHeights] = useState({});
+  const positionsSV = useSharedValue({});
+  const heightsSV = useSharedValue({});
 
   useEffect(() => {
     getIdentity()
@@ -304,10 +301,30 @@ function IdentityTab() {
   })();
   const totalStmts = Object.keys(areas).reduce((sum, k) => (k === '_custom' ? sum : sum + (Array.isArray(areas[k]) ? areas[k].length : 0)), 0);
 
-  const handleSaveOrder = async (newOrder) => {
+  // Keep the drag layer's shared values in sync with the current display
+  // order / measured heights so dragging always starts from where the
+  // cards actually are.
+  useEffect(() => {
+    positionsSV.value = Object.fromEntries(orderedAreas.map((a, i) => [a.id, i]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderedAreas.map(a => a.id).join('|')]);
+
+  useEffect(() => {
+    heightsSV.value = heights;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [heights]);
+
+  const handleMeasured = useCallback((id, h) => {
+    setHeights(prev => (Math.abs((prev[id] || 0) - h) > 0.5 ? { ...prev, [id]: h } : prev));
+  }, []);
+
+  const handleReorderCommit = useCallback((posMap) => {
+    const newOrder = Object.entries(posMap).sort((a, b) => a[1] - b[1]).map(([rid]) => rid);
     setOrder(newOrder);
-    try { await AsyncStorage.setItem(IDENTITY_ORDER_KEY, JSON.stringify(newOrder)); } catch (_) {}
-  };
+    AsyncStorage.setItem(IDENTITY_ORDER_KEY, JSON.stringify(newOrder)).catch(() => {});
+  }, []);
+
+  const totalAreasHeight = orderedAreas.reduce((sum, a) => sum + (heights[a.id] ?? DEFAULT_AREA_HEIGHT), 0);
 
   const persist = async (next) => {
     setAreas(next);
@@ -372,10 +389,7 @@ function IdentityTab() {
   return (
     <View>
       <Text style={styles.tabIntro}>Write identity statements for each area of life. "I am someone who..." — be honest, be bold, be expansive.</Text>
-
-      <TouchableOpacity style={styles.reorderTrigger} onPress={() => setReorderOpen(true)}>
-        <Text style={styles.reorderTriggerText}>☰ Reorder Areas</Text>
-      </TouchableOpacity>
+      <Text style={styles.reorderHintInline}>Hold ☰ on a card's header and drag to rearrange ✨</Text>
 
       {addingArea ? (
         <View style={styles.newAreaBox}>
@@ -389,50 +403,68 @@ function IdentityTab() {
         </View>
       ) : null}
 
-      {orderedAreas.map(area => {
-        const stmts = areas[area.id] || [];
-        const isCustom = customAreas.some(c => c.id === area.id);
-        return (
-          <GlassCard key={area.id} style={styles.identityBlock} noPadding>
-            <View style={styles.identityBlockHeader}>
-              <Text style={styles.accordionIcon}>{area.ic}</Text>
-              <Text style={styles.accordionLabel} numberOfLines={1}>{area.label}</Text>
-              {stmts.length > 0 && (
-                <View style={styles.accordionBadge}>
-                  <Text style={styles.accordionBadgeText}>{stmts.length}</Text>
-                </View>
-              )}
-              <TouchableOpacity onPress={() => setAddingTo(addingTo === area.id ? null : area.id)} style={styles.identityAddPill}>
-                <Text style={styles.identityAddPillText}>+ Add</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => isCustom ? removeCustomArea(area.id) : clearArea(area.id)} style={styles.identityRemoveBtn}>
-                <Text style={styles.identityRemoveBtnText}>✕</Text>
-              </TouchableOpacity>
-            </View>
+      <View style={{ height: totalAreasHeight }}>
+        {orderedAreas.map(area => {
+          const stmts = areas[area.id] || [];
+          const isCustom = customAreas.some(c => c.id === area.id);
+          return (
+            <DraggableAreaCard
+              key={area.id}
+              id={area.id}
+              positions={positionsSV}
+              heights={heightsSV}
+              onReorderCommit={handleReorderCommit}
+              onMeasured={handleMeasured}
+            >
+              {(gesture) => (
+                <GlassCard style={styles.identityBlock} noPadding>
+                  <View style={styles.identityBlockHeader}>
+                    <GestureDetector gesture={gesture}>
+                      <View style={styles.identityBlockHeaderDrag}>
+                        <Text style={styles.accordionIcon}>{area.ic}</Text>
+                        <Text style={styles.accordionLabel} numberOfLines={1}>{area.label}</Text>
+                        {stmts.length > 0 && (
+                          <View style={styles.accordionBadge}>
+                            <Text style={styles.accordionBadgeText}>{stmts.length}</Text>
+                          </View>
+                        )}
+                        <Text style={styles.dragHandleIcon}>☰</Text>
+                      </View>
+                    </GestureDetector>
+                    <TouchableOpacity onPress={() => setAddingTo(addingTo === area.id ? null : area.id)} style={styles.identityAddPill}>
+                      <Text style={styles.identityAddPillText}>+ Add</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => isCustom ? removeCustomArea(area.id) : clearArea(area.id)} style={styles.identityRemoveBtn}>
+                      <Text style={styles.identityRemoveBtnText}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
 
-            <View style={styles.identityBlockBody}>
-              <StatementsList areaId={area.id} stmts={stmts} onRemove={removeStatement} />
-              {addingTo === area.id && (
-                <View style={styles.addRow}>
-                  <TextInput
-                    style={styles.addInputFull}
-                    placeholder="I am someone who..."
-                    placeholderTextColor={colors.mist2}
-                    value={drafts[area.id] || ''}
-                    onChangeText={t => setDrafts(prev => ({ ...prev, [area.id]: t }))}
-                    onSubmitEditing={() => addStatement(area.id)}
-                    returnKeyType="done"
-                    autoFocus
-                  />
-                  <TouchableOpacity onPress={() => addStatement(area.id)} style={styles.addBtn}>
-                    <Text style={styles.addBtnText}>✓ Add</Text>
-                  </TouchableOpacity>
-                </View>
+                  <View style={styles.identityBlockBody}>
+                    <StatementsList areaId={area.id} stmts={stmts} onRemove={removeStatement} />
+                    {addingTo === area.id && (
+                      <View style={styles.addRow}>
+                        <TextInput
+                          style={styles.addInputFull}
+                          placeholder="I am someone who..."
+                          placeholderTextColor={colors.mist2}
+                          value={drafts[area.id] || ''}
+                          onChangeText={t => setDrafts(prev => ({ ...prev, [area.id]: t }))}
+                          onSubmitEditing={() => addStatement(area.id)}
+                          returnKeyType="done"
+                          autoFocus
+                        />
+                        <TouchableOpacity onPress={() => addStatement(area.id)} style={styles.addBtn}>
+                          <Text style={styles.addBtnText}>✓ Add</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                </GlassCard>
               )}
-            </View>
-          </GlassCard>
-        );
-      })}
+            </DraggableAreaCard>
+          );
+        })}
+      </View>
 
       {!addingArea && (
         <TouchableOpacity style={styles.addCustomAreaBtn} onPress={() => setAddingArea(true)}>
@@ -442,13 +474,6 @@ function IdentityTab() {
 
       {saving && <ActivityIndicator color="#c9a8c9" style={{ marginTop: 8 }} />}
       {!!error && <Text style={styles.errorText}>{error}</Text>}
-
-      <ReorderAreasModal
-        visible={reorderOpen}
-        areas={orderedAreas}
-        onClose={() => setReorderOpen(false)}
-        onSave={handleSaveOrder}
-      />
     </View>
   );
 }
@@ -732,19 +757,17 @@ const SavedLettersList = memo(function SavedLettersList({ letters, expandedId, o
             {!isOpen && <Text style={styles.letterPreview}>{preview}</Text>}
           </TouchableOpacity>
           <View style={styles.letterHeaderRight}>
-            {isOpen && (
-              <View style={styles.letterHeaderActions}>
-                <TouchableOpacity onPress={() => onRead({ heading: letter.heading || 'Letter', body: letter.body })} style={styles.iconActionBtn} hitSlop={6}>
-                  <Text style={styles.iconActionBtnText}>⛶</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => onEdit(letter)} style={styles.iconActionBtn} hitSlop={6}>
-                  <Text style={styles.iconActionBtnText}>✎</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => onDelete(letter.id)} style={[styles.iconActionBtn, styles.iconActionBtnDelete]} hitSlop={6}>
-                  <Text style={styles.iconActionBtnDeleteText}>🗑</Text>
-                </TouchableOpacity>
-              </View>
-            )}
+            <View style={styles.letterHeaderActions}>
+              <TouchableOpacity onPress={() => onRead({ heading: letter.heading || 'Letter', body: letter.body })} style={styles.iconActionBtn} hitSlop={6}>
+                <Text style={styles.iconActionBtnText}>⛶</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => onEdit(letter)} style={styles.iconActionBtn} hitSlop={6}>
+                <Text style={styles.iconActionBtnText}>✎</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => onDelete(letter.id)} style={[styles.iconActionBtn, styles.iconActionBtnDelete]} hitSlop={6}>
+                <Text style={styles.iconActionBtnDeleteText}>🗑</Text>
+              </TouchableOpacity>
+            </View>
             <TouchableOpacity onPress={() => onToggleExpand(letter.id)} hitSlop={8}>
               <Text style={styles.accordionChevron}>{isOpen ? '▴' : '▾'}</Text>
             </TouchableOpacity>
@@ -1089,27 +1112,11 @@ const styles = StyleSheet.create({
   editingBadgeText: { fontSize: 12, color: '#9a5fa8', fontWeight: '600', letterSpacing: 0.4 },
   cancelText: { fontSize: 12, color: '#9a8896', fontWeight: '500' },
 
-  // Identity — reorder
-  reorderTrigger: {
-    alignSelf: 'center', marginBottom: 14, paddingVertical: 7, paddingHorizontal: 14,
-    borderRadius: 50, backgroundColor: 'rgba(255,255,255,0.6)', borderWidth: 1, borderColor: 'rgba(154,95,168,0.25)',
-  },
-  reorderTriggerText: { fontSize: 12.5, color: '#9a5fa8', fontWeight: '600' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(46,37,48,0.4)', justifyContent: 'flex-end' },
-  reorderSheet: { backgroundColor: '#fffaf3', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 30 },
-  reorderSheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  reorderSheetTitle: { fontSize: 18, fontWeight: '600', color: '#2e2530' },
-  modalCloseText: { fontSize: 16, color: '#6b5c66' },
-  reorderHint: { fontSize: 12.5, color: '#6b5c66', marginBottom: 16 },
-  reorderRow: {
-    height: REORDER_ROW_HEIGHT - 8, flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 14,
-    borderWidth: 1, borderColor: 'rgba(154,95,168,0.18)',
-    shadowColor: '#9a5fa8', shadowOffset: { width: 0, height: 3 }, shadowRadius: 8,
-  },
-  reorderIcon: { fontSize: 17 },
-  reorderLabel: { flex: 1, fontSize: 14, fontFamily: fonts.bodyMedium, fontWeight: '600', color: colors.ink },
-  reorderHandle: { fontSize: 15, color: '#c9a8c9' },
+  // Identity — in-place drag to reorder
+  reorderHintInline: { fontSize: 12, color: '#9a8896', textAlign: 'center', marginTop: -10, marginBottom: 14, fontStyle: 'italic' },
+  draggableAreaWrap: { left: 0, right: 0 },
+  identityBlockHeaderDrag: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  dragHandleIcon: { fontSize: 14, color: '#c9a8c9', marginLeft: 4 },
 
   // Identity accordion
   accordionHeader: { flexDirection: 'row', alignItems: 'center' },
