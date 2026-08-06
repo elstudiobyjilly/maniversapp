@@ -4,20 +4,32 @@ import {
   AURA_STYLES, CENTER_GLOW, STAR_DOTS, familyOn, COLOUR_FAMILIES,
 } from '../constants/auraCard';
 
-// The card's background is the FIRST custom-recoloured family (in
-// COLOUR_FAMILIES order: purple, pink, blue, gold) once the user has
-// actually picked their own shades via the colour picker -- only then
-// does the background follow "what the user picked" rather than the
-// named style's own designed background wash. A style that hasn't been
-// customised (no shadeOverrides at all -- the default right after
-// picking a Style, see handlePickStyle) always keeps its own baked-in
-// background, since the whole point of a named Style is to apply its
-// own complete look untouched.
-function firstOnColor(colours, shadeOverrides) {
-  if (!shadeOverrides || Object.keys(shadeOverrides).length === 0) return null;
-  const first = COLOUR_FAMILIES.find((f) => colours[f.key] !== false && shadeOverrides[f.key]);
-  return first ? shadeOverrides[first.key] : null;
+// The card's background is the FIRST toggled-on colour family (in
+// COLOUR_FAMILIES order: purple, pink, blue, gold) whenever the card is in
+// manual mode (`manual` = true, see the screen: picking a Style always
+// wipes manual mode, customising a colour always turns it on -- the two
+// are mutually exclusive) -- that first colour is the mandatory base/
+// background colour. Outside manual mode, the background always stays
+// the named Style's own designed wash.
+function firstOnColor(colours, shadeOverrides, manual) {
+  if (!manual) return null;
+  const first = COLOUR_FAMILIES.find((f) => colours[f.key] !== false && colours[f.key] !== undefined);
+  if (!first) return null;
+  return shadeOverrides?.[first.key] || first.swatch;
 }
+
+// Simple luminance check so manual-mode text still reads clearly against
+// whatever the user's first picked colour turns out to be, the same way
+// each named Style is hand-tuned to sit light-text-on-dark or
+// dark-text-on-light.
+function isDarkHex(hex) {
+  if (!hex) return false;
+  const m = hex.replace('#', '');
+  const full = m.length === 3 ? m.split('').map((c) => c + c).join('') : m;
+  const r = parseInt(full.slice(0, 2), 16), g = parseInt(full.slice(2, 4), 16), b = parseInt(full.slice(4, 6), 16);
+  return (0.299 * r + 0.587 * g + 0.114 * b) < 140;
+}
+
 import { fonts } from '../constants/theme';
 
 // A picked custom shade replaces every stop's colour (keeping each stop's
@@ -42,18 +54,36 @@ const FAMILY_FALLBACK_POSITIONS = [
   { cx: 0.82, cy: 0.2, r: 0.34 },
 ];
 
+// Manual mode ignores the named style entirely -- the card is built
+// purely from the 4 COLOURS toggles/shades, laid out on the same fallback
+// positions used for any "extra" colour a style didn't define. This is
+// the "designing it yourself" path: no style's baked-in orbs at all.
+function buildManualOrbs(colours, shadeOverrides) {
+  const orbs = [];
+  let posIdx = 0;
+  COLOUR_FAMILIES.forEach((f) => {
+    if (colours[f.key] === false) return;
+    const color = shadeOverrides?.[f.key] || f.swatch;
+    const pos = FAMILY_FALLBACK_POSITIONS[posIdx % FAMILY_FALLBACK_POSITIONS.length];
+    posIdx += 1;
+    orbs.push({ cx: pos.cx, cy: pos.cy, r: pos.r, family: f.key, stops: [[0, color, 0.55], [100, color, 0]] });
+  });
+  return orbs;
+}
+
 // Builds the full orb list for a style: the style's own baked-in orbs for
 // whichever families are toggled on, PLUS a generated orb for any family
 // the user explicitly picked a custom shade for that the style doesn't
 // already define. A named Style is a complete, designed look on its own --
-// picking one (which resets COLOURS to its all-on/no-overrides default,
-// see handlePickStyle) should render exactly as designed, not sprout
-// extra orbs just because all 4 families default to "on". Only a family
-// the user has actually customised via the colour picker (a real
-// shadeOverride) earns a synthesized orb of its own; merely being
-// toggled on with no override never adds anything the style didn't
-// already draw.
-function buildActiveOrbs(s, colours, shadeOverrides) {
+// picking one (which resets COLOURS to its all-on/no-overrides default and
+// exits manual mode, see handlePickStyle) should render exactly as
+// designed, not sprout extra orbs just because all 4 families default to
+// "on". Only a family the user has actually customised via the colour
+// picker (a real shadeOverride) earns a synthesized orb of its own;
+// merely being toggled on with no override never adds anything the style
+// didn't already draw.
+function buildActiveOrbs(s, colours, shadeOverrides, manual) {
+  if (manual) return buildManualOrbs(colours, shadeOverrides);
   const slotOrbs = [s.mainOrb, s.orb1, s.orb2];
   const presentFamilies = new Set(slotOrbs.map((o) => o.family));
   const orbs = slotOrbs.filter((o) => familyOn(o, colours)).map((o) => recolorOrb(o, shadeOverrides));
@@ -72,12 +102,12 @@ function buildActiveOrbs(s, colours, shadeOverrides) {
 // ─── SVG composition — shape depends on `pattern`, colours depend on which
 // of the 4 colour families are toggled on (and optionally recoloured via
 // shadeOverrides: { purple/pink/blue/gold: hex }).
-export default function AuraCardSvg({ styleKey, size, pattern, colours, shadeOverrides }) {
+export default function AuraCardSvg({ styleKey, size, pattern, colours, shadeOverrides, manual }) {
   const s = AURA_STYLES[styleKey];
-  const baseOrbs = buildActiveOrbs(s, colours, shadeOverrides);
-  const showStars = pattern === 'cosmic' || (s.stars && pattern === 'radial');
+  const baseOrbs = buildActiveOrbs(s, colours, shadeOverrides, manual);
+  const showStars = !manual && (pattern === 'cosmic' || (s.stars && pattern === 'radial'));
 
-  const firstColor = firstOnColor(colours, shadeOverrides);
+  const firstColor = firstOnColor(colours, shadeOverrides, manual);
   const bgFill = firstColor || (s.bg.type === 'solid' ? s.bg.colors[0] : `url(#bg-${styleKey})`);
 
   if (pattern === 'solid') {
@@ -140,7 +170,7 @@ export default function AuraCardSvg({ styleKey, size, pattern, colours, shadeOve
 
   // radial / aura / mesh / cosmic all share the gradient-defs setup below
   const orbsForLayout =
-    pattern === 'aura' ? [s.mainOrb].filter((o) => familyOn(o, colours)).map((o) => recolorOrb(o, shadeOverrides))
+    pattern === 'aura' ? (manual ? baseOrbs.slice(0, 1) : [s.mainOrb].filter((o) => familyOn(o, colours)).map((o) => recolorOrb(o, shadeOverrides)))
     : pattern === 'mesh' ? [...baseOrbs, ...baseOrbs].slice(0, 6).map((o, i) => ({ ...o, cx: (0.2 + (i * 0.28)) % 1, cy: (0.25 + i * 0.19 * (i % 2 === 0 ? 1 : -1) + 1) % 1, r: o.r * 0.6 }))
     : baseOrbs;
   const orbs = [...orbsForLayout, CENTER_GLOW];
@@ -180,28 +210,41 @@ export default function AuraCardSvg({ styleKey, size, pattern, colours, shadeOve
 // ─── The complete, capture-ready card face: gradient canvas + the branded
 // text overlay. Shared by the Aura Card tool screen and the Home dashboard
 // widget so both always produce an identical downloadable card.
-export function AuraCardFace({ styleKey, size, pattern, colours, shadeOverrides, quote, innerRef }) {
+export function AuraCardFace({ styleKey, size, pattern, colours, shadeOverrides, quote, innerRef, manual }) {
   const s = AURA_STYLES[styleKey];
+  // In manual mode there's no named style to borrow text contrast/label
+  // from -- derive readable text colour from the first picked colour
+  // instead (the same "mandatory base colour" driving the background),
+  // and show a generic "Custom" label rather than a style name that no
+  // longer applies.
+  const manualFirst = manual ? firstOnColor(colours, shadeOverrides, true) : null;
+  const dark = manual ? isDarkHex(manualFirst) : s.dark;
+  const text = manual
+    ? (dark
+        ? { name: 'rgba(255,255,255,.92)', subtitle: 'rgba(255,255,255,.75)', affirmation: 'rgba(255,255,255,.7)' }
+        : { name: 'rgba(46,37,48,.9)', subtitle: 'rgba(90,70,85,.75)', affirmation: 'rgba(60,48,58,.68)' })
+    : s.text;
+  const label = manual ? 'Custom' : s.label;
   return (
     <View ref={innerRef} collapsable={false} style={[faceStyles.capture, { width: size, height: size }]}>
-      <AuraCardSvg styleKey={styleKey} size={size} pattern={pattern} colours={colours} shadeOverrides={shadeOverrides} />
+      <AuraCardSvg styleKey={styleKey} size={size} pattern={pattern} colours={colours} shadeOverrides={shadeOverrides} manual={manual} />
       <View style={faceStyles.overlay}>
-        <Text style={[faceStyles.brand, { color: s.text.name, fontSize: size * 0.045 }]}>MANIVERS</Text>
-        <Text style={[faceStyles.date, { color: s.text.subtitle, fontSize: size * 0.026 }]}>
+        <Text style={[faceStyles.brand, { color: text.name, fontSize: size * 0.045 }]}>MANIVERS</Text>
+        <Text style={[faceStyles.date, { color: text.subtitle, fontSize: size * 0.026 }]}>
           {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
         </Text>
         <View style={{ flex: 1.6 }} />
-        <Text adjustsFontSizeToFit numberOfLines={1} style={[faceStyles.name, { color: s.text.name, fontSize: size * 0.085 }]}>
+        <Text adjustsFontSizeToFit numberOfLines={1} style={[faceStyles.name, { color: text.name, fontSize: size * 0.085 }]}>
           Your <Text style={faceStyles.nameAccent}>Aura Card</Text>
         </Text>
-        <Text style={[faceStyles.subtitle, { color: s.text.subtitle, fontSize: size * 0.032 }]}>{s.label}</Text>
+        <Text style={[faceStyles.subtitle, { color: text.subtitle, fontSize: size * 0.032 }]}>{label}</Text>
         <View style={{ flex: 1.4 }} />
-        <Text numberOfLines={3} style={[faceStyles.affirmation, { color: s.text.affirmation, fontSize: size * 0.038 }]}>
+        <Text numberOfLines={3} style={[faceStyles.affirmation, { color: text.affirmation, fontSize: size * 0.038 }]}>
           "{quote}"
         </Text>
         <View style={{ flex: 0.8 }} />
-        <Text style={[faceStyles.watermark, { fontSize: size * 0.03, color: s.text.subtitle }]}>manivers.com</Text>
-        <Text style={[faceStyles.tagline, { fontSize: size * 0.024, color: s.text.affirmation }]}>Believe · Receive · Become</Text>
+        <Text style={[faceStyles.watermark, { fontSize: size * 0.03, color: text.subtitle }]}>manivers.com</Text>
+        <Text style={[faceStyles.tagline, { fontSize: size * 0.024, color: text.affirmation }]}>Believe · Receive · Become</Text>
         <View style={{ flex: 0.5 }} />
       </View>
     </View>

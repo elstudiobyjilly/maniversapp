@@ -25,6 +25,13 @@ export default function AuraCard() {
   const insets = useSafeAreaInsets();
   const [wordsText, setWordsText] = useState('');
   const [manualStyle, setManualStyle] = useState(null); // null = Auto
+  // Style (Auto/named presets) and manually customising COLOURS are
+  // mutually exclusive design modes -- picking one always wipes the
+  // other, exactly like the toggle between a ready-made outfit and
+  // building your own. `manualColors` tracks which mode is currently
+  // active; while true, no Style chip (not even Auto) shows selected,
+  // and the card renders purely from the 4 COLOURS toggles/shades.
+  const [manualColors, setManualColors] = useState(false);
   const [pattern, setPattern] = useState('radial');
   const [colours, setColours] = useState({ purple: true, pink: true, blue: true, gold: true });
   const [shadeOverrides, setShadeOverrides] = useState({});
@@ -84,6 +91,7 @@ export default function AuraCard() {
   // family afterwards still works as a deliberate override on top of it.)
   const handlePickStyle = (key) => {
     setManualStyle(key); // null when 'Auto' is tapped
+    setManualColors(false); // wipe manual colour design -- Style wins
     setColours({ purple: true, pink: true, blue: true, gold: true });
     setShadeOverrides({});
     setCardHidden(false);
@@ -93,6 +101,7 @@ export default function AuraCard() {
     const nextStyle = STYLE_KEYS[Math.floor(Math.random() * STYLE_KEYS.length)];
     const nextPattern = PATTERNS[Math.floor(Math.random() * PATTERNS.length)];
     setManualStyle(nextStyle);
+    setManualColors(false);
     setPattern(nextPattern);
     setColours({ purple: true, pink: true, blue: true, gold: true });
     setShadeOverrides({});
@@ -101,11 +110,16 @@ export default function AuraCard() {
 
   const handleClearCard = () => setCardHidden(true);
 
-  const toggleColour = (key) => { setColours((prev) => ({ ...prev, [key]: !prev[key] })); setPickerFor(null); setCardHidden(false); };
+  // Toggling a colour on/off, or picking a custom shade, is "designing it
+  // yourself" -- it switches into manual mode, which wipes the Style
+  // selection (no chip stays highlighted) exactly the way picking a Style
+  // wipes manual colours above.
+  const toggleColour = (key) => { setColours((prev) => ({ ...prev, [key]: !prev[key] })); setManualColors(true); setPickerFor(null); setCardHidden(false); };
   const openShadePicker = (key) => setPickerFor((cur) => (cur === key ? null : key));
   const pickShade = (key, hex) => {
     setShadeOverrides((prev) => ({ ...prev, [key]: hex }));
     setColours((prev) => ({ ...prev, [key]: true }));
+    setManualColors(true);
     setPickerFor(null);
     setCardHidden(false);
     setCustomHex('');
@@ -124,6 +138,7 @@ export default function AuraCard() {
   const handleResetColours = () => {
     setColours({ purple: true, pink: true, blue: true, gold: true });
     setShadeOverrides({});
+    setManualColors(false); // back to defaults -- Style is back in charge
     setPickerFor(null);
     setCardHidden(false);
   };
@@ -201,10 +216,10 @@ export default function AuraCard() {
                 {col.map((opt) => (
                   <TouchableOpacity
                     key={opt.key ?? 'auto'}
-                    style={[styles.chip, manualStyle === opt.key && styles.chipActive]}
+                    style={[styles.chip, !manualColors && manualStyle === opt.key && styles.chipActive]}
                     onPress={() => handlePickStyle(opt.key)}
                   >
-                    <Text style={[styles.chipText, manualStyle === opt.key && styles.chipTextActive]}>{opt.label}</Text>
+                    <Text style={[styles.chipText, !manualColors && manualStyle === opt.key && styles.chipTextActive]}>{opt.label}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -263,6 +278,7 @@ export default function AuraCard() {
                 colours={colours}
                 shadeOverrides={shadeOverrides}
                 quote={quote}
+                manual={manualColors}
               />
             </View>
 
