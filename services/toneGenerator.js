@@ -1,4 +1,9 @@
-import * as FileSystem from 'expo-file-system';
+// Expo SDK 54 moved the old cacheDirectory/writeAsStringAsync/EncodingType
+// API to expo-file-system/legacy -- the default 'expo-file-system' export no
+// longer has them, so this file was silently throwing on every call (caught
+// by the "silently fail" try/catch below) and Frequency Tuner / Affirmation
+// Beat never actually produced sound.
+import * as FileSystem from 'expo-file-system/legacy';
 
 function writeString(view, offset, str) {
   for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
