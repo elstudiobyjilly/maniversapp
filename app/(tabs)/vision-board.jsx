@@ -20,43 +20,32 @@ import * as Linking from 'expo-linking';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const SCREEN_HEIGHT = Dimensions.get('window').height;
-// Baseline/minimum canvas size — was only 1.15x the viewport -- barely any
-// bigger than what's already on screen, so panning had almost nowhere to
-// go and felt "stuck" even though the gesture itself worked. 2.4x gives
-// real room to pan around. This is a FLOOR, not the final size — see
-// canvasWidth/canvasHeight below, which grow past this to fit items placed
-// further out (e.g. saved from the website, which may lay out on a
-// differently-sized canvas) so nothing ever ends up permanently
-// unreachable by panning.
-const BASE_CANVAS_WIDTH = SCREEN_WIDTH * 2.4;
-// The board's visible frame — fixed size, matches the website. Zooming
-// scales/pans the content inside this frame; the frame itself never resizes.
+// Matches the website exactly (explore.js: V_BOARD_W / V_BOARD_H) — a
+// FIXED 1600×2000 board, not something derived from the phone's screen
+// size. Every item's x/y is a pixel position within this exact canvas on
+// both platforms, and the website clamps every item to stay inside these
+// bounds on every move/save — so this size is always big enough to reach
+// every item, on any device.
+const CANVAS_WIDTH = 1600;
+const CANVAS_HEIGHT = 2000;
+// The board's visible frame — fixed size. Zooming scales/pans the content
+// inside this frame; the frame itself never resizes.
 const VIEWPORT_WIDTH = SCREEN_WIDTH - 32;
-// Was a flat 500px regardless of screen size, which left a large dead strip
-// of empty space below the board on taller phones and tablets. Now fills
-// the space actually left after the header/toolbar/controls above it and
-// the "+ Add Image" bar below, with sane floor/ceiling so it never gets
-// too cramped or absurdly tall.
 const VIEWPORT_HEIGHT = Math.max(420, Math.min(900, SCREEN_HEIGHT - 380));
-// BASE_CANVAS_HEIGHT used to be a flat 1000px, independent of
-// VIEWPORT_HEIGHT. Width scales the same way relative to its viewport
-// (1.6x), so it always had pan room; height didn't — once VIEWPORT_HEIGHT
-// grew to fill taller screens it could equal or exceed that flat 1000,
-// leaving zero vertical pan range (maxPanY computes to 0) while horizontal
-// kept working fine. That's the exact "left/right pans, up/down doesn't,
-// can't reach the bottom" symptom. Scaling it off the viewport the same
-// way width does guarantees vertical pan room always exists, on every
-// screen size.
-const BASE_CANVAS_HEIGHT = VIEWPORT_HEIGHT * 2.4;
-// Padding kept clear beyond the furthest item so it's not flush against
-// the edge of the pannable area.
-const CANVAS_ITEM_PADDING = 80;
 const ITEM_SIZE = 120;
-// Zoom range for the board viewport. Max was 2x, which wasn't enough to
-// actually inspect a busy board. Min was 0.5x, which wasn't enough to zoom
-// back out and see a board whose images are spread across the wider canvas.
-const ZOOM_MIN = 0.2;
+// Zoom range. Max was 2x, which wasn't enough to actually inspect a busy
+// board. The minimum is NOT a flat constant — see minZoomFor() below,
+// which matches the website's rule (explore.js _vMinZoom): the board can
+// never zoom out past "cover scale" (still fully filling the frame on
+// both axes, like CSS background-size:cover). A flat 0.2 minimum let the
+// board shrink well past that, exposing the frame's own background as
+// dead space around it — that's the "a lot of space behind the board"
+// bug. Bottoming out at cover-scale instead means the frame's background
+// is never visible, at any zoom, exactly like the website.
 const ZOOM_MAX = 3;
+function minZoomFor(viewportW, viewportH) {
+  return Math.max(viewportW / CANVAS_WIDTH, viewportH / CANVAS_HEIGHT, 0.05);
+}
 const MIN_ITEM_SIZE = 60;
 
 const CATEGORIES = ['💰 Wealth', '💕 Love', '🌿 Health', '🚀 Career', '🏡 Home', '✨ Purpose', '🕊️ Peace'];
@@ -96,7 +85,7 @@ function BoardImage({ uri, style }) {
   return <Image source={{ uri: safeUri }} style={style} onError={() => setFailed(true)} />;
 }
 
-function DraggableImage({ item, index, isLocked, selectMode, selected, onMove, onResize, onRemove, onToggleSelect, onLongPressItem, canvasWidth, canvasHeight }) {
+function DraggableImage({ item, index, isLocked, selectMode, selected, onMove, onResize, onRemove, onToggleSelect, onLongPressItem }) {
   const translateX = useSharedValue(item.x || 0);
   const translateY = useSharedValue(item.y || 0);
   const startX = useSharedValue(item.x || 0);
@@ -146,8 +135,8 @@ function DraggableImage({ item, index, isLocked, selectMode, selected, onMove, o
       translateY.value = startY.value + e.translationY;
     })
     .onEnd(() => {
-      const clampedX = Math.max(0, Math.min(canvasWidth - width.value, translateX.value));
-      const clampedY = Math.max(0, Math.min(canvasHeight - height.value, translateY.value));
+      const clampedX = Math.max(0, Math.min(CANVAS_WIDTH - width.value, translateX.value));
+      const clampedY = Math.max(0, Math.min(CANVAS_HEIGHT - height.value, translateY.value));
       translateX.value = clampedX;
       translateY.value = clampedY;
       runOnJS(onMove)(index, clampedX, clampedY);
@@ -260,23 +249,13 @@ export default function VisionBoard() {
 
   const canvasRef = useRef(null);
 
-  // The canvas must always be at least as big as the furthest-out item —
-  // otherwise an item saved with coordinates beyond the app's base canvas
-  // size (e.g. placed on the website, which may lay its board out on a
-  // differently-sized canvas) sits outside the pannable area entirely.
-  // Since panning is clamped to the canvas's own bounds, that item becomes
-  // permanently unreachable no matter how far you pan or zoom out — items
-  // would just render cut off at the frame's edge forever. Growing the
-  // canvas to fit every item's actual position/size guarantees everything
-  // placed on the board stays reachable.
-  const canvasWidth = useMemo(() => {
-    const maxX = items.reduce((m, it) => Math.max(m, (it.x || 0) + (it.w || ITEM_SIZE)), 0);
-    return Math.max(BASE_CANVAS_WIDTH, maxX + CANVAS_ITEM_PADDING);
-  }, [items]);
-  const canvasHeight = useMemo(() => {
-    const maxY = items.reduce((m, it) => Math.max(m, (it.y || 0) + (it.h || ITEM_SIZE)), 0);
-    return Math.max(BASE_CANVAS_HEIGHT, maxY + CANVAS_ITEM_PADDING);
-  }, [items]);
+  // The frame is the full screen in fullscreen mode, the normal fixed
+  // viewport otherwise — minZoom (cover-scale) is recalculated for
+  // whichever is currently active, same as the website re-applying scale
+  // on its own viewport-size changes.
+  const viewportW = fullscreen ? SCREEN_WIDTH : VIEWPORT_WIDTH;
+  const viewportH = fullscreen ? SCREEN_HEIGHT : VIEWPORT_HEIGHT;
+  const minZoom = useMemo(() => minZoomFor(viewportW, viewportH), [viewportW, viewportH]);
 
   // The board FRAME is a fixed-size viewport (matches the website — zooming
   // never resizes the board itself). zoom/pan only move the content around
@@ -301,11 +280,22 @@ export default function VisionBoard() {
     []
   );
 
+  // Bottoms out the board at cover-scale instead of a flat minimum — the
+  // board always completely fills the frame, at any zoom, so the frame's
+  // own background is never visible as dead space around it (matches the
+  // website's _vApplyScale / _vMinZoom exactly). Re-clamps whenever the
+  // frame itself changes size (entering/exiting fullscreen).
+  useEffect(() => {
+    if (zoom.value < minZoom) {
+      zoom.value = withTiming(minZoom, { duration: 200 });
+      savedZoom.value = minZoom;
+    }
+  }, [minZoom]);
+
   const setZoomTo = (value) => {
-    const clamped = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, value));
+    const clamped = Math.max(minZoom, Math.min(ZOOM_MAX, value));
     zoom.value = withTiming(clamped, { duration: 200 });
     savedZoom.value = clamped;
-    if (clamped === 1) { panX.value = withTiming(0); panY.value = withTiming(0); }
   };
 
   const pinchGesture = Gesture.Pinch()
@@ -314,7 +304,7 @@ export default function VisionBoard() {
     })
     .onUpdate((e) => {
       const next = savedZoom.value * e.scale;
-      zoom.value = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, next));
+      zoom.value = Math.max(minZoom, Math.min(ZOOM_MAX, next));
     })
     .onEnd(() => {
       savedZoom.value = zoom.value;
@@ -345,10 +335,10 @@ export default function VisionBoard() {
   // content inside it scales+pans. Pan is clamped so the content can never
   // be dragged fully out of the fixed frame.
   const canvasAnimatedStyle = useAnimatedStyle(() => {
-    const scaledW = canvasWidth * zoom.value;
-    const scaledH = canvasHeight * zoom.value;
-    const maxPanX = Math.max(0, (scaledW - VIEWPORT_WIDTH) / 2);
-    const maxPanY = Math.max(0, (scaledH - VIEWPORT_HEIGHT) / 2);
+    const scaledW = CANVAS_WIDTH * zoom.value;
+    const scaledH = CANVAS_HEIGHT * zoom.value;
+    const maxPanX = Math.max(0, (scaledW - viewportW) / 2);
+    const maxPanY = Math.max(0, (scaledH - viewportH) / 2);
     const clampedX = Math.min(maxPanX, Math.max(-maxPanX, panX.value));
     const clampedY = Math.min(maxPanY, Math.max(-maxPanY, panY.value));
     return {
@@ -410,12 +400,8 @@ export default function VisionBoard() {
     setUploading(true); setError('');
     try {
       const cloudUrl = await uploadImage(result.assets[0].uri, 'vision-board');
-      // New images land within the base canvas area (roughly what's
-      // visible at a normal zoom) rather than the dynamically-grown
-      // canvasWidth/Height, which may extend far out just to keep old
-      // far-flung items reachable.
-      const randX = Math.floor(Math.random() * Math.max(1, BASE_CANVAS_WIDTH - ITEM_SIZE));
-      const randY = Math.floor(Math.random() * Math.max(1, BASE_CANVAS_HEIGHT - ITEM_SIZE));
+      const randX = Math.floor(Math.random() * Math.max(1, CANVAS_WIDTH - ITEM_SIZE));
+      const randY = Math.floor(Math.random() * Math.max(1, CANVAS_HEIGHT - ITEM_SIZE));
       const newItem = { url: cloudUrl, label: '', type: 'image', x: randX, y: randY, w: ITEM_SIZE, h: ITEM_SIZE };
       const updatedItems = [...items, newItem];
       const saved = await saveVisionBoard(updatedItems);
@@ -448,8 +434,8 @@ export default function VisionBoard() {
 
       const newItems = toAdd.map((url) => ({
         url, label: '', type: 'image',
-        x: Math.floor(Math.random() * Math.max(1, BASE_CANVAS_WIDTH - ITEM_SIZE)),
-        y: Math.floor(Math.random() * Math.max(1, BASE_CANVAS_HEIGHT - ITEM_SIZE)),
+        x: Math.floor(Math.random() * Math.max(1, CANVAS_WIDTH - ITEM_SIZE)),
+        y: Math.floor(Math.random() * Math.max(1, CANVAS_HEIGHT - ITEM_SIZE)),
         w: ITEM_SIZE, h: ITEM_SIZE,
       }));
       const updatedItems = [...items, ...newItems];
@@ -479,7 +465,7 @@ export default function VisionBoard() {
 
   const handleTidy = () => {
     if (isLocked) { setError('Unlock the board to tidy it.'); return; }
-    const cols = Math.max(1, Math.floor(BASE_CANVAS_WIDTH / (ITEM_SIZE + 14)));
+    const cols = Math.max(1, Math.floor(CANVAS_WIDTH / (ITEM_SIZE + 14)));
     const tidied = items.map((it, i) => ({
       ...it,
       x: (i % cols) * (ITEM_SIZE + 14) + 10,
@@ -496,8 +482,8 @@ export default function VisionBoard() {
     if (isLocked) { setError('Unlock the board to group images.'); return; }
     if (selectMode) {
       if (selectedIndices.length > 1) {
-        const cx = BASE_CANVAS_WIDTH / 2 - ITEM_SIZE / 2;
-        const cy = BASE_CANVAS_HEIGHT / 2 - ITEM_SIZE / 2;
+        const cx = CANVAS_WIDTH / 2 - ITEM_SIZE / 2;
+        const cy = CANVAS_HEIGHT / 2 - ITEM_SIZE / 2;
         const updated = items.map((it, i) => {
           const pos = selectedIndices.indexOf(i);
           return pos === -1 ? it : { ...it, x: cx + pos * 18, y: cy + pos * 18 };
@@ -619,10 +605,10 @@ export default function VisionBoard() {
           style={[
             styles.canvas,
             {
-              width: canvasWidth,
-              height: canvasHeight,
-              left: (VIEWPORT_WIDTH - canvasWidth) / 2,
-              top: (VIEWPORT_HEIGHT - canvasHeight) / 2,
+              width: CANVAS_WIDTH,
+              height: CANVAS_HEIGHT,
+              left: (viewportW - CANVAS_WIDTH) / 2,
+              top: (viewportH - CANVAS_HEIGHT) / 2,
             },
             canvasAnimatedStyle,
           ]}
@@ -632,8 +618,6 @@ export default function VisionBoard() {
               key={i}
               item={item}
               index={i}
-              canvasWidth={canvasWidth}
-              canvasHeight={canvasHeight}
               isLocked={isLocked}
               selectMode={selectMode}
               selected={selectedIndices.includes(i)}
@@ -697,7 +681,7 @@ export default function VisionBoard() {
             <TouchableOpacity style={styles.zoomBtn} onPress={() => setZoomTo(zoom.value + 0.1)}>
               <Text style={styles.zoomBtnText}>+</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.fitBtn} onPress={() => setZoomTo(1)}>
+            <TouchableOpacity style={styles.fitBtn} onPress={() => { setZoomTo(minZoom); panX.value = withTiming(0); panY.value = withTiming(0); }}>
               <Text style={styles.fitBtnText}>⟳ Fit</Text>
             </TouchableOpacity>
           </View>
@@ -803,8 +787,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   viewportFullscreen: { flex: 1, width: '100%', height: '100%', borderRadius: 0, marginTop: 0 },
-  // left/top are computed per-render from the dynamic canvasWidth/Height
-  // and applied inline (see canvasNode) since they can't be static here.
+  // width/height/left/top are applied inline (see canvasNode) since left/top
+  // depend on whether fullscreen is active and can't be static here.
   canvas: {
     backgroundColor: '#fff',
     position: 'absolute',
