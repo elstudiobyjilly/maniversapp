@@ -1,21 +1,42 @@
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
+import { TouchableOpacity, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
+
+// Small frosted-glass back button -- floats over the content via
+// headerTransparent (doesn't reserve header height / push content down,
+// so screens' own in-content titles don't need to move), for when the
+// OS edge-swipe-back gesture isn't available or is awkward to use:
+// iPad/Android split-screen, external displays, the Mac Catalyst build,
+// etc. Deliberately subtle (low-opacity glass, no solid background,
+// small) rather than a prominent button -- "there but not shouting".
+function BackButton() {
+  const router = useRouter();
+  return (
+    <TouchableOpacity onPress={() => router.back()} hitSlop={10} activeOpacity={0.7}>
+      <BlurView intensity={35} tint="light" style={styles.backBtn}>
+        <Ionicons name="chevron-back" size={17} color="rgba(46,37,48,0.6)" />
+      </BlurView>
+    </TouchableOpacity>
+  );
+}
 
 export default function ToolsLayout() {
   return (
     <Stack
       screenOptions={{
-        headerShown: false,
-        // Edge-swipe-back only (the standard iOS behaviour). This used to
-        // also set fullScreenGestureEnabled: true, which installs a pan
-        // gesture recognizer across the ENTIRE screen (not just the edge)
-        // to catch swipe-back gestures anywhere -- that recognizer sits in
-        // the touch pipeline over everything on screen, including write
-        // boxes, and briefly contesting a tap right as a TextInput starts
-        // to focus is a known way to get the keyboard cancelled mid-open.
-        // That's almost certainly what's been causing the "keyboard pops
-        // up and immediately closes" glitch reported across every screen
-        // in this stack even after fixing two earlier, unrelated causes of
-        // the same symptom. Edge-only swipe was the actual ask anyway.
+        headerShown: true,
+        headerTransparent: true,
+        headerTitle: '',
+        headerShadowVisible: false,
+        headerLeft: () => <BackButton />,
+        // Edge-swipe-back still works on phones (this used to also set
+        // fullScreenGestureEnabled: true, which installed a pan gesture
+        // recognizer across the ENTIRE screen and ended up contesting taps
+        // on write boxes right as the keyboard tried to open -- removed
+        // for that reason, see prior commit). The BackButton above covers
+        // the cases swipe-back can't reach: iPad/Android split-screen,
+        // external displays, Mac Catalyst, etc.
         gestureEnabled: true,
       }}
     >
@@ -42,4 +63,17 @@ export default function ToolsLayout() {
   );
 }
 
-  
+const styles = StyleSheet.create({
+  backBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    marginLeft: 14,
+    marginTop: 2,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
+  },
+});
