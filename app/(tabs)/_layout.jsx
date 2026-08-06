@@ -5,34 +5,18 @@ import FloatingTabBar from '../../components/FloatingTabBar';
 // bottom tab bar entirely -- it renders the sliding "liquid glass"
 // indicator behind the active icon (iOS 18 tab bar style: tap a tab and a
 // frosted pill glides over to it) and the pink icon colours, matching the
-// app's actual pink accent instead of the previous purple. The pill's own
-// position/shadow/border still lives in tabBarStyle below; FloatingTabBar
-// only renders what's inside it.
+// app's actual pink accent instead of the previous purple. ALL of the
+// pill's own styling (position/size/blur/shadow/border) now lives inside
+// FloatingTabBar itself -- `tabBarStyle` here would do nothing, since
+// React Navigation only applies it to its own built-in bar renderer, never
+// to a custom `tabBar`. (That's exactly what broke this the first time:
+// tabBarStyle silently stopped applying the moment a custom tabBar was
+// introduced, collapsing the pill into an unstyled full-height sliver.)
 export default function TabsLayout() {
   return (
     <Tabs
       tabBar={(props) => <FloatingTabBar {...props} />}
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: {
-          position: 'absolute',
-          left: 20,
-          right: 20,
-          bottom: 22,
-          height: 62,
-          borderRadius: 31,
-          backgroundColor: 'rgba(255,251,253,0.97)',
-          borderTopWidth: 0,
-          borderWidth: 1,
-          borderColor: 'rgba(248,184,200,0.3)',
-          shadowColor: '#7a5080',
-          shadowOffset: { width: 0, height: 6 },
-          shadowOpacity: 0.16,
-          shadowRadius: 16,
-          elevation: 10,
-          paddingHorizontal: 6,
-        },
-      }}
+      screenOptions={{ headerShown: false }}
     >
       <Tabs.Screen name="dashboard" options={{ title: 'Home' }} />
       <Tabs.Screen name="affirmations" options={{ title: 'Affirm' }} />
