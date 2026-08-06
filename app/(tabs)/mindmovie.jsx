@@ -101,8 +101,14 @@ export default function MindMovie() {
   const [playingMovie, setPlayingMovie] = useState(null);
   const [sceneIndex, setSceneIndex] = useState(0);
   const [narrationLoading, setNarrationLoading] = useState(false);
+  const [paused, setPaused] = useState(false);
   const soundRef = useRef(null);
   const fallbackTimerRef = useRef(null);
+  // For the timed (no-audio) fallback path, pause/resume needs to remember
+  // how much of the slide's duration is left instead of just clearing it.
+  const fallbackRemainingRef = useRef(0);
+  const fallbackStartedAtRef = useRef(0);
+  const fallbackGoNextRef = useRef(null);
   // Open /sessions row for the movie currently playing, so watching a Mind
   // Movie reaches the Tracker's totals/streak like affirmations do.
   const trackedSessionId = useRef(null);
@@ -247,6 +253,7 @@ export default function MindMovie() {
   const playScene = async (movie, index) => {
     await cleanupPlayback();
     setSceneIndex(index);
+    setPaused(false);
     const scene = movie.scenes[index];
 
     const goNext = () => {
@@ -263,6 +270,7 @@ export default function MindMovie() {
         setPlayingMovie(null);
       }
     };
+    fallbackGoNextRef.current = goNext;
 
     // Prefer the pre-generated cached narration URL for this movie's
     // locked voice over live TTS.
@@ -276,10 +284,16 @@ export default function MindMovie() {
         soundRef.current = sound;
         sound.setOnPlaybackStatusUpdate((status) => { if (status.didJustFinish) goNext(); });
       } catch (e) {
-        fallbackTimerRef.current = setTimeout(goNext, (movie.slideDur || 5) * 1000);
+        const ms = (movie.slideDur || 5) * 1000;
+        fallbackRemainingRef.current = ms;
+        fallbackStartedAtRef.current = Date.now();
+        fallbackTimerRef.current = setTimeout(goNext, ms);
       } finally { setNarrationLoading(false); }
     } else {
-      fallbackTimerRef.current = setTimeout(goNext, (movie.slideDur || 5) * 1000);
+      const ms = (movie.slideDur || 5) * 1000;
+      fallbackRemainingRef.current = ms;
+      fallbackStartedAtRef.current = Date.now();
+      fallbackTimerRef.current = setTimeout(goNext, ms);
     }
   };
 
@@ -299,6 +313,31 @@ export default function MindMovie() {
     await cleanupPlayback();
     trackedSessionId.current = null;
     setPlayingMovie(null);
+  };
+
+  const togglePause = async () => {
+    if (soundRef.current) {
+      if (paused) { await soundRef.current.playAsync(); } else { await soundRef.current.pauseAsync(); }
+      setPaused(!paused);
+      return;
+    }
+    // Timed fallback path — pause clears the timer and remembers what's
+    // left; resume restarts a timer for the remaining duration.
+    if (paused) {
+      fallbackStartedAtRef.current = Date.now();
+      fallbackTimerRef.current = setTimeout(() => fallbackGoNextRef.current?.(), fallbackRemainingRef.current);
+      setPaused(false);
+    } else {
+      clearTimeout(fallbackTimerRef.current);
+      const elapsed = Date.now() - fallbackStartedAtRef.current;
+      fallbackRemainingRef.current = Math.max(0, fallbackRemainingRef.current - elapsed);
+      setPaused(true);
+    }
+  };
+
+  const goToScene = (movie, index) => {
+    if (index < 0 || index >= movie.scenes.length) return;
+    playScene(movie, index);
   };
 
   if (checkingPlan || loading) {
@@ -438,13 +477,46 @@ export default function MindMovie() {
       <Modal visible={!!playingMovie} animationType="fade" onRequestClose={closePlayback}>
         {playingMovie && (
           <View style={styles.playerContainer}>
+            <View style={[styles.playerTopBar, { paddingTop: insets.top + 10 }]}>
+              <Text style={styles.playerTitle} numberOfLines={1}>{playingMovie.title}</Text>
+              <View style={styles.playerTopActions}>
+                <TouchableOpacity style={styles.playerIconButton} onPress={togglePause}>
+                  <Text style={styles.playerIconButtonText}>{paused ? '▶' : '❚❚'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.playerIconButton} onPress={closePlayback}>
+                  <Text style={styles.playerIconButtonText}>✕ Exit</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
             <SceneImage uri={playingMovie.scenes[sceneIndex]?.img} style={styles.playerImage} iconSize={54} />
+
             <View style={styles.playerCaptionWrap}>
               {narrationLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.playerCaption}>{playingMovie.scenes[sceneIndex]?.text}</Text>}
+              <View style={styles.playerProgressTrack}>
+                <View style={[styles.playerProgressFill, { width: `${((sceneIndex + 1) / playingMovie.scenes.length) * 100}%` }]} />
+              </View>
             </View>
-            <TouchableOpacity style={styles.closePlayer} onPress={closePlayback}>
-              <Text style={styles.closePlayerText}>✕</Text>
-            </TouchableOpacity>
+
+            <View style={[styles.playerBottomBar, { paddingBottom: insets.bottom + 20 }]}>
+              <Text style={styles.playerCounter}>{sceneIndex + 1} / {playingMovie.scenes.length}</Text>
+              <View style={styles.playerNavGroup}>
+                <TouchableOpacity
+                  style={[styles.playerNavButton, sceneIndex === 0 && styles.playerNavButtonDisabled]}
+                  onPress={() => goToScene(playingMovie, sceneIndex - 1)}
+                  disabled={sceneIndex === 0}
+                >
+                  <Text style={styles.playerNavButtonText}>‹</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.playerNavButton, sceneIndex === playingMovie.scenes.length - 1 && !playingMovie.loop && styles.playerNavButtonDisabled]}
+                  onPress={() => goToScene(playingMovie, sceneIndex + 1)}
+                  disabled={sceneIndex === playingMovie.scenes.length - 1 && !playingMovie.loop}
+                >
+                  <Text style={styles.playerNavButtonText}>›</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
         )}
       </Modal>
@@ -489,8 +561,19 @@ const styles = StyleSheet.create({
   thumb: { width: 56, height: 56, borderRadius: 10, marginRight: 8, backgroundColor: 'rgba(255,255,255,0.35)' },
   playerContainer: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
   playerImage: { width: '100%', height: '70%', resizeMode: 'contain' },
-  playerCaptionWrap: { position: 'absolute', bottom: 80, paddingHorizontal: 30, minHeight: 40, justifyContent: 'center' },
+  playerTopBar: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 18, zIndex: 2 },
+  playerTitle: { fontFamily: fonts.displayMedium, color: '#fff', fontSize: 15, fontWeight: '600', flex: 1, marginRight: 10 },
+  playerTopActions: { flexDirection: 'row', gap: 8 },
+  playerIconButton: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: radii.pill, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
+  playerIconButtonText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  playerCaptionWrap: { position: 'absolute', bottom: 80, left: 0, right: 0, paddingHorizontal: 30, minHeight: 40, justifyContent: 'center' },
   playerCaption: { fontFamily: fonts.displayItalic, color: '#fff', fontSize: 19, textAlign: 'center', fontWeight: '500', fontStyle: 'italic' },
-  closePlayer: { position: 'absolute', top: 50, right: 24, width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
-  closePlayerText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  playerProgressTrack: { height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.25)', marginTop: 14, overflow: 'hidden' },
+  playerProgressFill: { height: '100%', backgroundColor: '#fff', borderRadius: 2 },
+  playerBottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, zIndex: 2 },
+  playerCounter: { color: 'rgba(255,255,255,0.85)', fontFamily: fonts.bodyMedium, fontSize: 13, fontWeight: '600' },
+  playerNavGroup: { flexDirection: 'row', gap: 12 },
+  playerNavButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
+  playerNavButtonDisabled: { opacity: 0.35 },
+  playerNavButtonText: { color: '#fff', fontSize: 20, fontWeight: '700' },
 });
