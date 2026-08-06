@@ -32,7 +32,15 @@ const ICONS = {
 export default function FloatingTabBar({ state, descriptors, navigation }) {
   const insets = useSafeAreaInsets();
   const [barWidth, setBarWidth] = useState(0);
-  const routes = state.routes.filter((r) => descriptors[r.key].options.href !== null);
+  // Filtering on descriptors[r.key].options.href doesn't actually work
+  // here -- expo-router's `href: null` (used on the mindmovie/subliminal
+  // Tabs.Screen entries in _layout.jsx to hide them from the bar while
+  // keeping them reachable as screens) isn't exposed on `options.href` to
+  // a fully custom `tabBar` render prop the way it is to expo-router's own
+  // default bar, so that filter silently matched everything and both
+  // screens showed up as tab buttons anyway. ICONS only lists the 6 real
+  // tabs, so filtering on that instead is the reliable signal.
+  const routes = state.routes.filter((r) => Boolean(ICONS[r.name]));
   const slot = routes.length ? barWidth / routes.length : 0;
 
   const indicatorX = useSharedValue(0);
