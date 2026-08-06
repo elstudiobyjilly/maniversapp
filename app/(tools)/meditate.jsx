@@ -8,17 +8,6 @@ import ScreenHeader from '../../components/ScreenHeader';
 import Button from '../../components/Button';
 import { startSession, completeSession } from '../../services/api';
 
-const GUIDED_MEDITATIONS = [
-  { key: 'deep_sleep', icon: '🌙', label: 'Deep Sleep', color: 'rgba(173,196,230,0.35)' },
-  { key: 'morning_rise', icon: '🌅', label: 'Morning Rise', color: 'rgba(245,200,150,0.35)' },
-  { key: 'abundance_flow', icon: '💰', label: 'Abundance Flow', color: 'rgba(240,215,140,0.35)' },
-  { key: 'calm_storm', icon: '🌊', label: 'Calm the Storm', color: 'rgba(160,210,200,0.35)' },
-  { key: 'own_power', icon: '👑', label: 'Own Your Power', color: 'rgba(200,170,225,0.35)' },
-  { key: 'coming_home', icon: '💕', label: 'Coming Home', color: 'rgba(245,190,205,0.35)' },
-  { key: 'body_healing', icon: '🌿', label: 'Body Healing', color: 'rgba(180,215,180,0.35)' },
-  { key: 'gratitude_bath', icon: '🙏', label: 'Gratitude Bath', color: 'rgba(210,195,230,0.35)' },
-];
-
 export default function Meditate() {
   const insets = useSafeAreaInsets();
   const [tool, setTool] = useState('breath');
@@ -55,14 +44,13 @@ export default function Meditate() {
         </View>
 
         {mode === 'guided' ? (
-          <View style={styles.grid}>
-            {GUIDED_MEDITATIONS.map((m) => (
-              <TouchableOpacity key={m.key} style={[styles.gridCard, { backgroundColor: m.color }]}>
-                <Text style={styles.gridIcon}>{m.icon}</Text>
-                <Text style={styles.gridLabel}>{m.label}</Text>
-                <Text style={styles.gridMin}>10+ min</Text>
-              </TouchableOpacity>
-            ))}
+          <View style={styles.comingSoonWrap}>
+            <Text style={styles.comingSoonIcon}>🎧</Text>
+            <Text style={styles.comingSoonTitle}>Guided Meditations</Text>
+            <Text style={styles.comingSoonTag}>Coming Soon ✨</Text>
+            <Text style={styles.comingSoonBody}>
+              We're recording a full library of guided sessions. This will be ready after launch — for now, try the Breath Timer, Med Timer, or Mantra Counter above.
+            </Text>
           </View>
         ) : (
           <View style={styles.comingSoonWrap}>
@@ -245,13 +233,13 @@ const styles = StyleSheet.create({
   breathCircle: { width: 160, height: 160, borderRadius: 80, borderWidth: 2, borderColor: 'rgba(201,168,201,0.5)', backgroundColor: 'rgba(201,168,201,0.08)', justifyContent: 'center', alignItems: 'center' },
   breathLabel: { fontSize: 14, color: '#6b5c66', fontWeight: '500' },
   row: { flexDirection: 'row', gap: 8, justifyContent: 'center', flexWrap: 'wrap' },
-  timerDisplay: { fontSize: 56, color: '#9a5fa8', fontWeight: '300', marginBottom: 20, fontFamily: 'serif' },
+  timerDisplay: { fontSize: 56, color: '#9a5fa8', fontWeight: '300', marginBottom: 20, fontFamily: 'serif', textAlign: 'center', alignSelf: 'center' },
   durationPill: { backgroundColor: 'rgba(255,255,255,0.5)', borderRadius: 50, paddingVertical: 8, paddingHorizontal: 14, borderWidth: 1, borderColor: 'rgba(201,168,201,0.25)' },
   durationPillActive: { backgroundColor: '#c9a8c9', borderColor: '#c9a8c9' },
   durationText: { fontSize: 12, color: '#2e2530' },
   durationTextActive: { color: '#fff', fontWeight: '700' },
   hintText: { fontSize: 12, color: '#6b5c66', marginTop: 14, textAlign: 'center', fontStyle: 'italic' },
-  mantraCount: { fontSize: 56, color: '#9a5fa8', fontWeight: '300', marginBottom: 6, fontFamily: 'serif' },
+  mantraCount: { fontSize: 56, color: '#9a5fa8', fontWeight: '300', marginBottom: 6, fontFamily: 'serif', textAlign: 'center', alignSelf: 'center' },
   mantraTapBar: { width: '100%', backgroundColor: '#c9a8c9', borderRadius: 20, paddingVertical: 28, alignItems: 'center', marginTop: 18 },
   mantraTapEmoji: { fontSize: 32 },
   modeRow: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.5)', borderRadius: 50, padding: 4, marginBottom: 16 },
@@ -259,11 +247,6 @@ const styles = StyleSheet.create({
   modePillActive: { backgroundColor: '#fff' },
   modeText: { fontSize: 13, color: '#6b5c66', fontWeight: '600' },
   modeTextActive: { color: '#2e2530' },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  gridCard: { width: '31%', borderRadius: 16, paddingVertical: 22, alignItems: 'center', marginBottom: 4 },
-  gridIcon: { fontSize: 26, marginBottom: 8 },
-  gridLabel: { fontSize: 12, fontWeight: '600', color: '#2e2530', textAlign: 'center' },
-  gridMin: { fontSize: 10, color: '#6b5c66', marginTop: 3 },
   comingSoonWrap: { alignItems: 'center', paddingVertical: 50, paddingHorizontal: 20 },
   comingSoonIcon: { fontSize: 40, marginBottom: 14 },
   comingSoonTitle: { fontSize: 22, color: '#2e2530', fontWeight: '600', marginBottom: 6, fontFamily: 'serif' },

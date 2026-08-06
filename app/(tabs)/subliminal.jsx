@@ -271,6 +271,14 @@ export default function Subliminal() {
   };
 
   const startSession = async (session) => {
+    // Silent playback streams from the backend's ultrasonic-shift endpoint,
+    // which is currently failing (AVPlayerItem -1100 / NSURLErrorDomain) --
+    // block it with a clear message instead of letting people hit a dead
+    // player with no explanation. Audible sessions are unaffected.
+    if (session.volume_level === 'subliminal') {
+      setError('Silent Subliminal is launching after the App Store release — try Audible in the meantime ✨');
+      return;
+    }
     await stopAll();
     setError('');
     setActiveSession(session);
@@ -634,19 +642,36 @@ export default function Subliminal() {
                     <Text style={styles.stepHeading}>Activate Subliminal</Text>
                     <Text style={styles.stepSub}>Choose your transmission output level.</Text>
 
-                    {Object.entries(PRESETS).map(([key, p]) => (
-                      <TouchableOpacity key={key} style={[styles.presetCard, preset === key && styles.presetCardActive]} onPress={() => setPreset(key)}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                          <Text style={styles.presetIcon}>{p.icon}</Text>
-                          <Text style={styles.presetLabel}>{p.label}</Text>
-                          {preset === key && <Text style={styles.presetCheck}>✓</Text>}
-                        </View>
-                        <Text style={styles.presetDesc}>{p.desc}</Text>
-                        <View style={styles.chipRow}>
-                          {p.tags.map((tag) => <View key={tag} style={styles.presetTag}><Text style={styles.presetTagText}>{tag}</Text></View>)}
-                        </View>
-                      </TouchableOpacity>
-                    ))}
+                    {Object.entries(PRESETS).map(([key, p]) => {
+                      // Silent relies on the backend's ultrasonic-shift audio
+                      // generation, which is currently failing on-device
+                      // (AVPlayerItem -1100 / NSURLErrorDomain) -- disabled
+                      // until that's fixed post-launch rather than letting
+                      // people hit a broken player.
+                      const disabled = key === 'subliminal';
+                      return (
+                        <TouchableOpacity
+                          key={key}
+                          style={[styles.presetCard, preset === key && styles.presetCardActive, disabled && styles.presetCardDisabled]}
+                          onPress={() => !disabled && setPreset(key)}
+                          disabled={disabled}
+                        >
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <Text style={styles.presetIcon}>{p.icon}</Text>
+                            <Text style={styles.presetLabel}>{p.label}</Text>
+                            {disabled ? (
+                              <View style={styles.presetSoonBadge}><Text style={styles.presetSoonBadgeText}>Coming Soon</Text></View>
+                            ) : preset === key && <Text style={styles.presetCheck}>✓</Text>}
+                          </View>
+                          <Text style={styles.presetDesc}>{disabled ? 'Launching after the App Store release — audible works great in the meantime.' : p.desc}</Text>
+                          {!disabled && (
+                            <View style={styles.chipRow}>
+                              {p.tags.map((tag) => <View key={tag} style={styles.presetTag}><Text style={styles.presetTagText}>{tag}</Text></View>)}
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
 
                     <View style={styles.reviewBox}>
                       <View style={styles.reviewRow}>
@@ -817,7 +842,10 @@ export default function Subliminal() {
                           )}
                           <View style={{ flex: 1 }}>
                             <Text style={styles.libName}>{sessionName(s)}{s.locked ? ' 🔒 Manifestor' : ''}</Text>
-                            <Text style={styles.libMeta}>{p ? `${p.icon} ${p.label}` : '✨ Subliminal'} · {s.aff_count ?? '?'} affs</Text>
+                            <Text style={styles.libMeta}>
+                              {p ? `${p.icon} ${p.label}` : '✨ Subliminal'} · {s.aff_count ?? '?'} affs
+                              {s.volume_level === 'subliminal' ? ' · Coming Soon' : ''}
+                            </Text>
                           </View>
                           {!selectMode && (
                             <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -933,9 +961,12 @@ const styles = StyleSheet.create({
 
   presetCard: { borderRadius: radii.md, padding: 14, backgroundColor: 'rgba(255,255,255,0.55)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.25)', marginBottom: 10 },
   presetCardActive: { backgroundColor: 'rgba(201,168,201,0.2)', borderColor: colors.purpleMid },
+  presetCardDisabled: { opacity: 0.55 },
   presetIcon: { fontSize: 18 },
   presetLabel: { fontFamily: fonts.displayMedium, fontSize: 15, color: colors.ink, fontWeight: '600' },
   presetCheck: { color: colors.purpleDark, fontWeight: '700', marginLeft: 'auto' },
+  presetSoonBadge: { marginLeft: 'auto', backgroundColor: 'rgba(154,95,168,0.15)', borderRadius: radii.pill, paddingVertical: 3, paddingHorizontal: 9 },
+  presetSoonBadgeText: { fontFamily: fonts.bodyMedium, fontSize: 10.5, color: colors.purpleDark, fontWeight: '700' },
   presetDesc: { fontFamily: fonts.body, fontSize: 12, color: colors.mist, lineHeight: 17, marginTop: 6 },
   presetTag: { backgroundColor: 'rgba(201,168,201,0.15)', borderRadius: radii.pill, paddingVertical: 3, paddingHorizontal: 9 },
   presetTagText: { fontFamily: fonts.body, fontSize: 10, color: colors.purpleDark },
