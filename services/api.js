@@ -3,6 +3,16 @@ const API_BASE = 'https://maniverse444.onrender.com';
 let _token = null;
 export function setApiToken(t) { _token = t; }
 
+// Set by authStore at startup -- every screen just calls req()/its wrapper
+// functions and lets a 401 throw like any other error, so without this a
+// dead session only ever showed up as whatever generic error message that
+// screen happened to render, with the user stuck there until they thought
+// to manually log out. Firing this here means EVERY API call, from any
+// screen, bounces straight to the login screen the instant the session is
+// found to be expired.
+let _onUnauthorized = null;
+export function setUnauthorizedHandler(fn) { _onUnauthorized = fn; }
+
 export async function req(method, path, body = null) {
   const headers = { 'Content-Type': 'application/json' };
   if (_token) headers['Authorization'] = 'Bearer ' + _token;
@@ -14,20 +24,44 @@ export async function req(method, path, body = null) {
   });
 
   if (res.status === 204) return null;
-  const data = await res.json();
+
+  // Read as text first and parse manually instead of res.json() directly --
+  // a 502/503 from Render waking up (or any proxy hiccup) can come back
+  // with an empty or HTML body instead of JSON. res.json() on that throws
+  // a bare "JSON Parse error: Unexpected end of input" with no status code
+  // attached, which every screen's catch block then displayed verbatim --
+  // completely opaque, and indistinguishable from "every feature is
+  // broken." Now that always becomes a real Error with .status set, so a
+  // 401 still redirects to login (see below) and everything else gets an
+  // actionable message instead of a raw parser error.
+  const raw = await res.text();
+  let data = null;
+  if (raw) {
+    try { data = JSON.parse(raw); } catch (_) { data = null; }
+  }
 
   if (!res.ok) {
     if (res.status === 401) {
+      _onUnauthorized?.();
       const err = new Error('Session expired');
       err.status = 401;
       throw err;
     }
-    const msg = typeof data.detail === 'string'
-      ? data.detail
-      : Array.isArray(data.detail)
-        ? data.detail.map(e => e.msg || JSON.stringify(e)).join(', ')
-        : JSON.stringify(data.detail) || 'Error';
+    let msg;
+    if (data && typeof data.detail === 'string') msg = data.detail;
+    else if (data && Array.isArray(data.detail)) msg = data.detail.map((e) => e.msg || JSON.stringify(e)).join(', ');
+    else if (data && data.detail) msg = JSON.stringify(data.detail);
+    else if (res.status >= 500) msg = 'Server is temporarily unavailable — please try again in a moment.';
+    else msg = `Request failed (${res.status})`;
     const err = new Error(msg);
+    err.status = res.status;
+    throw err;
+  }
+
+  if (data === null && raw) {
+    // 2xx but the body wasn't valid JSON -- still surface something
+    // actionable rather than crash deep inside a screen's .then/.catch.
+    const err = new Error('Server returned an unexpected response — please try again.');
     err.status = res.status;
     throw err;
   }

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
+import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { loginRequest, registerRequest, sendOtp, verifyOtp, getMe, setApiToken } from '../services/api';
+import { loginRequest, registerRequest, sendOtp, verifyOtp, getMe, setApiToken, setUnauthorizedHandler } from '../services/api';
 
 const TOKEN_KEY = 'mv_token';
 const USER_KEY = 'mv_user';
@@ -84,3 +85,17 @@ export const useAuthStore = create((set, get) => ({
     set({ token: null, user: null, isAuthenticated: false });
   },
 }));
+
+// A single expired token can trigger several 401s at once (e.g. the
+// dashboard's Promise.allSettled hitting many endpoints in parallel) --
+// this guard makes sure logout+redirect only actually runs once per
+// session expiry instead of firing repeatedly for every failed call.
+let _handlingUnauthorized = false;
+setUnauthorizedHandler(() => {
+  if (_handlingUnauthorized) return;
+  _handlingUnauthorized = true;
+  useAuthStore.getState().logout().finally(() => {
+    router.replace('/(auth)/login');
+    _handlingUnauthorized = false;
+  });
+});
