@@ -112,7 +112,7 @@ function Widget({ icon, title, onOpen, openLabel = 'Open', children, style, body
   );
 }
 
-function WriteBox({ value, onChangeText, placeholder, minHeight = 84 }) {
+function WriteBox({ value, onChangeText, placeholder, minHeight = 84, onBlur }) {
   const [focused, setFocused] = useState(false);
   // The TextInput itself needs the minHeight, not just its wrapper — a
   // wrapper-only minHeight left blank space below a single-line input that
@@ -126,7 +126,7 @@ function WriteBox({ value, onChangeText, placeholder, minHeight = 84 }) {
         value={value}
         onChangeText={onChangeText}
         onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
+        onBlur={() => { setFocused(false); onBlur?.(); }}
         multiline
         textAlignVertical="top"
       />
@@ -160,7 +160,7 @@ function GratitudeWidget({ router, entries, onSaved }) {
       {todays.length === 0 ? (
         <Text style={styles.widgetEmpty}>Nothing yet today — start with one small thing 🌸</Text>
       ) : (
-        todays.slice(0, 2).map((e) => (
+        todays.map((e) => (
           <View key={e.id} style={styles.listLine}>
             <Text style={styles.listDot}>·</Text>
             <Text style={styles.listText} numberOfLines={2}>{e.content}</Text>
@@ -224,7 +224,6 @@ function DesireActionWidget({ router, roadmaps, rawLogs, setRawLogs }) {
   }
 
   const practices = active?.practices || [];
-  const shownPractices = practices.slice(0, 3);
 
   return (
     <Widget icon="🗺️" title="Desire Action" onOpen={() => router.push('/desire-action')} style={{ minHeight: WIDGET_H_TALL }}>
@@ -241,10 +240,10 @@ function DesireActionWidget({ router, roadmaps, rawLogs, setRawLogs }) {
       </ScrollView>
 
       <Text style={styles.widgetSubLabel}>TODAY'S CHECKLIST</Text>
-      {shownPractices.length === 0 ? (
+      {practices.length === 0 ? (
         <Text style={styles.widgetEmpty}>No practices set for this desire.</Text>
       ) : (
-        shownPractices.map((p) => {
+        practices.map((p) => {
           const done = !!todayLog?.practices?.[p];
           return (
             <TouchableOpacity key={p} style={styles.checkRow} onPress={() => toggle(p)} disabled={busy}>
@@ -254,17 +253,14 @@ function DesireActionWidget({ router, roadmaps, rawLogs, setRawLogs }) {
           );
         })
       )}
-      {practices.length > 3 && <Text style={styles.widgetMore}>+{practices.length - 3} more in tracker</Text>}
 
       <Text style={styles.widgetSubLabel}>ACTION / NOTE</Text>
-      <WriteBox value={note} onChangeText={setNote} placeholder="What action did you take today?" minHeight={48} />
-      <Button
-        title="Save note"
-        size="sm"
-        onPress={() => writeDay(todayLog?.practices || {}, note)}
-        loading={busy}
-        variant="ghost"
-        style={{ marginTop: 10, alignSelf: 'flex-start' }}
+      <WriteBox
+        value={note}
+        onChangeText={setNote}
+        onBlur={() => writeDay(todayLog?.practices || {}, note)}
+        placeholder="What action did you take today?"
+        minHeight={48}
       />
     </Widget>
   );
@@ -369,11 +365,16 @@ function ManifestedWidget({ router, wins, onSaved }) {
     <Widget icon="🏆" title="Manifested" onOpen={() => router.push('/manifested')} openLabel="All" style={{ minHeight: WIDGET_H_SHORT }}>
       <WriteBox value={title} onChangeText={setTitle} placeholder="What just manifested for you? 🎉" minHeight={72} />
       <Button title="Log it 🎉" size="sm" onPress={save} loading={saving} style={{ marginTop: 8, alignSelf: 'flex-start' }} />
-      {(wins || []).length > 0 && (
-        <View style={styles.listLine}>
-          <Text style={styles.listDot}>🎉</Text>
-          <Text style={styles.listText} numberOfLines={1}>{wins[0].title}</Text>
-        </View>
+      {(wins || []).length === 0 ? null : (
+        <>
+          <Text style={styles.widgetSubLabel}>PAST WINS</Text>
+          {wins.slice(0, 3).map((w) => (
+            <View key={w.id} style={styles.listLine}>
+              <Text style={styles.listDot}>🎉</Text>
+              <Text style={styles.listText} numberOfLines={1}>{w.title}</Text>
+            </View>
+          ))}
+        </>
       )}
     </Widget>
   );
@@ -744,7 +745,6 @@ const styles = StyleSheet.create({
   widgetOpen: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.purpleDark, fontWeight: '600' },
   widgetSubLabel: { fontFamily: fonts.bodyMedium, fontSize: 10, color: colors.purpleDark, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', marginTop: 16, marginBottom: 8 },
   widgetEmpty: { fontFamily: fonts.body, fontSize: 12.5, color: colors.mist, lineHeight: 19 },
-  widgetMore: { fontFamily: fonts.body, fontSize: 11, color: colors.mist, marginTop: 4, fontStyle: 'italic' },
 
   colourHint: { fontFamily: fonts.body, fontSize: 10.5, color: colors.mist, marginBottom: 6, fontStyle: 'italic' },
   colourRow: { flexDirection: 'row', gap: 14, marginBottom: 4 },
