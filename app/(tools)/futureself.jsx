@@ -964,18 +964,19 @@ const styles = StyleSheet.create({
   accordionBadgeText: { fontSize: 11, color: colors.pinkDeep, fontFamily: fonts.bodyBold, fontWeight: '700' },
   accordionChevron: { fontSize: 12, color: colors.mist2 },
   accordionBody: { marginTop: 14, borderTopWidth: 1, borderTopColor: 'rgba(154,95,168,0.1)', paddingTop: 12 },
-  // Soft-tinted rows instead of boxed/bordered rectangles: a translucent
-  // pink wash, generous rounded padding, and a thin colour accent bar on
-  // the left rather than a hard outline.
+  // Soft-tinted rows instead of boxed/bordered rectangles: a frosted
+  // white-glass wash (not pink -- too much colour on top of the header's
+  // own tint read as busy), generous rounded padding, and a thin colour
+  // accent bar on the left rather than a hard outline.
   stmtRow: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(255,209,232,0.3)',
+    backgroundColor: 'rgba(255,255,255,0.55)',
     borderRadius: radii.sm,
-    paddingVertical: 12, paddingHorizontal: 14,
+    paddingVertical: 13, paddingHorizontal: 14,
     marginBottom: 8,
   },
   stmtAccentBar: { width: 3, alignSelf: 'stretch', borderRadius: 2, backgroundColor: colors.pinkDark, marginRight: 12 },
-  stmtText: { color: colors.ink2, fontSize: 15, fontFamily: fonts.displayItalic, fontStyle: 'italic', flex: 1, lineHeight: 21 },
+  stmtText: { color: colors.ink2, fontSize: 16.5, fontFamily: fonts.displayItalic, fontStyle: 'italic', flex: 1, lineHeight: 23 },
   stmtRemove: { color: colors.mist, fontSize: 13, paddingHorizontal: 4, marginLeft: 8 },
   addRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
   addPrefix: { fontSize: 13, color: '#6b5c66', fontStyle: 'italic' },
@@ -996,12 +997,15 @@ const styles = StyleSheet.create({
   },
 
   // Identity — always-open panels styled to read as cohesive frosted
-  // cards (GlassCard) rather than a cramped flat list: pink-tinted header
-  // with rounded top corners, real breathing room between panels.
+  // cards (GlassCard) rather than a cramped flat list: a frosted-glass
+  // header (not a solid pink wash -- combined with the pink-tinted rows
+  // below it, that read as too colourful/busy) with rounded top corners,
+  // real breathing room between panels.
   identityBlock: { marginBottom: spacing.xl },
   identityBlockHeader: {
     flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12, paddingHorizontal: 16,
-    backgroundColor: 'rgba(255,209,232,0.4)',
+    backgroundColor: 'rgba(255,255,255,0.4)',
+    borderBottomWidth: 1, borderBottomColor: 'rgba(201,168,201,0.18)',
     borderTopLeftRadius: radii.lg, borderTopRightRadius: radii.lg,
   },
   identityAddPill: { backgroundColor: 'rgba(200,88,120,0.16)', borderWidth: 1, borderColor: 'rgba(200,88,120,0.3)', borderRadius: 50, paddingVertical: 5, paddingHorizontal: 12 },
@@ -1050,10 +1054,10 @@ const styles = StyleSheet.create({
 
   // Letters
   letterHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 6 },
-  letterHeading: { fontSize: 14, fontWeight: '600', color: '#2e2530', marginBottom: 2 },
-  letterDate: { fontSize: 11, color: '#9a8896' },
-  letterPreview: { color: '#6b5c66', fontSize: 13, lineHeight: 18 },
-  letterBody: { color: '#2e2530', fontSize: 14, lineHeight: 22, fontStyle: 'italic', marginVertical: 10 },
+  letterHeading: { fontSize: 17, fontFamily: fonts.displayMedium, color: colors.ink, marginBottom: 3 },
+  letterDate: { fontSize: 11.5, color: colors.mist2 },
+  letterPreview: { color: colors.mist, fontSize: 14, lineHeight: 20 },
+  letterBody: { color: colors.ink2, fontSize: 16, lineHeight: 24, fontFamily: fonts.displayItalic, fontStyle: 'italic', marginVertical: 12 },
 
   chipRowWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   letterPromptsLabel: { fontSize: 10.5, color: '#9a5fa8', fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8 },
