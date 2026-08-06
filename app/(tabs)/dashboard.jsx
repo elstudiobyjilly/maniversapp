@@ -21,6 +21,7 @@ import { colors, fonts, gradients, radii } from '../../constants/theme';
 import { categoryLabel } from '../../constants/desires';
 import { DAILY_MESSAGES } from '../../constants/dailyContent';
 import { AURA_AFFIRMATIONS, PATTERNS, PATTERN_LABELS, COLOUR_FAMILIES, FAMILY_SHADES, AURA_STYLES, STYLE_KEYS, detectStyle } from '../../constants/auraCard';
+import { safeImageUri } from '../../services/imageUri';
 import {
   START_KEY_PREFIX, PRACTICES_KEY_PREFIX, toDateKey, addDays, buildLogsMap, dayNumberFor,
 } from '../../constants/desireAction';
@@ -276,6 +277,19 @@ function DesireActionWidget({ router, roadmaps, rawLogs, setRawLogs }) {
   );
 }
 
+// R2 keys with spaces/special characters in the filename hit iOS's
+// "Protocol error" in RN's raw <Image> (which, unlike a browser <img>,
+// doesn't auto-encode the URL) -- the Mind Movie screen itself already
+// works around this via safeImageUri, but this widget was using a raw
+// <Image> straight off m.scenes[0].img, so real saved thumbnails were
+// silently failing to load here even though they play fine everywhere else.
+function MovieThumb({ uri, style }) {
+  const [failed, setFailed] = useState(false);
+  const safeUri = safeImageUri(uri);
+  if (!safeUri || failed) return <LinearGradient colors={gradients.avatar} style={style} />;
+  return <Image source={{ uri: safeUri }} style={style} onError={() => setFailed(true)} />;
+}
+
 // ─── 🎬 Mind Movies — thumbnail grid ──────────────────────────────────────
 function MindMovieWidget({ router, movies }) {
   const shown = (movies || []).slice(0, 4);
@@ -294,11 +308,7 @@ function MindMovieWidget({ router, movies }) {
               style={styles.movieTile}
               onPress={() => router.push(m.locked ? '/mindmovie' : { pathname: '/mindmovie', params: { playId: m.id } })}
             >
-              {m.scenes?.[0]?.img ? (
-                <Image source={{ uri: m.scenes[0].img }} style={styles.movieThumb} />
-              ) : (
-                <LinearGradient colors={gradients.avatar} style={styles.movieThumb} />
-              )}
+              <MovieThumb uri={m.scenes?.[0]?.img} style={styles.movieThumb} />
               <Text style={styles.movieTitle} numberOfLines={1}>{m.locked ? '🔒 ' : ''}{m.title || 'Untitled'}</Text>
             </TouchableOpacity>
           ))}
