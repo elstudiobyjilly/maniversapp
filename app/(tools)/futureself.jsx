@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback, memo } from 'react';
 import {
   View,
   Text,
@@ -27,6 +27,7 @@ import {
 } from '../../services/api';
 import { usePlanStore } from '../../store/planStore';
 import ExpandableTextArea from '../../components/ExpandableTextArea';
+import { colors, fonts, radii, shadows, spacing } from '../../constants/theme';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -136,6 +137,27 @@ function ReadModal({ visible, title, body, onClose }) {
 // MAX_STMTS_TOTAL constant in cards.js.
 const MAX_IDENTITY_STMTS = 10;
 
+// Statements are rendered inline per-category. Since typing a draft for
+// ANY category lives in the same IdentityTab component that owns every
+// category's statement list, isolating that list in its own memoized
+// component (mirroring the fix applied to Community Wall's feed) keeps a
+// keystroke in one category's "+Add" box from forcing every other
+// category's statement list to re-render too.
+const StatementsList = memo(function StatementsList({ areaId, stmts, onRemove }) {
+  if (stmts.length === 0) {
+    return <Text style={styles.identityEmptyText}>Tap + Add to define your identity here...</Text>;
+  }
+  return stmts.map((s, i) => (
+    <View key={i} style={styles.stmtRow}>
+      <View style={styles.stmtAccentBar} />
+      <Text style={styles.stmtText}>{s}</Text>
+      <TouchableOpacity onPress={() => onRemove(areaId, i)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+        <Text style={styles.stmtRemove}>✕</Text>
+      </TouchableOpacity>
+    </View>
+  ));
+});
+
 // ─── TAB 1 — Identity ─────────────────────────────────────────────────────────
 function IdentityTab() {
   const isPaid = usePlanStore((s) => s.isPaid);
@@ -185,10 +207,13 @@ function IdentityTab() {
     await persist(next);
   };
 
-  const removeStatement = async (areaId, idx) => {
+  // useCallback with [areas] so the reference only changes when the actual
+  // data changes (not on every drafts/addingTo keystroke) -- required for
+  // StatementsList's memo() to be effective.
+  const removeStatement = useCallback(async (areaId, idx) => {
     const next = { ...areas, [areaId]: areas[areaId].filter((_, i) => i !== idx) };
     await persist(next);
-  };
+  }, [areas]);
 
   const clearArea = (areaId) => {
     Alert.alert('Clear all statements in this area?', null, [
@@ -241,7 +266,7 @@ function IdentityTab() {
         const stmts = areas[area.id] || [];
         const isCustom = customAreas.some(c => c.id === area.id);
         return (
-          <View key={area.id} style={styles.identityBlock}>
+          <GlassCard key={area.id} style={styles.identityBlock} noPadding>
             <View style={styles.identityBlockHeader}>
               <Text style={styles.accordionIcon}>{area.ic}</Text>
               <Text style={styles.accordionLabel} numberOfLines={1}>{area.label}</Text>
@@ -259,24 +284,13 @@ function IdentityTab() {
             </View>
 
             <View style={styles.identityBlockBody}>
-              {stmts.length === 0 ? (
-                <Text style={styles.identityEmptyText}>Tap + Add to define your identity here...</Text>
-              ) : (
-                stmts.map((s, i) => (
-                  <View key={i} style={styles.stmtRow}>
-                    <Text style={styles.stmtText}>{s}</Text>
-                    <TouchableOpacity onPress={() => removeStatement(area.id, i)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-                      <Text style={styles.stmtRemove}>✕</Text>
-                    </TouchableOpacity>
-                  </View>
-                ))
-              )}
+              <StatementsList areaId={area.id} stmts={stmts} onRemove={removeStatement} />
               {addingTo === area.id && (
                 <View style={styles.addRow}>
                   <TextInput
                     style={styles.addInputFull}
                     placeholder="I am someone who..."
-                    placeholderTextColor="#9a8896"
+                    placeholderTextColor={colors.mist2}
                     value={drafts[area.id] || ''}
                     onChangeText={t => setDrafts(prev => ({ ...prev, [area.id]: t }))}
                     onSubmitEditing={() => addStatement(area.id)}
@@ -289,7 +303,7 @@ function IdentityTab() {
                 </View>
               )}
             </View>
-          </View>
+          </GlassCard>
         );
       })}
 
@@ -417,6 +431,36 @@ function PortraitTab() {
   );
 }
 
+// Bridge history is rendered inline in the same component that owns the
+// actively-typed "I am now.../I am becoming..." ExpandableTextAreas --
+// same anti-pattern as Community Wall's feed. Isolated here so typing
+// doesn't re-diff every saved history card on each keystroke.
+const BridgeHistoryList = memo(function BridgeHistoryList({ history, onEdit, onDelete }) {
+  return history.map((e, idx) => (
+    <GlassCard key={e.id ?? idx} style={styles.mb12}>
+      <View style={styles.bridgeEntryHeader}>
+        <View style={styles.topicPill}>
+          <Text style={styles.topicPillText}>{BRIDGE_TOPICS.find(t => t.value === e.topic)?.label ?? e.topic ?? 'General'}</Text>
+        </View>
+        <Text style={styles.bridgeDate}>{e.date}</Text>
+      </View>
+      <Text style={styles.bridgeSideLabel}>I am now</Text>
+      <Text style={styles.bridgeSideText}>{e.current}</Text>
+      <View style={styles.bridgeDivider} />
+      <Text style={styles.bridgeSideLabel}>I am becoming</Text>
+      <Text style={[styles.bridgeSideText, { fontStyle: 'italic' }]}>{e.future}</Text>
+      <View style={styles.entryActionsRow}>
+        <TouchableOpacity onPress={() => onEdit(idx)} style={styles.smallActionBtn}>
+          <Text style={styles.smallActionBtnText}>Edit</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => onDelete(idx)} style={[styles.smallActionBtn, styles.smallActionBtnDelete]}>
+          <Text style={styles.smallActionBtnDeleteText}>Delete</Text>
+        </TouchableOpacity>
+      </View>
+    </GlassCard>
+  ));
+});
+
 // ─── TAB 3 — Bridge ──────────────────────────────────────────────────────────
 function BridgeTab() {
   const [history, setHistory] = useState([]);
@@ -458,17 +502,20 @@ function BridgeTab() {
     finally { setSaving(false); }
   };
 
-  const handleEdit = (idx) => {
+  // useCallback with [history] so BridgeHistoryList's memo() only sees a
+  // new reference when the actual history data changes, not on every
+  // keystroke in the current/future ExpandableTextAreas above.
+  const handleEdit = useCallback((idx) => {
     const e = history[idx];
     setCurrent(e.current); setFuture(e.future); setTopic(e.topic || 'general');
     setEditIdx(idx);
-  };
+  }, [history]);
 
-  const handleDelete = async (idx) => {
+  const handleDelete = useCallback(async (idx) => {
     const next = history.filter((_, i) => i !== idx);
     setHistory(next);
     await persist(next).catch(() => {});
-  };
+  }, [history]);
 
   if (loading) return <ActivityIndicator color="#c9a8c9" style={{ marginTop: 40 }} />;
 
@@ -519,34 +566,60 @@ function BridgeTab() {
       {history.length > 0 && (
         <>
           <Text style={styles.sectionHeading}>Your bridge history</Text>
-          {history.map((e, idx) => (
-            <GlassCard key={e.id ?? idx} style={styles.mb12}>
-              <View style={styles.bridgeEntryHeader}>
-                <View style={styles.topicPill}>
-                  <Text style={styles.topicPillText}>{BRIDGE_TOPICS.find(t => t.value === e.topic)?.label ?? e.topic ?? 'General'}</Text>
-                </View>
-                <Text style={styles.bridgeDate}>{e.date}</Text>
-              </View>
-              <Text style={styles.bridgeSideLabel}>I am now</Text>
-              <Text style={styles.bridgeSideText}>{e.current}</Text>
-              <View style={styles.bridgeDivider} />
-              <Text style={styles.bridgeSideLabel}>I am becoming</Text>
-              <Text style={[styles.bridgeSideText, { fontStyle: 'italic' }]}>{e.future}</Text>
-              <View style={styles.entryActionsRow}>
-                <TouchableOpacity onPress={() => handleEdit(idx)} style={styles.smallActionBtn}>
-                  <Text style={styles.smallActionBtnText}>Edit</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => handleDelete(idx)} style={[styles.smallActionBtn, styles.smallActionBtnDelete]}>
-                  <Text style={styles.smallActionBtnDeleteText}>Delete</Text>
-                </TouchableOpacity>
-              </View>
-            </GlassCard>
-          ))}
+          <BridgeHistoryList history={history} onEdit={handleEdit} onDelete={handleDelete} />
         </>
       )}
     </View>
   );
 }
+
+// Saved letters render inline in the same component that owns the
+// actively-typed heading/body fields -- identical anti-pattern to
+// Community Wall's feed (confirmed by the user's keyboard-glitch report
+// on this exact tab). Isolated so a keystroke in the letter body doesn't
+// re-diff every saved letter card.
+const formatLetterDate = (ts) => new Date(ts).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+const SavedLettersList = memo(function SavedLettersList({ letters, expandedId, onToggleExpand, onRead, onEdit, onDelete }) {
+  if (letters.length === 0) {
+    return <Text style={styles.identityEmptyText}>No letters saved yet ✨</Text>;
+  }
+  return letters.map(letter => {
+    const isOpen = expandedId === letter.id;
+    const preview = letter.body.length > 80 ? letter.body.slice(0, 80) + '…' : letter.body;
+    return (
+      <GlassCard key={letter.id} style={styles.mb12}>
+        <TouchableOpacity onPress={() => onToggleExpand(letter.id)} activeOpacity={0.8}>
+          <View style={styles.letterHeader}>
+            <View style={{ flex: 1 }}>
+              {!!letter.heading && <Text style={styles.letterHeading}>{letter.heading}</Text>}
+              <Text style={styles.letterDate}>{formatLetterDate(letter.ts)}</Text>
+            </View>
+            <Text style={styles.accordionChevron}>{isOpen ? '▴' : '▾'}</Text>
+          </View>
+          {!isOpen && <Text style={styles.letterPreview}>{preview}</Text>}
+        </TouchableOpacity>
+
+        {isOpen && (
+          <>
+            <Text style={styles.letterBody}>{letter.body}</Text>
+            <View style={styles.entryActionsRow}>
+              <TouchableOpacity onPress={() => onRead({ heading: letter.heading || 'Letter', body: letter.body })} style={styles.smallActionBtn}>
+                <Text style={styles.smallActionBtnText}>Fullscreen</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => onEdit(letter)} style={styles.smallActionBtn}>
+                <Text style={styles.smallActionBtnText}>Edit</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => onDelete(letter.id)} style={[styles.smallActionBtn, styles.smallActionBtnDelete]}>
+                <Text style={styles.smallActionBtnDeleteText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+      </GlassCard>
+    );
+  });
+});
 
 // ─── TAB 4 — Letter ──────────────────────────────────────────────────────────
 function LetterTab() {
@@ -592,17 +665,27 @@ function LetterTab() {
     finally { setSaving(false); }
   };
 
-  const handleEdit = (letter) => {
+  // useCallback so SavedLettersList's memo() isn't defeated by a fresh
+  // function reference on every heading/body keystroke.
+  const handleEdit = useCallback((letter) => {
     setHeading(letter.heading || '');
     setBody(letter.body);
     setEditId(letter.id);
-  };
+  }, []);
 
-  const handleDelete = async (id) => {
-    const next = letters.filter(l => l.id !== id);
-    setLetters(next);
-    await persist(next).catch(() => {});
-  };
+  const handleDelete = useCallback(async (id) => {
+    setLetters(prev => {
+      const next = prev.filter(l => l.id !== id);
+      persist(next).catch(() => {});
+      return next;
+    });
+  }, []);
+
+  const handleToggleExpand = useCallback((id) => {
+    setExpandedId(prev => (prev === id ? null : id));
+  }, []);
+
+  const handleReadLetter = useCallback((payload) => setReadModal(payload), []);
 
   const handleClear = () => { setHeading(''); setBody(''); setActiveTopic(null); setEditId(null); Speech.stop(); setSpeaking(false); };
 
@@ -622,8 +705,6 @@ function LetterTab() {
     Speech.speak(body.trim(), { rate: 0.9, onDone: () => setSpeaking(false), onStopped: () => setSpeaking(false) });
     setSpeaking(true);
   };
-
-  const formatDate = (ts) => new Date(ts).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
   if (loading) return <ActivityIndicator color="#c9a8c9" style={{ marginTop: 40 }} />;
 
@@ -685,47 +766,14 @@ function LetterTab() {
       </GlassCard>
 
       <Text style={[styles.sectionHeading, { marginTop: 4 }]}>💌 Saved Letters</Text>
-      {letters.length === 0 ? (
-        <Text style={styles.identityEmptyText}>No letters saved yet ✨</Text>
-      ) : (
-        <>
-          {letters.map(letter => {
-            const isOpen = expandedId === letter.id;
-            const preview = letter.body.length > 80 ? letter.body.slice(0, 80) + '…' : letter.body;
-            return (
-              <GlassCard key={letter.id} style={styles.mb12}>
-                <TouchableOpacity onPress={() => setExpandedId(isOpen ? null : letter.id)} activeOpacity={0.8}>
-                  <View style={styles.letterHeader}>
-                    <View style={{ flex: 1 }}>
-                      {!!letter.heading && <Text style={styles.letterHeading}>{letter.heading}</Text>}
-                      <Text style={styles.letterDate}>{formatDate(letter.ts)}</Text>
-                    </View>
-                    <Text style={styles.accordionChevron}>{isOpen ? '▴' : '▾'}</Text>
-                  </View>
-                  {!isOpen && <Text style={styles.letterPreview}>{preview}</Text>}
-                </TouchableOpacity>
-
-                {isOpen && (
-                  <>
-                    <Text style={styles.letterBody}>{letter.body}</Text>
-                    <View style={styles.entryActionsRow}>
-                      <TouchableOpacity onPress={() => setReadModal({ heading: letter.heading || 'Letter', body: letter.body })} style={styles.smallActionBtn}>
-                        <Text style={styles.smallActionBtnText}>Fullscreen</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => handleEdit(letter)} style={styles.smallActionBtn}>
-                        <Text style={styles.smallActionBtnText}>Edit</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => handleDelete(letter.id)} style={[styles.smallActionBtn, styles.smallActionBtnDelete]}>
-                        <Text style={styles.smallActionBtnDeleteText}>Delete</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </>
-                )}
-              </GlassCard>
-            );
-          })}
-        </>
-      )}
+      <SavedLettersList
+        letters={letters}
+        expandedId={expandedId}
+        onToggleExpand={handleToggleExpand}
+        onRead={handleReadLetter}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+      />
 
       {readModal && (
         <ReadModal
@@ -907,21 +955,28 @@ const styles = StyleSheet.create({
 
   // Identity accordion
   accordionHeader: { flexDirection: 'row', alignItems: 'center' },
-  accordionIcon: { fontSize: 18, marginRight: 10 },
-  accordionLabel: { flex: 1, fontSize: 14, fontWeight: '600', color: '#2e2530' },
+  accordionIcon: { fontSize: 19, marginRight: 10 },
+  accordionLabel: { flex: 1, fontSize: 14.5, fontFamily: fonts.bodyMedium, fontWeight: '600', color: colors.ink },
   accordionBadge: {
-    backgroundColor: 'rgba(201,168,201,0.25)', borderRadius: 10,
+    backgroundColor: 'rgba(200,88,120,0.16)', borderRadius: 10,
     paddingHorizontal: 7, paddingVertical: 2, marginRight: 8,
   },
-  accordionBadgeText: { fontSize: 11, color: '#9a5fa8', fontWeight: '700' },
-  accordionChevron: { fontSize: 12, color: '#9a8896' },
+  accordionBadgeText: { fontSize: 11, color: colors.pinkDeep, fontFamily: fonts.bodyBold, fontWeight: '700' },
+  accordionChevron: { fontSize: 12, color: colors.mist2 },
   accordionBody: { marginTop: 14, borderTopWidth: 1, borderTopColor: 'rgba(154,95,168,0.1)', paddingTop: 12 },
+  // Soft-tinted rows instead of boxed/bordered rectangles: a translucent
+  // pink wash, generous rounded padding, and a thin colour accent bar on
+  // the left rather than a hard outline.
   stmtRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: 'rgba(201,168,201,0.1)',
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(255,209,232,0.3)',
+    borderRadius: radii.sm,
+    paddingVertical: 12, paddingHorizontal: 14,
+    marginBottom: 8,
   },
-  stmtText: { color: '#2e2530', fontSize: 13, fontStyle: 'italic', flex: 1, lineHeight: 18 },
-  stmtRemove: { color: '#9a8896', fontSize: 13, paddingHorizontal: 4 },
+  stmtAccentBar: { width: 3, alignSelf: 'stretch', borderRadius: 2, backgroundColor: colors.pinkDark, marginRight: 12 },
+  stmtText: { color: colors.ink2, fontSize: 15, fontFamily: fonts.displayItalic, fontStyle: 'italic', flex: 1, lineHeight: 21 },
+  stmtRemove: { color: colors.mist, fontSize: 13, paddingHorizontal: 4, marginLeft: 8 },
   addRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
   addPrefix: { fontSize: 13, color: '#6b5c66', fontStyle: 'italic' },
   addInput: {
@@ -930,40 +985,43 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(201,168,201,0.2)',
   },
   addBtn: {
-    paddingHorizontal: 12, paddingVertical: 8, backgroundColor: 'rgba(201,168,201,0.25)',
-    borderRadius: 10, borderWidth: 1, borderColor: 'rgba(154,95,168,0.2)',
+    paddingHorizontal: 12, paddingVertical: 8, backgroundColor: 'rgba(200,88,120,0.16)',
+    borderRadius: 10, borderWidth: 1, borderColor: 'rgba(200,88,120,0.3)',
   },
-  addBtnText: { color: '#9a5fa8', fontWeight: '600', fontSize: 13 },
+  addBtnText: { color: colors.pinkDeep, fontWeight: '600', fontSize: 13 },
   addInputFull: {
     flex: 1, backgroundColor: '#fff', borderRadius: 10,
     paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#2e2530', fontStyle: 'italic',
-    borderWidth: 1, borderColor: 'rgba(201,168,201,0.35)',
+    borderWidth: 1, borderColor: 'rgba(200,88,120,0.35)',
   },
 
-  // Identity — always-open blocks (matches the website's identity-area-block)
-  identityBlock: { backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(201,168,201,0.25)', marginBottom: 10, overflow: 'hidden' },
+  // Identity — always-open panels styled to read as cohesive frosted
+  // cards (GlassCard) rather than a cramped flat list: pink-tinted header
+  // with rounded top corners, real breathing room between panels.
+  identityBlock: { marginBottom: spacing.xl },
   identityBlockHeader: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 12,
-    backgroundColor: 'rgba(201,168,201,0.12)',
+    flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12, paddingHorizontal: 16,
+    backgroundColor: 'rgba(255,209,232,0.4)',
+    borderTopLeftRadius: radii.lg, borderTopRightRadius: radii.lg,
   },
-  identityAddPill: { backgroundColor: 'rgba(201,168,201,0.2)', borderWidth: 1, borderColor: 'rgba(154,95,168,0.25)', borderRadius: 50, paddingVertical: 5, paddingHorizontal: 12 },
-  identityAddPillText: { fontSize: 11.5, color: '#9a5fa8', fontWeight: '700' },
-  identityRemoveBtn: { width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(220,80,80,0.08)', borderWidth: 1, borderColor: 'rgba(220,80,80,0.18)', alignItems: 'center', justifyContent: 'center' },
-  identityRemoveBtnText: { fontSize: 11, color: '#c06868' },
-  identityBlockBody: { padding: 12 },
-  identityEmptyText: { fontSize: 12.5, color: '#9a8896', fontStyle: 'italic' },
+  identityAddPill: { backgroundColor: 'rgba(200,88,120,0.16)', borderWidth: 1, borderColor: 'rgba(200,88,120,0.3)', borderRadius: 50, paddingVertical: 5, paddingHorizontal: 12 },
+  identityAddPillText: { fontSize: 11.5, color: colors.pinkDeep, fontWeight: '700' },
+  identityRemoveBtn: { width: 26, height: 26, borderRadius: 13, backgroundColor: colors.dangerBg, borderWidth: 1, borderColor: colors.dangerBorder, alignItems: 'center', justifyContent: 'center' },
+  identityRemoveBtnText: { fontSize: 11, color: colors.danger },
+  identityBlockBody: { padding: 16 },
+  identityEmptyText: { fontSize: 12.5, color: colors.mist2, fontStyle: 'italic' },
 
   // Add custom life area
-  newAreaBox: { backgroundColor: '#fff', borderWidth: 1.5, borderColor: 'rgba(201,168,201,0.4)', borderStyle: 'dashed', borderRadius: 14, padding: 12, marginBottom: 12 },
-  newAreaLabel: { fontSize: 10.5, color: '#9a5fa8', fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8 },
+  newAreaBox: { backgroundColor: '#fff', borderWidth: 1.5, borderColor: 'rgba(200,88,120,0.35)', borderStyle: 'dashed', borderRadius: 14, padding: 12, marginBottom: 16 },
+  newAreaLabel: { fontSize: 10.5, color: colors.pinkDeep, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8 },
   newAreaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  newAreaIcInput: { width: 42, textAlign: 'center', backgroundColor: '#fafafa', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(201,168,201,0.35)', paddingVertical: 8, fontSize: 15 },
-  newAreaNameInput: { flex: 1, backgroundColor: '#fafafa', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(201,168,201,0.35)', paddingVertical: 8, paddingHorizontal: 10, fontSize: 13, color: '#2e2530' },
-  newAreaAddBtn: { backgroundColor: '#9a5fa8', borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12 },
+  newAreaIcInput: { width: 42, textAlign: 'center', backgroundColor: '#fafafa', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(200,88,120,0.3)', paddingVertical: 8, fontSize: 15 },
+  newAreaNameInput: { flex: 1, backgroundColor: '#fafafa', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(200,88,120,0.3)', paddingVertical: 8, paddingHorizontal: 10, fontSize: 13, color: '#2e2530' },
+  newAreaAddBtn: { backgroundColor: colors.pinkDeep, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12 },
   newAreaAddBtnText: { color: '#fff', fontSize: 12.5, fontWeight: '600' },
-  newAreaCancelText: { fontSize: 16, color: '#9a8896', paddingHorizontal: 4 },
+  newAreaCancelText: { fontSize: 16, color: colors.mist2, paddingHorizontal: 4 },
   addCustomAreaBtn: { alignSelf: 'center', marginTop: 4, marginBottom: 8 },
-  addCustomAreaBtnText: { fontSize: 13, color: '#9a5fa8', fontWeight: '600' },
+  addCustomAreaBtnText: { fontSize: 13, color: colors.pinkDeep, fontWeight: '600' },
 
   // Portrait
   portraitText: { color: '#2e2530', fontSize: 15, fontStyle: 'italic', lineHeight: 24, marginBottom: 16 },
