@@ -41,6 +41,12 @@ export default function AbundanceCheque() {
     } catch (_) {} finally { setSaving(false); }
   };
 
+  // Autosave on blur -- previously only the manual Save button persisted
+  // anything, so leaving a field (or the whole tool) without tapping it
+  // first silently dropped whatever was typed, the same class of bug
+  // fixed earlier for the Desire Action note.
+  const handleFieldBlur = () => { if (!loading) handleSave(); };
+
   const handleDownload = async () => {
     setBusy(true); setInfo('');
     try {
@@ -98,6 +104,7 @@ export default function AbundanceCheque() {
             placeholderTextColor={st.ink + '60'}
             value={name}
             onChangeText={setName}
+            onBlur={handleFieldBlur}
           />
 
           <Text style={[styles.fieldLabel, { color: st.ink, marginTop: 14 }]}>THE SUM OF / I AM RECEIVING</Text>
@@ -108,6 +115,7 @@ export default function AbundanceCheque() {
               placeholderTextColor={st.ink + '60'}
               value={amount}
               onChangeText={setAmount}
+              onBlur={handleFieldBlur}
             />
             <View style={[styles.infinityBox, { borderColor: st.ink + '40' }]}>
               <Text style={[styles.infinitySymbol, { color: st.ink }]}>∞</Text>
@@ -121,6 +129,7 @@ export default function AbundanceCheque() {
             placeholderTextColor={st.ink + '60'}
             value={memo}
             onChangeText={setMemo}
+            onBlur={handleFieldBlur}
           />
 
           <View style={styles.signRow}>
