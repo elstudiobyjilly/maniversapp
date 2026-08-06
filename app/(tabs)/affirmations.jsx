@@ -18,6 +18,7 @@ import Button from '../../components/Button';
 import ExpandableTextArea from '../../components/ExpandableTextArea';
 import UsageBadge from '../../components/UsageBadge';
 import NowPlayingPlayer from '../../components/NowPlayingPlayer';
+import ReadModeModal from '../../components/ReadModeModal';
 import { usePlanStore } from '../../store/planStore';
 import { useAuthStore } from '../../store/authStore';
 import { colors, fonts, radii } from '../../constants/theme';
@@ -115,6 +116,9 @@ export default function Affirmations() {
 
   // Full-screen "Now Playing" player -- { queue, startIndex } or null.
   const [player, setPlayer] = useState(null);
+  // Read Mode -- { title, content } or null, opened from the player's
+  // "Read the full set" button.
+  const [readItem, setReadItem] = useState(null);
 
   const canGenerateAi = hasFeature('ai_affirmations'); // false (0) on free
   const ownCap = limits?.own_affirmations_total; // free: 20 total ever
@@ -670,8 +674,18 @@ export default function Affirmations() {
           onClose={closePlayer}
           isFavorited={(item) => !!item.raw.is_favorite}
           onToggleFavorite={(item) => item.raw.id && handleFavorite(item.raw.id)}
+          onReadFull={(item) => setReadItem({ title: item.title, content: item.content })}
         />
       )}
+
+      <ReadModeModal
+        visible={!!readItem}
+        onClose={() => setReadItem(null)}
+        title={readItem?.title}
+        content={readItem?.content}
+        kicker="Affirmations"
+        onListen={() => setReadItem(null)}
+      />
     </GradientBackground>
   );
 }

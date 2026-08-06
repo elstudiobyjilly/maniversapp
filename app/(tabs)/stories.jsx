@@ -19,6 +19,7 @@ import Button from '../../components/Button';
 import ExpandableTextArea from '../../components/ExpandableTextArea';
 import UsageBadge from '../../components/UsageBadge';
 import NowPlayingPlayer from '../../components/NowPlayingPlayer';
+import ReadModeModal from '../../components/ReadModeModal';
 import { usePlanStore } from '../../store/planStore';
 import { useAuthStore } from '../../store/authStore';
 import { colors, fonts, radii } from '../../constants/theme';
@@ -115,6 +116,9 @@ export default function Stories() {
 
   // Full-screen "Now Playing" player -- { queue, startIndex } or null.
   const [player, setPlayer] = useState(null);
+  // Read Mode -- { title, content } or null, opened from the player's
+  // "Read the full story" button.
+  const [readItem, setReadItem] = useState(null);
 
   const canGenerateAi = hasFeature('ai_stories');
   const ownStoriesTotal = library.filter((s) => s.source !== 'ai').length;
@@ -566,8 +570,20 @@ export default function Stories() {
           onClose={closePlayer}
           isFavorited={(item) => (item.kind === 'library' ? !!item.raw.is_favorite : rtgPinned.includes(item.title))}
           onToggleFavorite={(item) => (item.kind === 'library' ? handleFavorite(item.raw.id) : toggleRtgPin(item.title))}
+          onReadFull={(item) => setReadItem({ title: item.title, content: item.content })}
         />
       )}
+
+      <ReadModeModal
+        visible={!!readItem}
+        onClose={() => setReadItem(null)}
+        title={readItem?.title}
+        content={readItem?.content}
+        kicker="Story"
+        // The player Modal stays mounted (and audio keeps playing)
+        // underneath Read Mode -- "Listen" just returns to it.
+        onListen={() => setReadItem(null)}
+      />
     </GradientBackground>
   );
 }
