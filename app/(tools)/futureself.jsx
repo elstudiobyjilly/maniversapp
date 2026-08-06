@@ -13,6 +13,8 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
 import * as Speech from 'expo-speech';
+import Animated, { useSharedValue, useAnimatedStyle, useAnimatedReaction, withSpring, runOnJS } from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import ScreenHeader from '../../components/ScreenHeader';
@@ -41,13 +43,16 @@ const IDENTITY_AREAS = [
 ];
 
 const BRIDGE_TOPICS = [
-  { value: 'general',   label: 'General' },
-  { value: 'money',     label: 'Money' },
-  { value: 'love',      label: 'Love' },
-  { value: 'health',    label: 'Health' },
-  { value: 'career',    label: 'Career' },
-  { value: 'becoming',  label: 'Becoming' },
+  { value: 'general',   label: 'General',  emoji: '✨' },
+  { value: 'money',     label: 'Money',    emoji: '💰' },
+  { value: 'love',      label: 'Love',     emoji: '💕' },
+  { value: 'health',    label: 'Health',   emoji: '🌿' },
+  { value: 'career',    label: 'Career',   emoji: '🚀' },
+  { value: 'becoming',  label: 'Becoming', emoji: '🦋' },
 ];
+function bridgeTopicMeta(value) {
+  return BRIDGE_TOPICS.find(t => t.value === value) || BRIDGE_TOPICS[0];
+}
 
 // Ported exactly (verbatim strings) from the website's cards.js "Choose a topic" row.
 const LETTER_TOPICS = [
@@ -158,6 +163,107 @@ const StatementsList = memo(function StatementsList({ areaId, stmts, onRemove })
   ));
 });
 
+// The backend has no ordering field for identity areas, so the order the
+// user drags them into on-device is mirrored under this key (same
+// on-device-workaround pattern used for Desire Action's start dates).
+const IDENTITY_ORDER_KEY = 'mv_fs_identity_order';
+const REORDER_ROW_HEIGHT = 60;
+
+// A single draggable row inside the reorder modal. `positions` is a shared
+// value holding { [id]: currentSlotIndex } for every row -- dragging this
+// row updates its own slot and swaps whichever row currently occupies the
+// slot it crosses into, so every other row animates out of the way.
+function ReorderRow({ id, icon, label, index, positions, count, onReorder }) {
+  const translateY = useSharedValue(index * REORDER_ROW_HEIGHT);
+  const isDragging = useSharedValue(false);
+
+  useAnimatedReaction(
+    () => positions.value[id],
+    (cur, prev) => {
+      if (cur !== prev && !isDragging.value) {
+        translateY.value = withSpring(cur * REORDER_ROW_HEIGHT, { damping: 20, stiffness: 220 });
+      }
+    }
+  );
+
+  const gesture = Gesture.Pan()
+    .onStart(() => { isDragging.value = true; })
+    .onUpdate((e) => {
+      translateY.value = positions.value[id] * REORDER_ROW_HEIGHT + e.translationY;
+      const newIndex = Math.min(count - 1, Math.max(0, Math.round(translateY.value / REORDER_ROW_HEIGHT)));
+      const oldIndex = positions.value[id];
+      if (newIndex !== oldIndex) {
+        const otherEntry = Object.entries(positions.value).find(([, v]) => v === newIndex);
+        const next = { ...positions.value, [id]: newIndex };
+        if (otherEntry) next[otherEntry[0]] = oldIndex;
+        positions.value = next;
+      }
+    })
+    .onEnd(() => {
+      translateY.value = withSpring(positions.value[id] * REORDER_ROW_HEIGHT, { damping: 20, stiffness: 220 });
+      isDragging.value = false;
+      runOnJS(onReorder)(positions.value);
+    });
+
+  const style = useAnimatedStyle(() => ({
+    position: 'absolute', left: 0, right: 0, top: 0,
+    transform: [{ translateY: translateY.value }],
+    zIndex: isDragging.value ? 10 : 1,
+    shadowOpacity: isDragging.value ? 0.18 : 0,
+  }));
+
+  return (
+    <GestureDetector gesture={gesture}>
+      <Animated.View style={[styles.reorderRow, style]}>
+        <Text style={styles.reorderIcon}>{icon}</Text>
+        <Text style={styles.reorderLabel} numberOfLines={1}>{label}</Text>
+        <Text style={styles.reorderHandle}>☰</Text>
+      </Animated.View>
+    </GestureDetector>
+  );
+}
+
+function ReorderAreasModal({ visible, areas, onClose, onSave }) {
+  const positions = useSharedValue({});
+  const [localOrder, setLocalOrder] = useState([]);
+
+  useEffect(() => {
+    if (visible) {
+      positions.value = Object.fromEntries(areas.map((a, i) => [a.id, i]));
+      setLocalOrder(areas.map(a => a.id));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
+
+  const handleReorder = (posMap) => {
+    setLocalOrder(Object.entries(posMap).sort((a, b) => a[1] - b[1]).map(([rid]) => rid));
+  };
+
+  const handleDone = () => { onSave(localOrder); onClose(); };
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={styles.modalOverlay}>
+        <View style={styles.reorderSheet}>
+          <View style={styles.reorderSheetHeader}>
+            <Text style={styles.reorderSheetTitle}>Reorder Life Areas</Text>
+            <TouchableOpacity onPress={onClose} hitSlop={8}><Text style={styles.modalCloseText}>✕</Text></TouchableOpacity>
+          </View>
+          <Text style={styles.reorderHint}>Hold ☰ and drag to set the order you want ✨</Text>
+          <View style={{ height: areas.length * REORDER_ROW_HEIGHT }}>
+            {areas.map((a, i) => (
+              <ReorderRow key={a.id} id={a.id} icon={a.ic} label={a.label} index={i} positions={positions} count={areas.length} onReorder={handleReorder} />
+            ))}
+          </View>
+          <TouchableOpacity style={styles.primaryBtn} onPress={handleDone}>
+            <Text style={styles.primaryBtnText}>Save Order ✨</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 // ─── TAB 1 — Identity ─────────────────────────────────────────────────────────
 function IdentityTab() {
   const isPaid = usePlanStore((s) => s.isPaid);
@@ -171,6 +277,8 @@ function IdentityTab() {
   const [addingArea, setAddingArea] = useState(false);
   const [newAreaIc, setNewAreaIc] = useState('');
   const [newAreaLabel, setNewAreaLabel] = useState('');
+  const [order, setOrder] = useState(null);
+  const [reorderOpen, setReorderOpen] = useState(false);
 
   useEffect(() => {
     getIdentity()
@@ -180,11 +288,26 @@ function IdentityTab() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+    AsyncStorage.getItem(IDENTITY_ORDER_KEY)
+      .then(raw => { if (raw) { try { setOrder(JSON.parse(raw)); } catch (_) {} } })
+      .catch(() => {});
   }, []);
 
   const customAreas = (areas._custom || []).filter(a => a && a.id && a.label);
   const allAreas = [...IDENTITY_AREAS, ...customAreas];
+  const orderedAreas = (() => {
+    if (!order) return allAreas;
+    const byId = Object.fromEntries(allAreas.map(a => [a.id, a]));
+    const known = order.filter(id => byId[id]);
+    const missing = allAreas.filter(a => !known.includes(a.id));
+    return [...known.map(id => byId[id]), ...missing];
+  })();
   const totalStmts = Object.keys(areas).reduce((sum, k) => (k === '_custom' ? sum : sum + (Array.isArray(areas[k]) ? areas[k].length : 0)), 0);
+
+  const handleSaveOrder = async (newOrder) => {
+    setOrder(newOrder);
+    try { await AsyncStorage.setItem(IDENTITY_ORDER_KEY, JSON.stringify(newOrder)); } catch (_) {}
+  };
 
   const persist = async (next) => {
     setAreas(next);
@@ -250,6 +373,10 @@ function IdentityTab() {
     <View>
       <Text style={styles.tabIntro}>Write identity statements for each area of life. "I am someone who..." — be honest, be bold, be expansive.</Text>
 
+      <TouchableOpacity style={styles.reorderTrigger} onPress={() => setReorderOpen(true)}>
+        <Text style={styles.reorderTriggerText}>☰ Reorder Areas</Text>
+      </TouchableOpacity>
+
       {addingArea ? (
         <View style={styles.newAreaBox}>
           <Text style={styles.newAreaLabel}>NEW LIFE AREA</Text>
@@ -262,7 +389,7 @@ function IdentityTab() {
         </View>
       ) : null}
 
-      {allAreas.map(area => {
+      {orderedAreas.map(area => {
         const stmts = areas[area.id] || [];
         const isCustom = customAreas.some(c => c.id === area.id);
         return (
@@ -315,6 +442,13 @@ function IdentityTab() {
 
       {saving && <ActivityIndicator color="#c9a8c9" style={{ marginTop: 8 }} />}
       {!!error && <Text style={styles.errorText}>{error}</Text>}
+
+      <ReorderAreasModal
+        visible={reorderOpen}
+        areas={orderedAreas}
+        onClose={() => setReorderOpen(false)}
+        onSave={handleSaveOrder}
+      />
     </View>
   );
 }
@@ -436,29 +570,31 @@ function PortraitTab() {
 // same anti-pattern as Community Wall's feed. Isolated here so typing
 // doesn't re-diff every saved history card on each keystroke.
 const BridgeHistoryList = memo(function BridgeHistoryList({ history, onEdit, onDelete }) {
-  return history.map((e, idx) => (
-    <GlassCard key={e.id ?? idx} style={styles.mb12}>
-      <View style={styles.bridgeEntryHeader}>
-        <View style={styles.topicPill}>
-          <Text style={styles.topicPillText}>{BRIDGE_TOPICS.find(t => t.value === e.topic)?.label ?? e.topic ?? 'General'}</Text>
+  return history.map((e, idx) => {
+    const meta = bridgeTopicMeta(e.topic);
+    return (
+      <GlassCard key={e.id ?? idx} style={styles.mb12}>
+        <View style={styles.bridgeEntryHeader}>
+          <View style={styles.topicAvatar}>
+            <Text style={styles.topicAvatarEmoji}>{meta.emoji}</Text>
+          </View>
+          <Text style={styles.topicPillText}>{meta.label}</Text>
+          <View style={{ flex: 1 }} />
+          <TouchableOpacity onPress={() => onEdit(idx)} style={styles.iconActionBtn} hitSlop={6}>
+            <Text style={styles.iconActionBtnText}>✎</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => onDelete(idx)} style={[styles.iconActionBtn, styles.iconActionBtnDelete]} hitSlop={6}>
+            <Text style={styles.iconActionBtnDeleteText}>🗑</Text>
+          </TouchableOpacity>
         </View>
-        <Text style={styles.bridgeDate}>{e.date}</Text>
-      </View>
-      <Text style={styles.bridgeSideLabel}>I am now</Text>
-      <Text style={styles.bridgeSideText}>{e.current}</Text>
-      <View style={styles.bridgeDivider} />
-      <Text style={styles.bridgeSideLabel}>I am becoming</Text>
-      <Text style={[styles.bridgeSideText, { fontStyle: 'italic' }]}>{e.future}</Text>
-      <View style={styles.entryActionsRow}>
-        <TouchableOpacity onPress={() => onEdit(idx)} style={styles.smallActionBtn}>
-          <Text style={styles.smallActionBtnText}>Edit</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => onDelete(idx)} style={[styles.smallActionBtn, styles.smallActionBtnDelete]}>
-          <Text style={styles.smallActionBtnDeleteText}>Delete</Text>
-        </TouchableOpacity>
-      </View>
-    </GlassCard>
-  ));
+        <Text style={styles.bridgeSideLabel}>I am now</Text>
+        <Text style={styles.bridgeSideText}>{e.current}</Text>
+        <View style={styles.bridgeDivider} />
+        <Text style={styles.bridgeSideLabel}>I am becoming</Text>
+        <Text style={[styles.bridgeSideText, { fontStyle: 'italic' }]}>{e.future}</Text>
+      </GlassCard>
+    );
+  });
 });
 
 // ─── TAB 3 — Bridge ──────────────────────────────────────────────────────────
@@ -553,7 +689,7 @@ function BridgeTab() {
         <Dropdown
           label="Topic"
           value={topic}
-          options={BRIDGE_TOPICS}
+          options={BRIDGE_TOPICS.map(t => ({ value: t.value, label: `${t.emoji} ${t.label}` }))}
           onSelect={setTopic}
           fullWidth
         />
@@ -589,33 +725,33 @@ const SavedLettersList = memo(function SavedLettersList({ letters, expandedId, o
     const preview = letter.body.length > 80 ? letter.body.slice(0, 80) + '…' : letter.body;
     return (
       <GlassCard key={letter.id} style={styles.mb12}>
-        <TouchableOpacity onPress={() => onToggleExpand(letter.id)} activeOpacity={0.8}>
-          <View style={styles.letterHeader}>
-            <View style={{ flex: 1 }}>
-              {!!letter.heading && <Text style={styles.letterHeading}>{letter.heading}</Text>}
-              <Text style={styles.letterDate}>{formatLetterDate(letter.ts)}</Text>
-            </View>
-            <Text style={styles.accordionChevron}>{isOpen ? '▴' : '▾'}</Text>
+        <View style={styles.letterHeader}>
+          <TouchableOpacity style={{ flex: 1 }} onPress={() => onToggleExpand(letter.id)} activeOpacity={0.8}>
+            {!!letter.heading && <Text style={styles.letterHeading}>{letter.heading}</Text>}
+            <Text style={styles.letterDate}>{formatLetterDate(letter.ts)}</Text>
+            {!isOpen && <Text style={styles.letterPreview}>{preview}</Text>}
+          </TouchableOpacity>
+          <View style={styles.letterHeaderRight}>
+            {isOpen && (
+              <View style={styles.letterHeaderActions}>
+                <TouchableOpacity onPress={() => onRead({ heading: letter.heading || 'Letter', body: letter.body })} style={styles.iconActionBtn} hitSlop={6}>
+                  <Text style={styles.iconActionBtnText}>⛶</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => onEdit(letter)} style={styles.iconActionBtn} hitSlop={6}>
+                  <Text style={styles.iconActionBtnText}>✎</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => onDelete(letter.id)} style={[styles.iconActionBtn, styles.iconActionBtnDelete]} hitSlop={6}>
+                  <Text style={styles.iconActionBtnDeleteText}>🗑</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            <TouchableOpacity onPress={() => onToggleExpand(letter.id)} hitSlop={8}>
+              <Text style={styles.accordionChevron}>{isOpen ? '▴' : '▾'}</Text>
+            </TouchableOpacity>
           </View>
-          {!isOpen && <Text style={styles.letterPreview}>{preview}</Text>}
-        </TouchableOpacity>
+        </View>
 
-        {isOpen && (
-          <>
-            <Text style={styles.letterBody}>{letter.body}</Text>
-            <View style={styles.entryActionsRow}>
-              <TouchableOpacity onPress={() => onRead({ heading: letter.heading || 'Letter', body: letter.body })} style={styles.smallActionBtn}>
-                <Text style={styles.smallActionBtnText}>Fullscreen</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => onEdit(letter)} style={styles.smallActionBtn}>
-                <Text style={styles.smallActionBtnText}>Edit</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => onDelete(letter.id)} style={[styles.smallActionBtn, styles.smallActionBtnDelete]}>
-                <Text style={styles.smallActionBtnDeleteText}>Delete</Text>
-              </TouchableOpacity>
-            </View>
-          </>
-        )}
+        {isOpen && <Text style={styles.letterBody}>{letter.body}</Text>}
       </GlassCard>
     );
   });
@@ -953,6 +1089,28 @@ const styles = StyleSheet.create({
   editingBadgeText: { fontSize: 12, color: '#9a5fa8', fontWeight: '600', letterSpacing: 0.4 },
   cancelText: { fontSize: 12, color: '#9a8896', fontWeight: '500' },
 
+  // Identity — reorder
+  reorderTrigger: {
+    alignSelf: 'center', marginBottom: 14, paddingVertical: 7, paddingHorizontal: 14,
+    borderRadius: 50, backgroundColor: 'rgba(255,255,255,0.6)', borderWidth: 1, borderColor: 'rgba(154,95,168,0.25)',
+  },
+  reorderTriggerText: { fontSize: 12.5, color: '#9a5fa8', fontWeight: '600' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(46,37,48,0.4)', justifyContent: 'flex-end' },
+  reorderSheet: { backgroundColor: '#fffaf3', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 30 },
+  reorderSheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  reorderSheetTitle: { fontSize: 18, fontWeight: '600', color: '#2e2530' },
+  modalCloseText: { fontSize: 16, color: '#6b5c66' },
+  reorderHint: { fontSize: 12.5, color: '#6b5c66', marginBottom: 16 },
+  reorderRow: {
+    height: REORDER_ROW_HEIGHT - 8, flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 14,
+    borderWidth: 1, borderColor: 'rgba(154,95,168,0.18)',
+    shadowColor: '#9a5fa8', shadowOffset: { width: 0, height: 3 }, shadowRadius: 8,
+  },
+  reorderIcon: { fontSize: 17 },
+  reorderLabel: { flex: 1, fontSize: 14, fontFamily: fonts.bodyMedium, fontWeight: '600', color: colors.ink },
+  reorderHandle: { fontSize: 15, color: '#c9a8c9' },
+
   // Identity accordion
   accordionHeader: { flexDirection: 'row', alignItems: 'center' },
   accordionIcon: { fontSize: 19, marginRight: 10 },
@@ -1046,14 +1204,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9, paddingVertical: 3,
     borderWidth: 1, borderColor: 'rgba(154,95,168,0.2)',
   },
-  topicPillText: { fontSize: 11, color: '#9a5fa8', fontWeight: '600' },
-  bridgeDate: { fontSize: 11, color: '#9a8896' },
+  topicPillText: { fontSize: 12.5, color: '#2e2530', fontWeight: '600' },
+  topicAvatar: {
+    width: 28, height: 28, borderRadius: 14, marginRight: 8,
+    backgroundColor: 'rgba(201,168,201,0.22)', borderWidth: 1, borderColor: 'rgba(154,95,168,0.25)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  topicAvatarEmoji: { fontSize: 14 },
   bridgeSideLabel: { fontSize: 10, color: '#9a5fa8', fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 3 },
   bridgeSideText: { color: '#2e2530', fontSize: 13, lineHeight: 19, marginBottom: 8 },
   bridgeDivider: { height: 1, backgroundColor: 'rgba(154,95,168,0.1)', marginVertical: 8 },
 
   // Letters
   letterHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 6 },
+  letterHeaderRight: { alignItems: 'flex-end', gap: 8 },
+  letterHeaderActions: { flexDirection: 'row', gap: 6 },
   letterHeading: { fontSize: 17, fontFamily: fonts.displayMedium, color: colors.ink, marginBottom: 3 },
   letterDate: { fontSize: 11.5, color: colors.mist2 },
   letterPreview: { color: colors.mist, fontSize: 14, lineHeight: 20 },
@@ -1081,6 +1246,15 @@ const styles = StyleSheet.create({
   smallActionBtnText: { fontSize: 11, color: '#9a5fa8', fontWeight: '600' },
   smallActionBtnDelete: { borderColor: 'rgba(192,64,64,0.2)' },
   smallActionBtnDeleteText: { fontSize: 11, color: '#9a8896', fontWeight: '600' },
+
+  // Small icon-only action buttons, used top-right of Bridge/Letter cards
+  iconActionBtn: {
+    width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.7)', borderWidth: 1, borderColor: 'rgba(154,95,168,0.2)',
+  },
+  iconActionBtnText: { fontSize: 12.5, color: '#9a5fa8' },
+  iconActionBtnDelete: { borderColor: 'rgba(192,64,64,0.25)' },
+  iconActionBtnDeleteText: { fontSize: 12, color: '#c04040' },
 
   // Actions tab
   pillsScroll: { marginBottom: 16 },
