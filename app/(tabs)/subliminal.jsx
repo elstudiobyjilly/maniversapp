@@ -279,12 +279,16 @@ export default function Subliminal() {
     // so point people there instead of just saying "not available."
     // Audible sessions are unaffected.
     if (session.volume_level === 'subliminal') {
+      // manivers.com is a single-page app with JS panel switching, not
+      // hash-based routing -- there's no #subliminal deep link that
+      // actually opens that panel, so just send people to the site and
+      // they log in + tap the Subliminal tab themselves from there.
       Alert.alert(
         'Silent Subliminal',
-        'This can\'t play inside the app yet — you can play it on manivers.com instead. Audible works great in the meantime ✨',
+        'This can\'t play inside the app yet — you can play it on manivers.com instead (log in, then tap Subliminal). Audible works great in the meantime ✨',
         [
           { text: 'OK', style: 'cancel' },
-          { text: 'Open Website', onPress: () => Linking.openURL('https://manivers.com/#subliminal') },
+          { text: 'Open Website', onPress: () => Linking.openURL('https://manivers.com') },
         ]
       );
       return;
