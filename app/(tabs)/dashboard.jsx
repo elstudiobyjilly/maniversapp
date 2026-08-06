@@ -52,6 +52,10 @@ const AURA_PREVIEW = Math.min((IS_WIDE ? SCREEN_WIDTH / 2 : SCREEN_WIDTH) - 96, 
 // rather than getting clipped (a fixed `height` was cutting off checkboxes
 // and tiles). A row's shorter box stretches to match its taller sibling.
 const WIDGET_H_TALL = 380;   // Gratitude / Desire Action
+// Gratitude entries and the Desire Action checklist both render as a 2-col
+// grid capped at 4 rows -- keeps the two widgets the same height instead of
+// one stretching arbitrarily tall with a long list.
+const GRID_MAX_ITEMS = 8;
 const WIDGET_H_MEDIA = 310;  // Mind Movies / Subliminals — sized to exactly fit 2 tile rows, no dead space
 const WIDGET_H_SHORT = 230;  // Message for the Day / Manifested
 
@@ -160,13 +164,16 @@ function GratitudeWidget({ router, entries, onSaved }) {
       {todays.length === 0 ? (
         <Text style={styles.widgetEmpty}>Nothing yet today — start with one small thing 🌸</Text>
       ) : (
-        todays.map((e) => (
-          <View key={e.id} style={styles.listLine}>
-            <Text style={styles.listDot}>·</Text>
-            <Text style={styles.listText} numberOfLines={2}>{e.content}</Text>
-          </View>
-        ))
+        <View style={styles.twoColGrid}>
+          {todays.slice(0, GRID_MAX_ITEMS).map((e) => (
+            <View key={e.id} style={[styles.gridCell, styles.listLine]}>
+              <Text style={styles.listDot}>·</Text>
+              <Text style={styles.listText} numberOfLines={2}>{e.content}</Text>
+            </View>
+          ))}
+        </View>
       )}
+      {todays.length > GRID_MAX_ITEMS && <Text style={styles.widgetMore}>+{todays.length - GRID_MAX_ITEMS} more in Gratitude</Text>}
     </Widget>
   );
 }
@@ -243,16 +250,19 @@ function DesireActionWidget({ router, roadmaps, rawLogs, setRawLogs }) {
       {practices.length === 0 ? (
         <Text style={styles.widgetEmpty}>No practices set for this desire.</Text>
       ) : (
-        practices.map((p) => {
-          const done = !!todayLog?.practices?.[p];
-          return (
-            <TouchableOpacity key={p} style={styles.checkRow} onPress={() => toggle(p)} disabled={busy}>
-              <View style={[styles.checkbox, done && styles.checkboxOn]}>{done && <Text style={styles.checkTick}>✓</Text>}</View>
-              <Text style={[styles.checkLabel, done && styles.checkLabelDone]} numberOfLines={1}>{p}</Text>
-            </TouchableOpacity>
-          );
-        })
+        <View style={styles.twoColGrid}>
+          {practices.slice(0, GRID_MAX_ITEMS).map((p) => {
+            const done = !!todayLog?.practices?.[p];
+            return (
+              <TouchableOpacity key={p} style={[styles.checkRow, styles.gridCell]} onPress={() => toggle(p)} disabled={busy}>
+                <View style={[styles.checkbox, done && styles.checkboxOn]}>{done && <Text style={styles.checkTick}>✓</Text>}</View>
+                <Text style={[styles.checkLabel, done && styles.checkLabelDone]} numberOfLines={1}>{p}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       )}
+      {practices.length > GRID_MAX_ITEMS && <Text style={styles.widgetMore}>+{practices.length - GRID_MAX_ITEMS} more in tracker</Text>}
 
       <Text style={styles.widgetSubLabel}>ACTION / NOTE</Text>
       <WriteBox
@@ -779,6 +789,14 @@ const styles = StyleSheet.create({
   listLine: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', marginBottom: 7 },
   listDot: { fontFamily: fonts.body, fontSize: 12, color: colors.purpleDark },
   listText: { flex: 1, fontFamily: fonts.body, fontSize: 12.5, color: colors.ink2, lineHeight: 18 },
+
+  // Shared 2-column grid — Gratitude entries and the Desire Action
+  // checklist both use this so the two widgets read as the same shape at
+  // a glance, capped at GRID_MAX_ITEMS (4 rows of 2) rather than growing
+  // arbitrarily tall.
+  twoColGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  gridCell: { width: '48%' },
+  widgetMore: { fontFamily: fonts.body, fontSize: 11, color: colors.mist, marginTop: 6, fontStyle: 'italic' },
 
   pillRow: { gap: 6, paddingBottom: 2 },
   desirePill: {
