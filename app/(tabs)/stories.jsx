@@ -312,7 +312,7 @@ export default function Stories() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 14, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 14, paddingBottom: 120 }}>
         <ScreenHeader lead="Manifest" accent="Stories" subtitle="Generate, write or play stories as if your desire has already arrived. ✨" />
 
         <TabPill

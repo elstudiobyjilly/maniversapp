@@ -255,7 +255,7 @@ export default function Profile() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 14, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 14, paddingBottom: 120 }} keyboardShouldPersistTaps="handled">
         <Text style={styles.eyebrow}>⚙ ACCOUNT</Text>
         <ScreenHeader lead="Your" accent="Settings" subtitle="Everything about your account, in one place ✨" />
 

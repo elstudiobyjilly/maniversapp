@@ -328,7 +328,7 @@ export default function Affirmations() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 14, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 14, paddingBottom: 120 }}>
         <ScreenHeader lead="Your" accent="Affirmations" subtitle="Craft powerful affirmations from your desire, or speak your own." />
 
         <TabPill

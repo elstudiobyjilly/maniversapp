@@ -170,7 +170,7 @@ export default function More() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 14, paddingBottom: 40 }} scrollEnabled={!dragging}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 14, paddingBottom: 120 }} scrollEnabled={!dragging}>
         <ScreenHeader lead="More T" accent="ools" subtitle="Every practice, all in one place ✨" />
 
         <View style={styles.modeRow}>

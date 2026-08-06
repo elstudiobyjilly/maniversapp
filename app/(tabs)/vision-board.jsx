@@ -663,7 +663,11 @@ export default function VisionBoard() {
           loading={uploading}
           disabled={isLocked}
           fullWidth
-          style={{ marginHorizontal: 16, marginVertical: 14 }}
+          // Extra bottom clearance -- the tab bar floats as a rounded pill
+          // now (position: absolute, ~104px tall including its own bottom
+          // margin) instead of reserving space in normal layout flow, so
+          // this button needs to clear it manually.
+          style={{ marginHorizontal: 16, marginTop: 14, marginBottom: 104 }}
         />
       )}
 
