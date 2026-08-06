@@ -30,7 +30,6 @@ import {
   getRoadmaps, getRoadmapDayLogs, createRoadmapDayLog, deleteRoadmapDayLog,
   getMindMovies, getSubSessions, getManifested, addManifested,
 } from '../../services/api';
-import { safeImageUri } from '../../services/imageUri';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 // The layout sketch pairs widgets two-across. That's how it renders on a
