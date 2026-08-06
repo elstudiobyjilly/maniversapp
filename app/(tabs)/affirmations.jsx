@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   generateAffirmation, getAffirmations, getAffirmationAudio,
@@ -18,6 +17,7 @@ import Chip from '../../components/Chip';
 import Button from '../../components/Button';
 import ExpandableTextArea from '../../components/ExpandableTextArea';
 import UsageBadge from '../../components/UsageBadge';
+import NowPlayingPlayer from '../../components/NowPlayingPlayer';
 import { usePlanStore } from '../../store/planStore';
 import { useAuthStore } from '../../store/authStore';
 import { colors, fonts, radii } from '../../constants/theme';
@@ -97,7 +97,6 @@ export default function Affirmations() {
   const [generating, setGenerating] = useState(false);
   const [current, setCurrent] = useState(null);
   const [error, setError] = useState('');
-  const [sound, setSound] = useState(null);
   const [playing, setPlaying] = useState(false);
   // Open /sessions row for the run currently playing, completed when the
   // audio finishes naturally (matching the website's activeSessId).
@@ -113,6 +112,9 @@ export default function Affirmations() {
   const [library, setLibrary] = useState([]);
   const [loadingLib, setLoadingLib] = useState(false);
   const [pinnedIds, setPinnedIds] = useState([]);
+
+  // Full-screen "Now Playing" player -- { queue, startIndex } or null.
+  const [player, setPlayer] = useState(null);
 
   const canGenerateAi = hasFeature('ai_affirmations'); // false (0) on free
   const ownCap = limits?.own_affirmations_total; // free: 20 total ever
@@ -155,14 +157,6 @@ export default function Affirmations() {
   }, []);
 
   useEffect(() => { if (topTab === 'hub') loadLibrary(); }, [topTab]);
-
-  // Stopping early leaves the session row open-but-incomplete, exactly like
-  // the website — total_sessions still counts it, completed_sessions doesn't.
-  const stopSound = async () => {
-    if (sound) { try { await sound.unloadAsync(); } catch (_) {} }
-    activeSessionId.current = null;
-    setSound(null); setPlaying(false);
-  };
 
   const markRecentlyPlayed = useCallback(async (id) => {
     if (!id) return;
@@ -242,47 +236,41 @@ export default function Affirmations() {
     }, 2000);
   };
 
-  const playLines = async (lines, itemId, cachedAudioUrl) => {
-    await stopSound();
-    setPlaying(true); setError('');
-    try {
-      let uri = cachedAudioUrl;
-      if (!uri && itemId) {
-        try {
-          const status = await getAffirmationAudioStatus(itemId);
-          uri = status?.audio_url;
-        } catch (_) {}
-      }
-      if (!uri) {
-        uri = await getAffirmationAudio(itemId || 0, lines.join('\n'), voice);
-      }
-      const { sound: newSound } = await Audio.Sound.createAsync({ uri }, { shouldPlay: true });
-      setSound(newSound);
+  // ── Full-screen "Now Playing" player ────────────────────────────────
+  const toAffQueueItem = (item) => ({
+    id: item.id ?? 0,
+    title: item.desire || item.title || 'Affirmations',
+    content: (item.affirmations || []).join('\n\n'),
+    kind: 'aff',
+    raw: item,
+  });
 
-      // Open a tracked listening session — this is what feeds the Tracker's
-      // totals, streak and days-practiced. Best-effort: a failure here must
-      // never stop playback.
-      try {
-        const sess = await startSession({ affirmationId: itemId || null, repeatTarget: repeatCount });
-        activeSessionId.current = sess?.id ?? null;
-      } catch (_) { activeSessionId.current = null; }
-
-      newSound.setOnPlaybackStatusUpdate((status) => {
-        if (status.didJustFinish) {
-          setPlaying(false);
-          const id = activeSessionId.current;
-          if (id) {
-            activeSessionId.current = null;
-            completeSession(id, repeatCount).catch(() => {});
-          }
-        }
-      });
-      if (itemId) markRecentlyPlayed(itemId);
-    } catch (e) {
-      setError(e.message || 'Could not play audio');
-      setPlaying(false);
+  const resolveAffAudioUri = async (item) => {
+    let uri = item.raw.audio_url;
+    if (!uri && item.raw.id) {
+      try { uri = (await getAffirmationAudioStatus(item.raw.id))?.audio_url; } catch (_) {}
     }
+    if (!uri) uri = await getAffirmationAudio(item.raw.id || 0, (item.raw.affirmations || []).join('\n'), voice);
+    return uri;
   };
+
+  const handleAffTrackStart = (item) => {
+    setPlaying(true);
+    startSession({ affirmationId: item.raw.id || null, repeatTarget: repeatCount })
+      .then((sess) => { activeSessionId.current = sess?.id ?? null; })
+      .catch(() => { activeSessionId.current = null; });
+    if (item.raw.id) markRecentlyPlayed(item.raw.id);
+  };
+
+  const handleAffTrackFinish = () => {
+    setPlaying(false);
+    const id = activeSessionId.current;
+    if (id) { activeSessionId.current = null; completeSession(id, repeatCount).catch(() => {}); }
+  };
+
+  const closePlayer = () => { setPlayer(null); setPlaying(false); activeSessionId.current = null; };
+
+  const playSet = (item) => setPlayer({ queue: [toAffQueueItem(item)], startIndex: 0 });
 
   // RTG cards load into Write Your Own so the user can edit before saving —
   // matches the website's "Tap to load & edit" copy.
@@ -312,8 +300,7 @@ export default function Affirmations() {
   const handlePlaySelected = () => {
     const items = library.filter((i) => selectedIds.includes(i.id));
     if (items.length === 0) return;
-    const lines = items.flatMap((i) => i.affirmations || []);
-    playLines(lines, null, null);
+    setPlayer({ queue: items.map(toAffQueueItem), startIndex: 0 });
   };
 
   const visibleLibrary = library
@@ -580,7 +567,7 @@ export default function Affirmations() {
                     {current.affirmations.map((line, i) => (
                       <Text key={i} style={styles.affLine}>{line}</Text>
                     ))}
-                    <Button title="Play Audio 🔊" onPress={() => playLines(current.affirmations, current.id, current.audio_url)} loading={playing} fullWidth style={{ marginTop: 14 }} />
+                    <Button title="Play Audio 🔊" onPress={() => playSet(current)} loading={playing} fullWidth style={{ marginTop: 14 }} />
                   </GlassCard>
                 )}
               </>
@@ -655,7 +642,7 @@ export default function Affirmations() {
                     {current.affirmations.map((line, i) => (
                       <Text key={i} style={styles.affLine}>{line}</Text>
                     ))}
-                    <Button title="Play Audio 🔊" onPress={() => playLines(current.affirmations, current.id, current.audio_url)} loading={playing} fullWidth style={{ marginTop: 14 }} />
+                    <Button title="Play Audio 🔊" onPress={() => playSet(current)} loading={playing} fullWidth style={{ marginTop: 14 }} />
                   </GlassCard>
                 )}
               </>
@@ -670,6 +657,21 @@ export default function Affirmations() {
         onClose={() => setShowUpgrade(false)}
         onSelectPlan={handleSelectPlan}
       />
+
+      {player && (
+        <NowPlayingPlayer
+          visible={!!player}
+          queue={player.queue}
+          startIndex={player.startIndex}
+          kicker="Now Playing — Affirmations"
+          getAudioUri={resolveAffAudioUri}
+          onTrackStart={handleAffTrackStart}
+          onTrackFinish={handleAffTrackFinish}
+          onClose={closePlayer}
+          isFavorited={(item) => !!item.raw.is_favorite}
+          onToggleFavorite={(item) => item.raw.id && handleFavorite(item.raw.id)}
+        />
+      )}
     </GradientBackground>
   );
 }

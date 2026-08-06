@@ -18,6 +18,7 @@ import Chip from '../../components/Chip';
 import Button from '../../components/Button';
 import ExpandableTextArea from '../../components/ExpandableTextArea';
 import UsageBadge from '../../components/UsageBadge';
+import NowPlayingPlayer from '../../components/NowPlayingPlayer';
 import { usePlanStore } from '../../store/planStore';
 import { useAuthStore } from '../../store/authStore';
 import { colors, fonts, radii } from '../../constants/theme';
@@ -111,6 +112,9 @@ export default function Stories() {
   const [rtgCategory, setRtgCategory] = useState('All');
   const [rtgPinned, setRtgPinned] = useState([]);
   const [rtgPlayingTitle, setRtgPlayingTitle] = useState(null);
+
+  // Full-screen "Now Playing" player -- { queue, startIndex } or null.
+  const [player, setPlayer] = useState(null);
 
   const canGenerateAi = hasFeature('ai_stories');
   const ownStoriesTotal = library.filter((s) => s.source !== 'ai').length;
@@ -222,7 +226,57 @@ export default function Stories() {
     setTab('write');
   };
 
-  const handlePlay = async (story) => {
+  // ── Full-screen "Now Playing" player ────────────────────────────────
+  // Queue items are a common shape ({ id, title, content, kind, raw }) so
+  // one player instance can play either the saved library or the
+  // Ready-Made set, with the rest of that same list as its queue/up-next.
+  const toLibraryQueueItem = (story) => ({ id: story.id, title: story.title, content: story.content, kind: 'library', raw: story });
+  const toRtgQueueItem = (preset) => ({ id: preset.title, title: preset.title, content: preset.content, kind: 'rtg', raw: preset });
+
+  const resolveAudioUri = async (item) => {
+    if (item.kind === 'library') {
+      let uri = item.raw.audio_url;
+      if (!uri) {
+        try { uri = (await getStoryAudioStatus(item.raw.id))?.audio_url; } catch (_) {}
+      }
+      if (!uri) uri = await getItemAudio('story', item.raw.id, item.raw.content, voice);
+      return uri;
+    }
+    return getItemAudio('story', 0, item.raw.content, voice);
+  };
+
+  const handleTrackStart = (item) => {
+    if (item.kind === 'library') {
+      setPlayingId(item.raw.id);
+      // Best-effort Tracker session + daily play count, same as before —
+      // a failure here must never stop playback.
+      startSession({ affirmationId: null, repeatTarget: 1 })
+        .then((sess) => { activeSessionId.current = sess?.id ?? null; })
+        .catch(() => { activeSessionId.current = null; });
+      addStoryPlay().then(loadPlaysToday).catch(() => {});
+    } else {
+      setRtgPlayingTitle(item.title);
+    }
+  };
+
+  const handleTrackFinish = (item) => {
+    if (item.kind === 'library') {
+      setPlayingId(null);
+      const id = activeSessionId.current;
+      if (id) { activeSessionId.current = null; completeSession(id, 1).catch(() => {}); }
+    } else {
+      setRtgPlayingTitle(null);
+    }
+  };
+
+  const closePlayer = () => {
+    setPlayer(null);
+    setPlayingId(null);
+    setRtgPlayingTitle(null);
+    activeSessionId.current = null;
+  };
+
+  const handlePlay = (story, list) => {
     if (story.locked) {
       setUpgradeMsg('This story is locked -- upgrade to play it again, or free up a slot.');
       setShowUpgrade(true);
@@ -233,61 +287,17 @@ export default function Stories() {
       setShowUpgrade(true);
       return;
     }
-
-    await stopSound();
-    setPlayingId(story.id); setError('');
-    try {
-      let uri = story.audio_url;
-      if (!uri) {
-        try {
-          const status = await getStoryAudioStatus(story.id);
-          uri = status?.audio_url;
-        } catch (_) {}
-      }
-      if (!uri) {
-        uri = await getItemAudio('story', story.id, story.content, voice);
-      }
-      const { sound: newSound } = await Audio.Sound.createAsync({ uri }, { shouldPlay: true });
-      setSound(newSound);
-
-      // Count this listen towards the Tracker (totals / streak / days
-      // practiced), the same way the affirmation player does. Best-effort:
-      // a failure here must never stop playback.
-      try {
-        const sess = await startSession({ affirmationId: null, repeatTarget: 1 });
-        activeSessionId.current = sess?.id ?? null;
-      } catch (_) { activeSessionId.current = null; }
-
-      newSound.setOnPlaybackStatusUpdate((status) => {
-        if (status.didJustFinish) {
-          setPlayingId(null);
-          const id = activeSessionId.current;
-          if (id) {
-            activeSessionId.current = null;
-            completeSession(id, 1).catch(() => {});
-          }
-        }
-      });
-      try { await addStoryPlay(); loadPlaysToday(); } catch (_) {}
-    } catch (e) {
-      if (e.status === 403 || e.status === 429) { setUpgradeMsg(e.message || 'Upgrade for unlimited story plays.'); setShowUpgrade(true); }
-      else setError(e.message || 'Could not play audio');
-      setPlayingId(null);
-    }
+    const queue = (list || filteredLibrary).map(toLibraryQueueItem);
+    const startIndex = Math.max(0, queue.findIndex((q) => q.raw.id === story.id));
+    setError('');
+    setPlayer({ queue, startIndex });
   };
 
-  const handlePlayRTG = async (preset) => {
-    await stopSound();
-    setRtgPlayingTitle(preset.title); setError('');
-    try {
-      const uri = await getItemAudio('story', 0, preset.content, voice);
-      const { sound: newSound } = await Audio.Sound.createAsync({ uri }, { shouldPlay: true });
-      setSound(newSound);
-      newSound.setOnPlaybackStatusUpdate((status) => { if (status.didJustFinish) setRtgPlayingTitle(null); });
-    } catch (e) {
-      setError(e.message || 'Could not play story');
-      setRtgPlayingTitle(null);
-    }
+  const handlePlayRTG = (preset, list) => {
+    const queue = (list || filteredRTG).map(toRtgQueueItem);
+    const startIndex = Math.max(0, queue.findIndex((q) => q.raw.title === preset.title));
+    setError('');
+    setPlayer({ queue, startIndex });
   };
 
   const toggleRtgPin = async (title) => {
@@ -543,6 +553,21 @@ export default function Stories() {
         onClose={() => setShowUpgrade(false)}
         onSelectPlan={handleSelectPlan}
       />
+
+      {player && (
+        <NowPlayingPlayer
+          visible={!!player}
+          queue={player.queue}
+          startIndex={player.startIndex}
+          kicker="Now Playing — Stories"
+          getAudioUri={resolveAudioUri}
+          onTrackStart={handleTrackStart}
+          onTrackFinish={handleTrackFinish}
+          onClose={closePlayer}
+          isFavorited={(item) => (item.kind === 'library' ? !!item.raw.is_favorite : rtgPinned.includes(item.title))}
+          onToggleFavorite={(item) => (item.kind === 'library' ? handleFavorite(item.raw.id) : toggleRtgPin(item.title))}
+        />
+      )}
     </GradientBackground>
   );
 }
