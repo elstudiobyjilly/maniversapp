@@ -1,7 +1,8 @@
 import { Stack, useRouter } from 'expo-router';
-import { TouchableOpacity, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+import QuickNavFab from '../../components/QuickNavFab';
 
 // Small frosted-glass back button -- floats over the content via
 // headerTransparent (doesn't reserve header height / push content down,
@@ -23,6 +24,7 @@ function BackButton() {
 
 export default function ToolsLayout() {
   return (
+    <View style={{ flex: 1 }}>
     <Stack
       screenOptions={{
         headerShown: true,
@@ -60,6 +62,12 @@ export default function ToolsLayout() {
       <Stack.Screen name="reps" options={{ title: 'Reps' }} />
       <Stack.Screen name="techniques" options={{ title: 'Techniques' }} />
     </Stack>
+    {/* Trial: collapsed circular quick-nav, scoped to tool screens only
+        (per explicit request) -- these are the only screens with zero way
+        back to the main tabs besides the back button. Not on the 5 main
+        tabs, which already have the full FloatingTabBar. */}
+    <QuickNavFab />
+    </View>
   );
 }
 
