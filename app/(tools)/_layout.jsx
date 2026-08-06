@@ -5,8 +5,18 @@ export default function ToolsLayout() {
     <Stack
       screenOptions={{
         headerShown: false,
+        // Edge-swipe-back only (the standard iOS behaviour). This used to
+        // also set fullScreenGestureEnabled: true, which installs a pan
+        // gesture recognizer across the ENTIRE screen (not just the edge)
+        // to catch swipe-back gestures anywhere -- that recognizer sits in
+        // the touch pipeline over everything on screen, including write
+        // boxes, and briefly contesting a tap right as a TextInput starts
+        // to focus is a known way to get the keyboard cancelled mid-open.
+        // That's almost certainly what's been causing the "keyboard pops
+        // up and immediately closes" glitch reported across every screen
+        // in this stack even after fixing two earlier, unrelated causes of
+        // the same symptom. Edge-only swipe was the actual ask anyway.
         gestureEnabled: true,
-        fullScreenGestureEnabled: true,
       }}
     >
       <Stack.Screen name="gratitude" options={{ title: 'Gratitude' }} />
