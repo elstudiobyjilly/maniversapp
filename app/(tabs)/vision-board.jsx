@@ -293,14 +293,16 @@ export default function VisionBoard() {
       savedZoom.value = zoom.value;
     });
 
-  // While editing, a single finger drags individual images, so panning the
-  // board needs two fingers. When the board is locked or in fullscreen the
-  // images aren't draggable, so a single finger should pan — requiring two
-  // fingers just to look around a zoomed-in board is what made viewing feel
-  // stuck.
-  const panNeedsTwoFingers = !isLocked && !fullscreen;
+  // Single finger pans the board by dragging empty canvas space, matching
+  // the website ("Drag empty space to pan"). This doesn't conflict with
+  // per-image dragging: each DraggableImage has its own nested
+  // GestureDetector (movePan), and react-native-gesture-handler gives a
+  // touch that starts on an image to that inner handler first — this outer
+  // canvas pan only ever gets touches that start on empty background.
+  // Previously this required two fingers whenever the board was unlocked,
+  // which is why panning felt broken/stuck and only pinch-zoom worked.
   const panGesture = Gesture.Pan()
-    .minPointers(panNeedsTwoFingers ? 2 : 1)
+    .minPointers(1)
     .onStart(() => {
       startPanX.value = panX.value;
       startPanY.value = panY.value;
@@ -660,7 +662,7 @@ export default function VisionBoard() {
 
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
           {info ? <Text style={styles.infoText}>{info}</Text> : null}
-          <Text style={styles.hintText}>Drag to move · Pinch or two-finger drag to zoom/pan the board · Resize from corner · Lock when done ✨</Text>
+          <Text style={styles.hintText}>Drag an image to move it · Pinch to zoom · Drag empty space to pan · Resize from corner · Lock when done ✨</Text>
           <Text style={styles.hintText}>Press and hold an image for a moment to add a category 🏷️</Text>
         </View>
       )}
