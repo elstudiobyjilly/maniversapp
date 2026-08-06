@@ -26,7 +26,16 @@ const DEFAULT_PRACTICES = ['Scripting', 'Visualisation', 'Gratitude'];
 const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
 function toDateKey(d) {
-  return d.toISOString().slice(0, 10);
+  // Local calendar date, NOT toISOString() (which converts to UTC first).
+  // For anyone in a positive UTC offset (India, most of Asia, Australia),
+  // toISOString().slice(0,10) on a local midnight Date rolls back to the
+  // PREVIOUS day, so a day picked as "today" got its checks/notes filed
+  // under yesterday's key while the day-pill number (drawn from
+  // Date.getDate(), local) still correctly showed today's date.
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 function startOfDay(d) {
   const x = new Date(d);
@@ -416,7 +425,14 @@ export default function DesireActionTool() {
             {selectedDay && (
               <GlassCard style={{ marginTop: 16, marginBottom: 16 }}>
                 <Text style={styles.dayDetailTitle}>
-                  {new Date(selectedDay).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                  {(() => {
+                    // Parse the y-m-d key as LOCAL midnight, not via
+                    // `new Date("YYYY-MM-DD")` — that form is parsed as UTC
+                    // and can display the wrong day for negative-UTC-offset
+                    // users once formatted back in local time.
+                    const [yy, mm, dd] = selectedDay.split('-').map(Number);
+                    return new Date(yy, mm - 1, dd).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+                  })()}
                 </Text>
                 {(currentDesire.practices || []).length === 0 ? (
                   <Text style={styles.noPracsText}>No practices set for this desire.</Text>

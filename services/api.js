@@ -540,27 +540,6 @@ export async function saveIdentity(body) {
   return req('POST', '/identity/', body);
 }
 
-// ── ROADMAP ───────────────────────────────────────────────────────────
-export async function getRoadmaps() {
-  return req('GET', '/roadmap/');
-}
-
-export async function createRoadmap({ desire, days, weeks, practices = [] }) {
-  return req('POST', '/roadmap/', { desire, days, weeks, practices });
-}
-
-export async function checkRoadmapAction(rmId, week, actionIdx, checked) {
-  return req('PATCH', `/roadmap/${rmId}/check`, { week, action_idx: actionIdx, checked });
-}
-
-export async function noteRoadmap(rmId, week, note) {
-  return req('PATCH', `/roadmap/${rmId}/note`, { week, note });
-}
-
-export async function deleteRoadmap(rmId) {
-  return req('DELETE', `/roadmap/${rmId}`);
-}
-
 // ── SCRIPTING ─────────────────────────────────────────────────────────
 export async function getScripts() {
   return req('GET', '/scripting/');

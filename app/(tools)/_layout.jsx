@@ -27,7 +27,6 @@ export default function ToolsLayout() {
       <Stack.Screen name="letgo" options={{ title: 'Let Go' }} />
       <Stack.Screen name="futureself" options={{ title: 'Future Self' }} />
       <Stack.Screen name="identity" options={{ title: 'Identity' }} />
-      <Stack.Screen name="roadmap" options={{ title: 'Roadmap' }} />
       <Stack.Screen name="scripting" options={{ title: 'Scripting' }} />
       <Stack.Screen name="reps" options={{ title: 'Reps' }} />
       <Stack.Screen name="tracker" options={{ title: 'Habit Tracker' }} />
