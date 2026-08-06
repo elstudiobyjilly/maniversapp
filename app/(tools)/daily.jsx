@@ -116,7 +116,7 @@ export default function Daily() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 16, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 46, paddingBottom: 40 }}>
         <View ref={contentRef} collapsable={false}>
           <ScreenHeader lead="Daily" accent="Energy" subtitle="Your message for today. Your oracle pull. Your energy. ✨" />
 

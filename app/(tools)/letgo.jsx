@@ -79,7 +79,7 @@ export default function LetGo() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 16 }]}>
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 46 }]}>
         <ScreenHeader lead="Let" accent="Go" subtitle="Detachment is not giving up. It is trusting completely. 🌿" />
 
         <TabPill

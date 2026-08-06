@@ -42,7 +42,7 @@ export default function Reps() {
   return (
     <GradientBackground>
       <ScrollView
-        contentContainerStyle={{ padding: 16, paddingTop: insets.top + 16, paddingBottom: 40 }}
+        contentContainerStyle={{ padding: 16, paddingTop: insets.top + 46, paddingBottom: 40 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.purpleMid} />}
       >
         <ScreenHeader lead="Your" accent="Reps" subtitle="Every time you repeat an affirmation or play a story, it counts here. 🔁" />

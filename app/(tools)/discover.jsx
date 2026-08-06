@@ -204,7 +204,7 @@ export default function Discover() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 16, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 46, paddingBottom: 40 }}>
         <ScreenHeader lead="Dis" accent="cover" subtitle="Manifesting knowledge, wisdom & guides — curated with love." />
 
         <TabPill

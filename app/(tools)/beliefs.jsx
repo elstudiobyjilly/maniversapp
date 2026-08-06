@@ -127,7 +127,7 @@ export default function Beliefs() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 16 }]} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 46 }]} keyboardShouldPersistTaps="handled">
         <ScreenHeader lead="Limiting" accent="Beliefs" subtitle="Identify them. Reframe them. Watch them dissolve. 🔓" />
 
         <TabPill

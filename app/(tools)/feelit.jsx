@@ -403,7 +403,7 @@ export default function FeelIt() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 16 }]}>
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 46 }]}>
 
         <ScreenHeader lead="Feel It" accent="Cards" subtitle="Transmute your emotional state ✨" />
 

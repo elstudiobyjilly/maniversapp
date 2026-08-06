@@ -160,7 +160,7 @@ export default function Gratitude() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 16 }]} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 46 }]} keyboardShouldPersistTaps="handled">
         <ScreenHeader lead="Gratitude" accent="Log" subtitle="What you appreciate, appreciates. Write daily. 🙏" />
 
         <View style={styles.statsRow}>

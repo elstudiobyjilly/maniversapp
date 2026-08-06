@@ -171,7 +171,7 @@ export default function AuraCard() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 16 }]} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 46 }]} keyboardShouldPersistTaps="handled">
         <ScreenHeader lead="Your" accent="Aura Card" subtitle="A word, a list, an affirmation set — make it yours. Share it. Start the trend. ✨" />
 
         <GlassCard style={styles.mb20}>

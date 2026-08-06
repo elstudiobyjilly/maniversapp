@@ -887,7 +887,7 @@ export default function FutureSelf() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 16 }]} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 46 }]} keyboardShouldPersistTaps="handled">
 
         <ScreenHeader lead="Future" accent="Self" subtitle="Identity, portrait, bridge & letters from who you're becoming" />
 

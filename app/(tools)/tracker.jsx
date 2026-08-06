@@ -98,7 +98,7 @@ export default function Tracker() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 16, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 46, paddingBottom: 40 }}>
         <ScreenHeader lead="Your" accent="Tracker" subtitle="Your practice, at a glance ✨" />
 
         {loading && !stats ? (

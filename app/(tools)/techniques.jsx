@@ -31,7 +31,7 @@ export default function Techniques() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 16, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 46, paddingBottom: 40 }}>
         <ScreenHeader lead="Manifestation" accent="Techniques" subtitle="17 proven techniques — pick one, commit, and watch it work." />
 
         {TECHNIQUES.map((t, i) => {

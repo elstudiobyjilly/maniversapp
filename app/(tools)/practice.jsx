@@ -199,7 +199,7 @@ export default function Practice() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 16 }]}>
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 46 }]}>
         <ScreenHeader lead="Practice" accent="Methods" subtitle="Don't just read about techniques — actually do them. Track your practice. 🌟" />
 
         <TabPill

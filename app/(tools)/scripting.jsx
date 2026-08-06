@@ -157,7 +157,7 @@ export default function Scripting() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 16 }]} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 46 }]} keyboardShouldPersistTaps="handled">
         <ScreenHeader lead="Your" accent="Scripting" subtitle="Write your desires as if they have already happened. ✨" />
 
         <TabPill

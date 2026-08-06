@@ -192,7 +192,7 @@ export default function DesireDetail() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 16, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 46, paddingBottom: 40 }}>
         <DesireCover uri={desire.images?.[0]} style={styles.coverImage} />
 
         {editing ? (

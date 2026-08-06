@@ -141,7 +141,7 @@ export default function Manifested() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 16 }]} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 46 }]} keyboardShouldPersistTaps="handled">
         <ScreenHeader lead="Manifested" accent="Log" subtitle="Your proof of power. Everything the universe delivered. 🎉" />
 
         {showIgCta && (
