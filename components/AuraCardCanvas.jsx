@@ -169,8 +169,12 @@ export default function AuraCardSvg({ styleKey, size, pattern, colours, shadeOve
   }
 
   // radial / aura / mesh / cosmic all share the gradient-defs setup below
+  // 'aura' is deliberately a single soft glow for a named Style (just its
+  // mainOrb) -- but in manual mode there's no "main" colour, only however
+  // many of the 4 COLOURS the user has toggled on, and all of them should
+  // still show up under any pattern, this one included.
   const orbsForLayout =
-    pattern === 'aura' ? (manual ? baseOrbs.slice(0, 1) : [s.mainOrb].filter((o) => familyOn(o, colours)).map((o) => recolorOrb(o, shadeOverrides)))
+    pattern === 'aura' ? (manual ? baseOrbs : [s.mainOrb].filter((o) => familyOn(o, colours)).map((o) => recolorOrb(o, shadeOverrides)))
     : pattern === 'mesh' ? [...baseOrbs, ...baseOrbs].slice(0, 6).map((o, i) => ({ ...o, cx: (0.2 + (i * 0.28)) % 1, cy: (0.25 + i * 0.19 * (i % 2 === 0 ? 1 : -1) + 1) % 1, r: o.r * 0.6 }))
     : baseOrbs;
   const orbs = [...orbsForLayout, CENTER_GLOW];
