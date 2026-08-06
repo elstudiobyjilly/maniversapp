@@ -62,7 +62,7 @@ export default function FloatingTabBar({ state, descriptors, navigation }) {
   if (tabBarHidden) return null;
 
   return (
-    <View style={[styles.pill, { bottom: 22 + Math.max(0, insets.bottom - 12) }]}>
+    <View style={[styles.pill, { bottom: 8 + Math.max(0, insets.bottom - 12) }]}>
       {/* borderRadius set directly on the BlurView, not just relying on
           the parent's overflow:hidden -- on iOS, BlurView clipped only by
           an ancestor's overflow can render past the intended rounded
