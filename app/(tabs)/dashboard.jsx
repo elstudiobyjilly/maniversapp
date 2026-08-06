@@ -4,6 +4,7 @@ import {
   RefreshControl, ActivityIndicator, Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -55,14 +56,26 @@ const WIDGET_H_MEDIA = 310;  // Mind Movies / Subliminals — sized to exactly f
 const WIDGET_H_SHORT = 230;  // Message for the Day / Manifested
 
 // A desire's cover URL can 404/expire without the record itself changing —
-// falls back to the gradient placeholder instead of rendering blank white.
+// falls back to a frosted glass placeholder (instead of a flat gradient
+// block) so a desire with no image yet still looks intentional rather than
+// like a broken/missing cover.
 function DesireCover({ uri, style }) {
   const [failed, setFailed] = useState(false);
   // R2 keys with spaces/special characters in the filename hit iOS's
   // "Protocol error" in RN's Image, which doesn't auto-encode the URL the
   // way a browser <img> silently does.
   const safeUri = safeImageUri(uri);
-  if (!safeUri || failed) return <LinearGradient colors={gradients.avatar} style={style} />;
+  if (!safeUri || failed) {
+    return (
+      <LinearGradient colors={gradients.avatar} style={style}>
+        <BlurView intensity={40} tint="light" style={StyleSheet.absoluteFill} />
+        <View style={[StyleSheet.absoluteFill, styles.desireCoverFrostTint]} />
+        <View style={styles.desireCoverFrostIconWrap}>
+          <Text style={styles.desireCoverFrostIcon}>✨</Text>
+        </View>
+      </LinearGradient>
+    );
+  }
   return <Image source={{ uri: safeUri }} style={style} onError={() => setFailed(true)} />;
 }
 
@@ -708,7 +721,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.6)', borderWidth: 1,
     borderColor: 'rgba(201,168,201,0.25)', borderRadius: radii.md, overflow: 'hidden',
   },
-  desireCover: { width: '100%', height: DESIRE_CARD_W * 0.72 },
+  desireCover: { width: '100%', height: DESIRE_CARD_W * 0.72, overflow: 'hidden' },
+  desireCoverFrostTint: { backgroundColor: 'rgba(255,255,255,0.14)' },
+  desireCoverFrostIconWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  desireCoverFrostIcon: { fontSize: 30, opacity: 0.85 },
   desireBody: { padding: 12 },
   desireTitle: { fontFamily: fonts.displayMedium, fontSize: 15, color: colors.ink, fontWeight: '600' },
   desireCategory: { fontFamily: fonts.body, fontSize: 11, color: colors.mist, marginTop: 3 },

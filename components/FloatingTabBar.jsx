@@ -5,6 +5,7 @@ import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { colors } from '../constants/theme';
+import { useUiStore } from '../store/uiStore';
 
 const ICONS = {
   dashboard: 'home',
@@ -31,6 +32,7 @@ const ICONS = {
 // glides over to it, rather than just an icon colour flipping instantly).
 export default function FloatingTabBar({ state, descriptors, navigation }) {
   const insets = useSafeAreaInsets();
+  const tabBarHidden = useUiStore((s) => s.tabBarHidden);
   const [barWidth, setBarWidth] = useState(0);
   // Filtering on descriptors[r.key].options.href doesn't actually work
   // here -- expo-router's `href: null` (used on the mindmovie/subliminal
@@ -56,6 +58,8 @@ export default function FloatingTabBar({ state, descriptors, navigation }) {
     transform: [{ translateX: indicatorX.value }],
     width: slot,
   }));
+
+  if (tabBarHidden) return null;
 
   return (
     <View style={[styles.pill, { bottom: 22 + Math.max(0, insets.bottom - 12) }]}>

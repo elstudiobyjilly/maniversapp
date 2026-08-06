@@ -68,16 +68,30 @@ function MethodsPane() {
   const [loading, setLoading] = useState(true);
   const [logging, setLogging] = useState(null);
   const [search, setSearch] = useState('');
+  const [syncError, setSyncError] = useState('');
 
   useEffect(() => {
     getPracticeChecks().then(setChecks).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
+  // Autosaves on every tap -- was updating the local checkbox immediately
+  // but silently swallowing a failed save, so a checked step could look
+  // fine on screen and then be gone next time the backend was the source
+  // of truth again. Now a failed save rolls the checkbox back and says so,
+  // instead of lying about what's actually stored.
   const toggleStep = async (methodName, stepIdx) => {
+    const previous = checks;
     const current = checks[methodName]?.[stepIdx] || false;
     const updated = { ...checks, [methodName]: { ...(checks[methodName] || {}), [stepIdx]: !current } };
     setChecks(updated);
-    try { await savePracticeChecks(updated); } catch (_) {}
+    setSyncError('');
+    try {
+      await savePracticeChecks(updated);
+    } catch (e) {
+      setChecks(previous);
+      setSyncError('Could not save that check — check your connection and try again.');
+      setTimeout(() => setSyncError(''), 3500);
+    }
   };
 
   const handleLogSession = async (methodName) => {
@@ -106,6 +120,7 @@ function MethodsPane() {
         value={search}
         onChangeText={setSearch}
       />
+      {!!syncError && <Text style={styles.syncErrorText}>{syncError}</Text>}
       {filtered.map((method) => {
         const done = doneCount(method.name, method.steps.length);
         const isOpen = expanded === method.name;
@@ -225,6 +240,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff', borderRadius: radii.pill, paddingVertical: 10, paddingHorizontal: 16,
     fontSize: 13.5, color: colors.ink, marginBottom: 14, borderWidth: 1.5, borderColor: 'rgba(248,184,200,0.35)',
   },
+  syncErrorText: { color: colors.danger, fontSize: 12.5, textAlign: 'center', marginBottom: 10 },
 
   methodHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   methodIcon: { fontSize: 22 },

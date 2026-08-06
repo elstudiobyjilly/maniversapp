@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, ScrollView, ActivityIndicator, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import ScreenHeader from '../../components/ScreenHeader';
@@ -25,14 +26,25 @@ const CATEGORY_FILTER_OPTIONS = [
 ];
 
 // A desire's cover URL can 404/expire without the record itself changing —
-// falls back to the gradient placeholder instead of rendering blank white.
+// falls back to a frosted glass placeholder (instead of a flat gradient
+// block) so a desire with no image yet still looks intentional.
 function DesireCover({ uri, style }) {
   const [failed, setFailed] = useState(false);
   // R2 keys with spaces/special characters in the filename hit iOS's
   // "Protocol error" in RN's Image, which doesn't auto-encode the URL the
   // way a browser <img> silently does.
   const safeUri = safeImageUri(uri);
-  if (!safeUri || failed) return <LinearGradient colors={gradients.avatar} style={style} />;
+  if (!safeUri || failed) {
+    return (
+      <LinearGradient colors={gradients.avatar} style={[style, { overflow: 'hidden' }]}>
+        <BlurView intensity={40} tint="light" style={StyleSheet.absoluteFill} />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,255,255,0.14)' }]} />
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ fontSize: 30, opacity: 0.85 }}>✨</Text>
+        </View>
+      </LinearGradient>
+    );
+  }
   return <Image source={{ uri: safeUri }} style={style} onError={() => setFailed(true)} />;
 }
 

@@ -14,12 +14,16 @@ import UpgradeModal from '../../components/UpgradeModal';
 import ScreenHeader from '../../components/ScreenHeader';
 import Button from '../../components/Button';
 import { usePlanStore } from '../../store/planStore';
+import { useUiStore } from '../../store/uiStore';
 import { colors, fonts, radii, shadows } from '../../constants/theme';
 import * as Linking from 'expo-linking';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const SCREEN_HEIGHT = Dimensions.get('window').height;
-const CANVAS_WIDTH = SCREEN_WIDTH * 1.15;
+// Was only 1.15x the viewport -- barely any bigger than what's already on
+// screen, so panning had almost nowhere to go and felt "stuck" even though
+// the gesture itself worked. 2.4x gives real room to pan around.
+const CANVAS_WIDTH = SCREEN_WIDTH * 2.4;
 // The board's visible frame — fixed size, matches the website. Zooming
 // scales/pans the content inside this frame; the frame itself never resizes.
 const VIEWPORT_WIDTH = SCREEN_WIDTH - 32;
@@ -37,11 +41,12 @@ const VIEWPORT_HEIGHT = Math.max(420, Math.min(900, SCREEN_HEIGHT - 380));
 // That's the exact "left/right pans, up/down doesn't, can't reach the
 // bottom" symptom. Scaling it off the viewport the same way width does
 // guarantees vertical pan room always exists, on every screen size.
-const CANVAS_HEIGHT = VIEWPORT_HEIGHT * 1.15;
+const CANVAS_HEIGHT = VIEWPORT_HEIGHT * 2.4;
 const ITEM_SIZE = 120;
 // Zoom range for the board viewport. Max was 2x, which wasn't enough to
-// actually inspect a busy board.
-const ZOOM_MIN = 0.5;
+// actually inspect a busy board. Min was 0.5x, which wasn't enough to zoom
+// back out and see a board whose images are spread across the wider canvas.
+const ZOOM_MIN = 0.2;
 const ZOOM_MAX = 3;
 const MIN_ITEM_SIZE = 60;
 
@@ -216,10 +221,22 @@ export default function VisionBoard() {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIndices, setSelectedIndices] = useState([]);
   const [categorizingIndex, setCategorizingIndex] = useState(null);
+  const setTabBarHidden = useUiStore((s) => s.setTabBarHidden);
 
   useEffect(() => {
     refresh().finally(() => setCheckingPlan(false));
   }, []);
+
+  // The floating tab bar is a screen-wide overlay drawn by the tab layout,
+  // not something this screen's own layout can push below itself -- in
+  // fullscreen mode the board fills the entire screen, so the tab bar was
+  // sitting on top of (overlapping) the bottom of the board. Hide it while
+  // fullscreen is active, and always restore it on the way out (including
+  // navigating away without exiting fullscreen first).
+  useEffect(() => {
+    setTabBarHidden(fullscreen);
+    return () => setTabBarHidden(false);
+  }, [fullscreen]);
 
   const imageCap = limits?.vision_board_images_active; // paid: 40, free: n/a (blocked entirely)
 
