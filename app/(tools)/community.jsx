@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo, useCallback, memo } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getCommunityPosts, createCommunityPost, loveCommunityPost, deleteCommunityPost, createCheckout } from '../../services/api';
@@ -50,6 +50,59 @@ const TRUNCATE_AT = 220;
 // website's in-memory _communityAnonMap (resets every page load).
 const ANON_EMOJIS = ['🌸', '✨', '🌙', '💫', '🦋', '🌿', '💕', '🔮', '🌺', '⭐'];
 
+// Pure -- lives outside the component so it's never recreated on render.
+function timeAgo(dateStr) {
+  const mins = Math.floor((Date.now() - new Date(dateStr).getTime()) / 60000);
+  if (mins < 1) return 'now';
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h`;
+  return `${Math.floor(hrs / 24)}d`;
+}
+
+// The feed is the expensive part of this screen -- every post is its own
+// GlassCard, which renders its own BlurView. With any real number of
+// posts, re-diffing all of them on EVERY keystroke in the compose box
+// above (since typing changes state in the parent, which re-renders its
+// whole tree by default) is enough JS-thread work to visibly stall the
+// native keyboard-show animation mid-slide -- the "keyboard pops up
+// halfway and retracts" glitch. Isolating the feed in its own memoized
+// component means it only re-renders when posts/filters/expanded/
+// myUsername actually change, never just because the user is typing.
+const PostsFeed = memo(function PostsFeed({ loading, posts, expanded, myUsername, onLove, onDelete, onToggleExpand, getPostLabel }) {
+  if (loading) return <Text style={styles.muted}>Loading feed...</Text>;
+  if (posts.length === 0) return <Text style={styles.muted}>No posts yet — be the first ✨</Text>;
+  return posts.map((p) => {
+    const isLong = p.content.length > TRUNCATE_AT;
+    const isExpanded = expanded.has(p.id);
+    const displayText = isLong && !isExpanded ? p.content.slice(0, TRUNCATE_AT).trim() + '…' : p.content;
+    return (
+      <GlassCard key={p.id} style={styles.feedCard}>
+        <View style={styles.feedHead}>
+          <Text style={styles.feedName}>{getPostLabel(p)}</Text>
+          <View style={styles.feedHeadRight}>
+            <TouchableOpacity onPress={() => onLove(p.id)} style={styles.lovePill}>
+              <Text style={styles.lovePillText}>{p.i_loved ? '💕' : '🤍'} {p.love_count}</Text>
+            </TouchableOpacity>
+            <Text style={styles.metaText}>{timeAgo(p.created_at)}</Text>
+          </View>
+        </View>
+        <Text style={styles.feedText}>
+          {displayText}
+          {isLong && (
+            <Text style={styles.moreLink} onPress={() => onToggleExpand(p.id)}> {isExpanded ? 'less' : 'more'}</Text>
+          )}
+        </Text>
+        {p.username === myUsername && (
+          <TouchableOpacity onPress={() => onDelete(p.id)} style={styles.deleteRow}>
+            <Text style={styles.deleteIconText}>🗑️ Delete</Text>
+          </TouchableOpacity>
+        )}
+      </GlassCard>
+    );
+  });
+});
+
 export default function Community() {
   const insets = useSafeAreaInsets();
   const { hasFeature, refresh } = usePlanStore();
@@ -70,7 +123,11 @@ export default function Community() {
 
   const anonMap = useRef({});
   const anonCount = useRef(0);
-  const getPostLabel = (p) => {
+  // useCallback so PostsFeed (memoized below) gets a stable function
+  // reference across renders triggered by typing -- otherwise a brand new
+  // getPostLabel every keystroke would defeat the memo and force the
+  // whole feed to re-render anyway.
+  const getPostLabel = useCallback((p) => {
     if (p.username === myUsername) return 'You ✨';
     if (p.show_name && p.display_name) return `${p.display_name.split(' ')[0]} 🌸`;
     if (!anonMap.current[p.id]) {
@@ -78,7 +135,7 @@ export default function Community() {
       anonCount.current += 1;
     }
     return anonMap.current[p.id];
-  };
+  }, [myUsername]);
 
   const load = async () => {
     try { setPosts(await getCommunityPosts()); } catch (e) { setError(e.message || 'Could not load feed'); }
@@ -113,43 +170,38 @@ export default function Community() {
     );
   };
 
-  const handleLove = async (postId) => {
+  const handleLove = useCallback(async (postId) => {
     setPosts((prev) => prev.map((p) => p.id === postId
       ? { ...p, i_loved: !p.i_loved, love_count: p.i_loved ? p.love_count - 1 : p.love_count + 1 }
       : p));
     try { await loveCommunityPost(postId); } catch (_) {}
-  };
+  }, []);
 
-  const handleDelete = async (postId) => {
+  const handleDelete = useCallback(async (postId) => {
     try {
       await deleteCommunityPost(postId);
       setPosts((prev) => prev.filter((p) => p.id !== postId));
     } catch (e) { setError(e.message || 'Could not delete'); }
-  };
+  }, []);
 
-  const toggleExpand = (id) => {
+  const toggleExpand = useCallback((id) => {
     setExpanded((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
-  };
+  }, []);
 
-  const timeAgo = (dateStr) => {
-    const mins = Math.floor((Date.now() - new Date(dateStr).getTime()) / 60000);
-    if (mins < 1) return 'now';
-    if (mins < 60) return `${mins}m`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h`;
-    return `${Math.floor(hrs / 24)}d`;
-  };
-
-  const visiblePosts = posts.filter((p) => {
+  // Memoized so typing in the compose box (which changes `content`, not
+  // any of these) doesn't produce a new array reference every keystroke --
+  // that new reference would defeat PostsFeed's memo just as surely as an
+  // unstable callback would.
+  const visiblePosts = useMemo(() => posts.filter((p) => {
     if (mineOnly && p.username !== myUsername) return false;
     if (typeFilter !== 'all' && (p.post_type || '').toLowerCase() !== typeFilter) return false;
     if (categoryFilter !== 'all' && (p.category || '').toLowerCase() !== categoryFilter) return false;
     return true;
-  });
+  }), [posts, mineOnly, typeFilter, categoryFilter, myUsername]);
 
   return (
     <GradientBackground>
@@ -190,41 +242,16 @@ export default function Community() {
           </TouchableOpacity>
         </View>
 
-        {loading ? (
-          <Text style={styles.muted}>Loading feed...</Text>
-        ) : visiblePosts.length === 0 ? (
-          <Text style={styles.muted}>No posts yet — be the first ✨</Text>
-        ) : (
-          visiblePosts.map((p) => {
-            const isLong = p.content.length > TRUNCATE_AT;
-            const isExpanded = expanded.has(p.id);
-            const displayText = isLong && !isExpanded ? p.content.slice(0, TRUNCATE_AT).trim() + '…' : p.content;
-            return (
-              <GlassCard key={p.id} style={styles.feedCard}>
-                <View style={styles.feedHead}>
-                  <Text style={styles.feedName}>{getPostLabel(p)}</Text>
-                  <View style={styles.feedHeadRight}>
-                    <TouchableOpacity onPress={() => handleLove(p.id)} style={styles.lovePill}>
-                      <Text style={styles.lovePillText}>{p.i_loved ? '💕' : '🤍'} {p.love_count}</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.metaText}>{timeAgo(p.created_at)}</Text>
-                  </View>
-                </View>
-                <Text style={styles.feedText}>
-                  {displayText}
-                  {isLong && (
-                    <Text style={styles.moreLink} onPress={() => toggleExpand(p.id)}> {isExpanded ? 'less' : 'more'}</Text>
-                  )}
-                </Text>
-                {p.username === myUsername && (
-                  <TouchableOpacity onPress={() => handleDelete(p.id)} style={styles.deleteRow}>
-                    <Text style={styles.deleteIconText}>🗑️ Delete</Text>
-                  </TouchableOpacity>
-                )}
-              </GlassCard>
-            );
-          })
-        )}
+        <PostsFeed
+          loading={loading}
+          posts={visiblePosts}
+          expanded={expanded}
+          myUsername={myUsername}
+          onLove={handleLove}
+          onDelete={handleDelete}
+          onToggleExpand={toggleExpand}
+          getPostLabel={getPostLabel}
+        />
       </ScrollView>
 
       <UpgradeModal
