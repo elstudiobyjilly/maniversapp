@@ -37,6 +37,7 @@ export default function DesireActionTool() {
   const [selectedDay, setSelectedDay] = useState(null);
   const [noteText, setNoteText] = useState('');
   const [addOpen, setAddOpen] = useState(false);
+  const [addSaving, setAddSaving] = useState(false);
   const [addTitle, setAddTitle] = useState('');
   const [addStart, setAddStart] = useState(toDateKey(new Date()));
   const [addDur, setAddDur] = useState(21);
@@ -44,6 +45,7 @@ export default function DesireActionTool() {
   const [addCustom, setAddCustom] = useState('');
 
   const [editOpen, setEditOpen] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editStart, setEditStart] = useState('');
   const [editDur, setEditDur] = useState(21);
@@ -222,12 +224,14 @@ export default function DesireActionTool() {
     setAddPracs((cur) => (cur.includes(p) ? cur.filter((x) => x !== p) : [...cur, p]));
   };
   const handleSaveNewDesire = async () => {
+    if (addSaving) return; // guards against a double-tap firing two POSTs (was creating duplicate desires)
     if (!addTitle.trim()) { Alert.alert('Enter your desire ✨'); return; }
 
     const customList = addCustom.split('\n').map((s) => s.trim()).filter(Boolean);
     const title = addTitle.trim();
     const practices = [...addPracs, ...customList];
 
+    setAddSaving(true);
     try {
       const created = await createRoadmap({ desire: title, days: addDur, weeks: [], practices });
       try { await AsyncStorage.setItem(START_KEY_PREFIX + created.id, addStart); } catch (e) {}
@@ -242,6 +246,8 @@ export default function DesireActionTool() {
       } else {
         Alert.alert('Could not start tracker', e.message || 'Please try again.');
       }
+    } finally {
+      setAddSaving(false);
     }
   };
 
@@ -264,6 +270,7 @@ export default function DesireActionTool() {
   // (only /check and /note, which belong to the unrelated week-checklist
   // flow) -- so "editing" recreates the roadmap and migrates its day logs.
   const handleSaveEditDesire = async () => {
+    if (editSaving) return; // guards against a double-tap firing two POSTs
     if (!currentDesire) return;
     if (!editTitle.trim()) { Alert.alert('Enter your desire ✨'); return; }
     const title = editTitle.trim();
@@ -271,6 +278,7 @@ export default function DesireActionTool() {
     const oldTitle = currentDesire.title;
     const oldLogs = rawLogs.filter((l) => l.desire === oldTitle);
 
+    setEditSaving(true);
     try {
       const created = await createRoadmap({ desire: title, days: editDur, weeks: [], practices: editPracs });
       try { await AsyncStorage.setItem(START_KEY_PREFIX + created.id, editStart); } catch (e) {}
@@ -295,6 +303,8 @@ export default function DesireActionTool() {
       Alert.alert('Desire updated ✨');
     } catch (e) {
       Alert.alert('Could not update', e.message || 'Please try again.');
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -506,7 +516,7 @@ export default function DesireActionTool() {
               />
 
               <View style={styles.modalBtnRow}>
-                <Button title="✨ Start Tracking" onPress={handleSaveNewDesire} fullWidth />
+                <Button title="✨ Start Tracking" onPress={handleSaveNewDesire} loading={addSaving} disabled={addSaving} fullWidth />
                 <TouchableOpacity style={styles.cancelBtn} onPress={() => setAddOpen(false)}>
                   <Text style={styles.cancelBtnText}>Cancel</Text>
                 </TouchableOpacity>
@@ -559,7 +569,7 @@ export default function DesireActionTool() {
               </View>
 
               <View style={styles.modalBtnRow}>
-                <Button title="Save Changes" onPress={handleSaveEditDesire} fullWidth />
+                <Button title="Save Changes" onPress={handleSaveEditDesire} loading={editSaving} disabled={editSaving} fullWidth />
                 <TouchableOpacity style={styles.cancelBtn} onPress={() => setEditOpen(false)}>
                   <Text style={styles.cancelBtnText}>Cancel</Text>
                 </TouchableOpacity>

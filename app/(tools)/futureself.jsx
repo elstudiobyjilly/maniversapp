@@ -428,12 +428,12 @@ function IdentityTab() {
                             <Text style={styles.accordionBadgeText}>{stmts.length}</Text>
                           </View>
                         )}
-                        <Text style={styles.dragHandleIcon}>☰</Text>
                       </View>
                     </GestureDetector>
                     <TouchableOpacity onPress={() => setAddingTo(addingTo === area.id ? null : area.id)} style={styles.identityAddPill}>
                       <Text style={styles.identityAddPillText}>+ Add</Text>
                     </TouchableOpacity>
+                    <Text style={styles.dragHandleIcon}>☰</Text>
                     <TouchableOpacity onPress={() => isCustom ? removeCustomArea(area.id) : clearArea(area.id)} style={styles.identityRemoveBtn}>
                       <Text style={styles.identityRemoveBtnText}>✕</Text>
                     </TouchableOpacity>
@@ -455,6 +455,9 @@ function IdentityTab() {
                         />
                         <TouchableOpacity onPress={() => addStatement(area.id)} style={styles.addBtn}>
                           <Text style={styles.addBtnText}>✓ Add</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => { setAddingTo(null); setDrafts(prev => ({ ...prev, [area.id]: '' })); }} style={styles.addCancelBtn}>
+                          <Text style={styles.addCancelBtnText}>✕</Text>
                         </TouchableOpacity>
                       </View>
                     )}
@@ -605,12 +608,15 @@ const BridgeHistoryList = memo(function BridgeHistoryList({ history, onEdit, onD
           </View>
           <Text style={styles.topicPillText}>{meta.label}</Text>
           <View style={{ flex: 1 }} />
-          <TouchableOpacity onPress={() => onEdit(idx)} style={styles.iconActionBtn} hitSlop={6}>
-            <Text style={styles.iconActionBtnText}>✎</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => onDelete(idx)} style={[styles.iconActionBtn, styles.iconActionBtnDelete]} hitSlop={6}>
-            <Text style={styles.iconActionBtnDeleteText}>🗑</Text>
-          </TouchableOpacity>
+          <Text style={styles.bridgeDate}>{e.date}</Text>
+          <View style={styles.bridgeHeaderActions}>
+            <TouchableOpacity onPress={() => onEdit(idx)} style={styles.iconActionBtn} hitSlop={6}>
+              <Text style={styles.iconActionBtnText}>✎</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => onDelete(idx)} style={[styles.iconActionBtn, styles.iconActionBtnDelete]} hitSlop={6}>
+              <Text style={styles.iconActionBtnDeleteText}>🗑</Text>
+            </TouchableOpacity>
+          </View>
         </View>
         <Text style={styles.bridgeSideLabel}>I am now</Text>
         <Text style={styles.bridgeSideText}>{e.current}</Text>
@@ -672,10 +678,15 @@ function BridgeTab() {
     setEditIdx(idx);
   }, [history]);
 
-  const handleDelete = useCallback(async (idx) => {
-    const next = history.filter((_, i) => i !== idx);
-    setHistory(next);
-    await persist(next).catch(() => {});
+  const handleDelete = useCallback((idx) => {
+    Alert.alert('Delete this bridge entry?', null, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+        const next = history.filter((_, i) => i !== idx);
+        setHistory(next);
+        await persist(next).catch(() => {});
+      } },
+    ]);
   }, [history]);
 
   if (loading) return <ActivityIndicator color="#c9a8c9" style={{ marginTop: 40 }} />;
@@ -753,7 +764,6 @@ const SavedLettersList = memo(function SavedLettersList({ letters, expandedId, o
         <View style={styles.letterHeader}>
           <TouchableOpacity style={{ flex: 1 }} onPress={() => onToggleExpand(letter.id)} activeOpacity={0.8}>
             {!!letter.heading && <Text style={styles.letterHeading}>{letter.heading}</Text>}
-            <Text style={styles.letterDate}>{formatLetterDate(letter.ts)}</Text>
             {!isOpen && <Text style={styles.letterPreview}>{preview}</Text>}
           </TouchableOpacity>
           <View style={styles.letterHeaderRight}>
@@ -768,7 +778,8 @@ const SavedLettersList = memo(function SavedLettersList({ letters, expandedId, o
                 <Text style={styles.iconActionBtnDeleteText}>🗑</Text>
               </TouchableOpacity>
             </View>
-            <TouchableOpacity onPress={() => onToggleExpand(letter.id)} hitSlop={8}>
+            <TouchableOpacity onPress={() => onToggleExpand(letter.id)} style={styles.letterDateRow} hitSlop={8}>
+              <Text style={styles.letterDate}>{formatLetterDate(letter.ts)}</Text>
               <Text style={styles.accordionChevron}>{isOpen ? '▴' : '▾'}</Text>
             </TouchableOpacity>
           </View>
@@ -832,12 +843,17 @@ function LetterTab() {
     setEditId(letter.id);
   }, []);
 
-  const handleDelete = useCallback(async (id) => {
-    setLetters(prev => {
-      const next = prev.filter(l => l.id !== id);
-      persist(next).catch(() => {});
-      return next;
-    });
+  const handleDelete = useCallback((id) => {
+    Alert.alert('Delete this letter?', null, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => {
+        setLetters(prev => {
+          const next = prev.filter(l => l.id !== id);
+          persist(next).catch(() => {});
+          return next;
+        });
+      } },
+    ]);
   }, []);
 
   const handleToggleExpand = useCallback((id) => {
@@ -1155,6 +1171,8 @@ const styles = StyleSheet.create({
     borderRadius: 10, borderWidth: 1, borderColor: 'rgba(200,88,120,0.3)',
   },
   addBtnText: { color: colors.pinkDeep, fontWeight: '600', fontSize: 13 },
+  addCancelBtn: { paddingHorizontal: 10, paddingVertical: 8 },
+  addCancelBtnText: { color: colors.mist2, fontSize: 14, fontWeight: '600' },
   addInputFull: {
     flex: 1, backgroundColor: '#fff', borderRadius: 10,
     paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#2e2530', fontStyle: 'italic',
@@ -1218,6 +1236,8 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   topicAvatarEmoji: { fontSize: 14 },
+  bridgeDate: { fontSize: 11, color: '#9a8896', marginRight: 10 },
+  bridgeHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   bridgeSideLabel: { fontSize: 10, color: '#9a5fa8', fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 3 },
   bridgeSideText: { color: '#2e2530', fontSize: 13, lineHeight: 19, marginBottom: 8 },
   bridgeDivider: { height: 1, backgroundColor: 'rgba(154,95,168,0.1)', marginVertical: 8 },
@@ -1226,6 +1246,7 @@ const styles = StyleSheet.create({
   letterHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 6 },
   letterHeaderRight: { alignItems: 'flex-end', gap: 8 },
   letterHeaderActions: { flexDirection: 'row', gap: 6 },
+  letterDateRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   letterHeading: { fontSize: 17, fontFamily: fonts.displayMedium, color: colors.ink, marginBottom: 3 },
   letterDate: { fontSize: 11.5, color: colors.mist2 },
   letterPreview: { color: colors.mist, fontSize: 14, lineHeight: 20 },
