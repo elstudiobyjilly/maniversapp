@@ -5,7 +5,7 @@ import { useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Audio } from 'expo-av';
 import {
-  getMindMovies, createMindMovie, updateMindMovie, deleteMindMovie,
+  getMindMovies, createMindMovie, deleteMindMovie,
   uploadImage, finalizeMindMovie, generateMindMovieAudio, createCheckout,
   startSession, completeSession,
 } from '../../services/api';
@@ -73,7 +73,6 @@ export default function MindMovie() {
   const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
-  const [editingId, setEditingId] = useState(null);
   const [title, setTitle] = useState('');
   const [mood, setMood] = useState('spiritual');
   const [slideDur, setSlideDur] = useState(5);
@@ -130,7 +129,7 @@ export default function MindMovie() {
   }, [playId, movies]);
 
   const resetForm = () => {
-    setTitle(''); setMood('spiritual'); setSlideDur(5); setLoop(false); setScenes([]); setEditingId(null); setVoice('luna');
+    setTitle(''); setMood('spiritual'); setSlideDur(5); setLoop(false); setScenes([]); setVoice('luna');
   };
 
   // Matches the website: "+ Add Slide" just adds an empty scene card with a
@@ -172,8 +171,11 @@ export default function MindMovie() {
     setScenes((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Backend: create/update saves a DRAFT (never counts against the plan
-  // cap, however many times you edit it). Only /finalize consumes a slot.
+  // Backend: create saves a DRAFT (never counts against the plan cap,
+  // however many times you tweak it before saving). Only /finalize
+  // consumes a slot. There's no "edit an existing movie" path anymore —
+  // making a new one from scratch (add slides, write narration) is simple
+  // enough that a separate edit mode was just extra complexity.
   const handleSave = async (andPlay) => {
     if (!title.trim()) { setError('Give your movie a title.'); return; }
     if (scenes.length === 0) { setError('Add at least one scene.'); return; }
@@ -183,7 +185,7 @@ export default function MindMovie() {
       setShowUpgrade(true);
       return;
     }
-    if (!editingId && maxActive != null && activeCount >= maxActive) {
+    if (maxActive != null && activeCount >= maxActive) {
       setUpgradeMsg(`You've used all ${maxActive} of your Mind Movie slots — upgrade for more, or delete one first.`);
       setShowUpgrade(true);
       return;
@@ -191,12 +193,7 @@ export default function MindMovie() {
 
     setError(''); setCreating(true);
     try {
-      let movie;
-      if (editingId) {
-        movie = await updateMindMovie(editingId, { title: title.trim(), scenes, mood, slideDur, loop });
-      } else {
-        movie = await createMindMovie({ title: title.trim(), scenes, mood, slideDur, loop, voice });
-      }
+      let movie = await createMindMovie({ title: title.trim(), scenes, mood, slideDur, loop, voice });
 
       try {
         movie = await finalizeMindMovie(movie.id);
@@ -225,22 +222,6 @@ export default function MindMovie() {
     } catch (e) {
       setError(e.message || 'Could not save movie');
     } finally { setCreating(false); }
-  };
-
-  const handleEdit = (movie) => {
-    if (movie.locked) {
-      setUpgradeMsg('This Mind Movie is locked — upgrade to edit it again, or free up a slot.');
-      setShowUpgrade(true);
-      return;
-    }
-    setEditingId(movie.id);
-    setTitle(movie.title);
-    setMood(movie.mood || 'spiritual');
-    setSlideDur(movie.slideDur || 5);
-    setLoop(!!movie.loop);
-    setScenes(movie.scenes || []);
-    setVoice(movie.voice || 'luna');
-    setTab('create');
   };
 
   const handleDelete = async (movieId) => {
@@ -416,8 +397,8 @@ export default function MindMovie() {
               </View>
 
               <View style={{ marginTop: 14 }}>
-                <Text style={styles.label}>VOICE {editingId ? '(locked for this movie)' : '— permanent once saved'}</Text>
-                <Dropdown value={voice} options={VOICE_OPTIONS} onSelect={editingId ? () => {} : setVoice} fullWidth disabled={!!editingId} />
+                <Text style={styles.label}>VOICE — permanent once saved</Text>
+                <Dropdown value={voice} options={VOICE_OPTIONS} onSelect={setVoice} fullWidth />
               </View>
             </GlassCard>
 
@@ -493,7 +474,6 @@ export default function MindMovie() {
                 </ScrollView>
                 <View style={styles.row}>
                   <Button title="▶ Play" style={{ flex: 1 }} disabled={m.locked} onPress={() => m.locked ? setShowUpgrade(true) : startPlayback(m)} />
-                  <Button title="✏️ Edit" variant="ghost" onPress={() => handleEdit(m)} />
                   <TouchableOpacity style={styles.deleteButton} onPress={() => handleDelete(m.id)}>
                     <Text style={styles.deleteText}>🗑️</Text>
                   </TouchableOpacity>

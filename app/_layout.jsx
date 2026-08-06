@@ -39,9 +39,16 @@ export default function RootLayout() {
 
   useEffect(() => {
     hydrate();
+    // staysActiveInBackground was false, which is why narration/meditation/
+    // affirmation audio cut out the instant the app backgrounded or the
+    // phone locked on iOS -- iOS tears down the audio session unless the
+    // app declares the "audio" UIBackgroundMode (app.json) AND the audio
+    // session itself asks to keep playing. iPad appeared to "kind of work"
+    // because it's less aggressive about suspending backgrounded apps than
+    // iPhone is, not because the config was actually correct there either.
     Audio.setAudioModeAsync({
       playsInSilentModeIOS: true,
-      staysActiveInBackground: false,
+      staysActiveInBackground: true,
       shouldDuckAndroid: true,
       interruptionModeIOS: 1,
       interruptionModeAndroid: 1,
