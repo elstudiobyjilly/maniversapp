@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, ActivityIndicator, Dimensions, ScrollView } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet, ActivityIndicator, Dimensions, ScrollView, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useSharedValue, useAnimatedStyle, useAnimatedReaction, runOnJS, withTiming } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -213,6 +213,13 @@ export default function VisionBoard() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [loadingMM, setLoadingMM] = useState(false);
+  // Mind Movie picker -- a grid of every scene image across all saved
+  // Mind Movies, so adding to the board is a deliberate pick rather than
+  // a silent "add everything new" dump.
+  const [mmPickerOpen, setMmPickerOpen] = useState(false);
+  const [mmImages, setMmImages] = useState([]); // [{ url, movieTitle }]
+  const [mmSelected, setMmSelected] = useState(() => new Set());
+  const [mmAdding, setMmAdding] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [savingWallpaper, setSavingWallpaper] = useState(false);
   const [sharing, setSharing] = useState(false);
@@ -419,23 +426,56 @@ export default function VisionBoard() {
     } finally { setUploading(false); }
   };
 
-  // Pulls every scene image out of the user's saved Mind Movies and adds any
-  // not already on the board — matches the website's "From Mind Movies" button.
+  // Pulls every scene image out of the user's saved Mind Movies and opens a
+  // picker grid so adding to the board is a deliberate choice, not a
+  // silent "add everything new" dump like before.
   const handleFromMindMovies = async () => {
     if (isLocked) { setError('Unlock the board to add images.'); return; }
     setLoadingMM(true); setError(''); setInfo('');
     try {
       const movies = await getMindMovies();
-      const urls = [];
-      (movies || []).forEach((m) => (m.scenes || []).forEach((s) => { if (s.img) urls.push(s.img); }));
+      const seen = new Set();
+      const all = [];
+      (movies || []).forEach((m) => (m.scenes || []).forEach((s) => {
+        if (s.img && !seen.has(s.img)) { seen.add(s.img); all.push({ url: s.img, movieTitle: m.title || 'Mind Movie' }); }
+      }));
+      if (all.length === 0) { setInfo('No Mind Movie images yet — add some scenes first.'); setTimeout(() => setInfo(''), 3000); return; }
+
       const existing = new Set(items.map(itemUri));
-      const fresh = [...new Set(urls)].filter((u) => !existing.has(u));
-      if (fresh.length === 0) { setInfo('No new Mind Movie images to add.'); setTimeout(() => setInfo(''), 3000); return; }
+      setMmImages(all);
+      // Pre-select whatever isn't already on the board, so confirming with
+      // no changes reproduces the old "add everything new" behaviour.
+      setMmSelected(new Set(all.filter((img) => !existing.has(img.url)).map((img) => img.url)));
+      setMmPickerOpen(true);
+    } catch (e) {
+      if (e.status === 403) setShowUpgrade(true);
+      else setError(e.message || 'Could not load Mind Movies');
+    } finally { setLoadingMM(false); }
+  };
 
-      const capRemaining = imageCap != null ? Math.max(0, imageCap - items.length) : fresh.length;
-      const toAdd = fresh.slice(0, capRemaining);
-      if (toAdd.length === 0) { setError(`Vision board limit is ${imageCap} images — remove some to add more. ✨`); return; }
+  const toggleMmSelected = (url) => {
+    setMmSelected((prev) => {
+      const next = new Set(prev);
+      next.has(url) ? next.delete(url) : next.add(url);
+      return next;
+    });
+  };
 
+  const handleConfirmMmSelection = async () => {
+    const existing = new Set(items.map(itemUri));
+    const chosen = mmImages.map((img) => img.url).filter((u) => mmSelected.has(u) && !existing.has(u));
+    if (chosen.length === 0) { setMmPickerOpen(false); return; }
+
+    const capRemaining = imageCap != null ? Math.max(0, imageCap - items.length) : chosen.length;
+    const toAdd = chosen.slice(0, capRemaining);
+    if (toAdd.length === 0) {
+      setError(`Vision board limit is ${imageCap} images — remove some to add more. ✨`);
+      setMmPickerOpen(false);
+      return;
+    }
+
+    setMmAdding(true);
+    try {
       const newItems = toAdd.map((url) => ({
         url, label: '', type: 'image',
         x: Math.floor(Math.random() * Math.max(1, CANVAS_WIDTH - ITEM_SIZE)),
@@ -447,10 +487,11 @@ export default function VisionBoard() {
       setItems(saved.items || updatedItems);
       setInfo(`Added ${toAdd.length} image${toAdd.length === 1 ? '' : 's'} from Mind Movies ✨`);
       setTimeout(() => setInfo(''), 3000);
+      setMmPickerOpen(false);
     } catch (e) {
       if (e.status === 403) setShowUpgrade(true);
-      else setError(e.message || 'Could not load Mind Movies');
-    } finally { setLoadingMM(false); }
+      else setError(e.message || 'Could not add images');
+    } finally { setMmAdding(false); }
   };
 
   const handleRemove = async (index) => {
@@ -657,9 +698,9 @@ export default function VisionBoard() {
         <View style={{ paddingTop: insets.top + 14, paddingHorizontal: 16 }}>
           <ScreenHeader lead="Your" accent="Vision Board" subtitle="Pin your dreams. See them. Feel them. Receive them." />
 
-          {/* Row 1: editing actions (hidden while locked, since none of
-              them apply to a locked board) + Lock/Fullscreen, which always
-              apply. Horizontally scrollable so it never needs to wrap. */}
+          {/* Row 1: Add Photos / Movies are the only things hidden while
+              locked -- Board, Wallpaper, Lock and Fullscreen always apply
+              regardless of lock state. Horizontally scrollable. */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.toolRow} contentContainerStyle={styles.toolRowContent}>
             {!isLocked && (
               <>
@@ -669,35 +710,32 @@ export default function VisionBoard() {
                 <TouchableOpacity style={styles.controlPill} onPress={handleFromMindMovies} disabled={loadingMM}>
                   {loadingMM ? <ActivityIndicator size="small" color="#2e2530" /> : <Text style={styles.controlText}>🎬 Movies</Text>}
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.controlPill} onPress={handleDownload} disabled={downloading}>
-                  {downloading ? <ActivityIndicator size="small" color="#2e2530" /> : <Text style={styles.controlText}>⬇️ Board</Text>}
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.controlPill} onPress={handleWallpaper} disabled={savingWallpaper}>
-                  {savingWallpaper ? <ActivityIndicator size="small" color="#2e2530" /> : <Text style={styles.controlText}>📱 Wallpaper</Text>}
-                </TouchableOpacity>
               </>
             )}
+            <TouchableOpacity style={styles.controlPill} onPress={handleDownload} disabled={downloading}>
+              {downloading ? <ActivityIndicator size="small" color="#2e2530" /> : <Text style={styles.controlText}>⬇️ Board</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.controlPill} onPress={handleWallpaper} disabled={savingWallpaper}>
+              {savingWallpaper ? <ActivityIndicator size="small" color="#2e2530" /> : <Text style={styles.controlText}>📱 Wallpaper</Text>}
+            </TouchableOpacity>
             <TouchableOpacity style={[styles.controlPill, isLocked && styles.controlPillActive]} onPress={handleToggleLock}>
               <Text style={[styles.controlText, isLocked && styles.controlTextActive]}>{isLocked ? '🔒 Locked' : '🔓 Lock'}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.controlPill} onPress={() => setFullscreen(true)}>
               <Text style={styles.controlText}>⛶ Full</Text>
             </TouchableOpacity>
-            {!isLocked && (
-              <>
-                <TouchableOpacity style={styles.controlPill} onPress={handleTidy}>
-                  <Text style={styles.controlText}>✨ Tidy</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.controlPill, selectMode && styles.controlPillActive]} onPress={handleGroupToggle}>
-                  <Text style={[styles.controlText, selectMode && styles.controlTextActive]}>🗂 Group{selectMode && selectedIndices.length ? ` (${selectedIndices.length})` : ''}</Text>
-                </TouchableOpacity>
-              </>
-            )}
           </ScrollView>
 
-          {/* Row 2: zoom controls + Share/Clear, which always apply
-              regardless of lock state. Also horizontally scrollable. */}
+          {/* Row 2: Tidy, Group, zoom controls, Share, Clear All -- all
+              always visible; Tidy/Group/Clear still no-op with an error
+              while locked (see their handlers) rather than disappearing. */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.toolRow} contentContainerStyle={styles.toolRowContent}>
+            <TouchableOpacity style={styles.controlPill} onPress={handleTidy}>
+              <Text style={styles.controlText}>✨ Tidy</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.controlPill, selectMode && styles.controlPillActive]} onPress={handleGroupToggle}>
+              <Text style={[styles.controlText, selectMode && styles.controlTextActive]}>🗂 Group{selectMode && selectedIndices.length ? ` (${selectedIndices.length})` : ''}</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.zoomBtn} onPress={() => setZoomTo(zoom.value - 0.1)}>
               <Text style={styles.zoomBtnText}>−</Text>
             </TouchableOpacity>
@@ -711,8 +749,8 @@ export default function VisionBoard() {
             <TouchableOpacity style={styles.controlPill} onPress={handleShare} disabled={sharing}>
               {sharing ? <ActivityIndicator size="small" color="#2e2530" /> : <Text style={styles.controlText}>🔗 Share</Text>}
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.iconPill, styles.controlPillDanger]} onPress={handleClear}>
-              <Text style={styles.controlTextDanger}>🗑️</Text>
+            <TouchableOpacity style={[styles.controlPill, styles.controlPillDanger]} onPress={handleClear}>
+              <Text style={styles.controlTextDanger}>🗑️ Clear All</Text>
             </TouchableOpacity>
           </ScrollView>
 
@@ -769,6 +807,51 @@ export default function VisionBoard() {
         </View>
       )}
 
+      <Modal visible={mmPickerOpen} animationType="slide" transparent onRequestClose={() => setMmPickerOpen(false)}>
+        <View style={styles.mmOverlay}>
+          <View style={styles.mmSheet}>
+            <View style={styles.mmHeaderRow}>
+              <Text style={styles.mmTitle}>Select images to add</Text>
+              <TouchableOpacity onPress={() => setMmPickerOpen(false)}>
+                <Text style={styles.mmCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.mmSubtitle}>{mmSelected.size} selected · from your Mind Movies</Text>
+            <ScrollView contentContainerStyle={styles.mmGrid}>
+              {mmImages.map((img) => {
+                const selected = mmSelected.has(img.url);
+                const already = items.some((it) => itemUri(it) === img.url);
+                return (
+                  <TouchableOpacity
+                    key={img.url}
+                    style={styles.mmCell}
+                    onPress={() => !already && toggleMmSelected(img.url)}
+                    disabled={already}
+                  >
+                    <BoardImage uri={img.url} style={styles.mmCellImage} />
+                    {already ? (
+                      <View style={styles.mmAlreadyBadge}><Text style={styles.mmAlreadyBadgeText}>On board</Text></View>
+                    ) : (
+                      <View style={[styles.mmCheck, selected && styles.mmCheckOn]}>
+                        {selected && <Text style={styles.mmCheckText}>✓</Text>}
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <Button
+              title={`+ Add ${mmSelected.size || ''} Image${mmSelected.size === 1 ? '' : 's'}`}
+              onPress={handleConfirmMmSelection}
+              loading={mmAdding}
+              disabled={mmSelected.size === 0}
+              fullWidth
+              style={{ marginTop: 14 }}
+            />
+          </View>
+        </View>
+      </Modal>
+
       <UpgradeModal
         visible={showUpgrade}
         message="You've reached your Vision Board image limit — upgrade for more room."
@@ -792,12 +875,11 @@ const styles = StyleSheet.create({
   toolRow: { marginBottom: 8 },
   toolRowContent: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 8 },
   controlPill: { backgroundColor: 'rgba(255,255,255,0.6)', borderRadius: radii.pill, paddingVertical: 8, paddingHorizontal: 13, borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)', minWidth: 40, alignItems: 'center' },
-  iconPill: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.6)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)', alignItems: 'center', justifyContent: 'center' },
   controlPillActive: { backgroundColor: colors.pinkAccent, borderColor: colors.pinkAccent },
   controlPillDanger: { borderColor: colors.dangerBorder },
   controlText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.ink, fontWeight: '500' },
   controlTextActive: { color: '#fff' },
-  controlTextDanger: { color: colors.danger, fontSize: 14 },
+  controlTextDanger: { color: colors.danger, fontSize: 12, fontFamily: fonts.bodyMedium, fontWeight: '500' },
   zoomBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.6)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)' },
   zoomBtnText: { fontFamily: fonts.bodyMedium, fontSize: 16, color: colors.ink, fontWeight: '600' },
   zoomPct: { fontFamily: fonts.body, fontSize: 13, color: colors.mist, minWidth: 40, textAlign: 'center' },
@@ -876,4 +958,19 @@ const styles = StyleSheet.create({
   categoryChip: { backgroundColor: 'rgba(201,168,201,0.15)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.35)', borderRadius: radii.pill, paddingVertical: 8, paddingHorizontal: 12 },
   categoryChipClear: { backgroundColor: colors.dangerBg, borderColor: colors.dangerBorder },
   categoryChipText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.ink2, fontWeight: '500' },
+
+  mmOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  mmSheet: { backgroundColor: '#fdfbfe', borderTopLeftRadius: radii.lg, borderTopRightRadius: radii.lg, padding: 20, maxHeight: '82%' },
+  mmHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  mmTitle: { fontFamily: fonts.displayMedium, fontSize: 17, color: colors.ink, fontWeight: '600' },
+  mmCloseText: { fontFamily: fonts.bodyMedium, fontSize: 16, color: colors.mist2 },
+  mmSubtitle: { fontFamily: fonts.body, fontSize: 12, color: colors.mist, marginTop: 4, marginBottom: 12 },
+  mmGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  mmCell: { width: '31%', aspectRatio: 1, borderRadius: radii.sm, overflow: 'hidden', backgroundColor: 'rgba(201,168,201,0.15)' },
+  mmCellImage: { width: '100%', height: '100%' },
+  mmCheck: { position: 'absolute', top: 6, right: 6, width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(255,255,255,0.85)', borderWidth: 1.5, borderColor: colors.pinkAccent, alignItems: 'center', justifyContent: 'center' },
+  mmCheckOn: { backgroundColor: colors.pinkAccent },
+  mmCheckText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  mmAlreadyBadge: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.55)', paddingVertical: 3, alignItems: 'center' },
+  mmAlreadyBadgeText: { color: '#fff', fontSize: 9, fontFamily: fonts.bodyMedium, fontWeight: '600' },
 });
