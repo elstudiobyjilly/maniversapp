@@ -81,7 +81,6 @@ export default function MindMovie() {
   // Voice is picked ONCE at creation and locked for the movie's lifetime.
   const [voice, setVoice] = useState('luna');
   const [scenes, setScenes] = useState([]);
-  const [uploadingScene, setUploadingScene] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => { refresh().finally(() => setCheckingPlan(false)); }, []);
@@ -134,25 +133,35 @@ export default function MindMovie() {
     setTitle(''); setMood('spiritual'); setSlideDur(5); setLoop(false); setScenes([]); setEditingId(null); setVoice('luna');
   };
 
-  const handleAddScene = async () => {
+  // Matches the website: "+ Add Slide" just adds an empty scene card with a
+  // "Tap to add photo" placeholder — the photo picker opens when you tap
+  // the card itself (handleScenePhotoTap), not immediately on add. This
+  // also lets an existing scene's photo be replaced by tapping it again.
+  const [uploadingIndex, setUploadingIndex] = useState(null);
+
+  const handleAddScene = () => {
+    if (scenes.length >= 10) {
+      setError('Max 10 scenes per mind movie ✨');
+      return;
+    }
+    setError('');
+    setScenes((prev) => [...prev, { img: '', text: '' }]);
+  };
+
+  const handleScenePhotoTap = async (index) => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) { setError('Photo library permission needed.'); return; }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
     if (result.canceled) return;
 
-    if (scenes.length >= 10) {
-      setError('Max 10 scenes per mind movie ✨');
-      return;
-    }
-
-    setUploadingScene(true); setError('');
+    setUploadingIndex(index); setError('');
     try {
       const cloudUrl = await uploadImage(result.assets[0].uri, 'mind-movie');
-      setScenes((prev) => [...prev, { img: cloudUrl, text: '' }]);
+      setScenes((prev) => prev.map((s, i) => (i === index ? { ...s, img: cloudUrl } : s)));
     } catch (e) {
       if (e.status === 403) { setUpgradeMsg('Mind Movies are a Basic Manifestor feature.'); setShowUpgrade(true); }
       else setError(e.message || 'Could not upload scene image');
-    } finally { setUploadingScene(false); }
+    } finally { setUploadingIndex(null); }
   };
 
   const updateSceneText = (index, text) => {
@@ -168,6 +177,7 @@ export default function MindMovie() {
   const handleSave = async (andPlay) => {
     if (!title.trim()) { setError('Give your movie a title.'); return; }
     if (scenes.length === 0) { setError('Add at least one scene.'); return; }
+    if (scenes.some((s) => !s.img)) { setError('Add a photo to every scene before saving.'); return; }
     if (maxActive != null && maxActive === 0) {
       setUpgradeMsg('Mind Movies are a Basic Manifestor feature.');
       setShowUpgrade(true);
@@ -415,28 +425,48 @@ export default function MindMovie() {
             <Text style={styles.sectionHint}>Each scene is one moment of your dream life. Write it in present tense. ✨</Text>
 
             {scenes.map((scene, i) => (
-              <GlassCard key={i} style={{ marginBottom: 10 }}>
-                <View style={styles.sceneHeaderRow}>
+              <GlassCard key={i} noPadding style={{ marginBottom: 14, overflow: 'hidden' }}>
+                <TouchableOpacity
+                  style={styles.scenePhotoTap}
+                  activeOpacity={0.85}
+                  onPress={() => handleScenePhotoTap(i)}
+                  disabled={uploadingIndex === i}
+                >
+                  {scene.img ? (
+                    <SceneImage uri={scene.img} style={styles.sceneImage} iconSize={30} />
+                  ) : (
+                    <View style={styles.scenePlaceholder}>
+                      <Text style={styles.scenePlaceholderText}>
+                        {uploadingIndex === i ? 'Uploading...' : 'Tap to add photo'}
+                      </Text>
+                    </View>
+                  )}
+                  {uploadingIndex === i && (
+                    <View style={styles.sceneUploadingOverlay}><ActivityIndicator color="#fff" /></View>
+                  )}
                   <View style={styles.sceneNum}><Text style={styles.sceneNumText}>{i + 1}</Text></View>
-                  <TouchableOpacity onPress={() => removeScene(i)}><Text style={styles.removeText}>✕</Text></TouchableOpacity>
-                </View>
-                <SceneImage uri={scene.img} style={styles.sceneImage} iconSize={24} />
-                <View style={[styles.inputBox, { marginTop: 10 }]}>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Narration for this scene..."
-                    placeholderTextColor="rgba(46,37,48,0.4)"
-                    value={scene.text}
-                    onChangeText={(t) => updateSceneText(i, t)}
-                  />
+                  <TouchableOpacity style={styles.sceneRemoveBtn} onPress={() => removeScene(i)}>
+                    <Text style={styles.removeText}>✕</Text>
+                  </TouchableOpacity>
+                </TouchableOpacity>
+                <View style={styles.sceneTextWrap}>
+                  <View style={styles.inputBox}>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Narration for this scene..."
+                      placeholderTextColor="rgba(46,37,48,0.4)"
+                      value={scene.text}
+                      onChangeText={(t) => updateSceneText(i, t)}
+                    />
+                  </View>
                 </View>
               </GlassCard>
             ))}
 
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-            <TouchableOpacity style={styles.addSceneButton} onPress={handleAddScene} disabled={uploadingScene}>
-              {uploadingScene ? <ActivityIndicator color="#9a5fa8" /> : <Text style={styles.addSceneText}>+ Add Slide</Text>}
+            <TouchableOpacity style={styles.addSceneButton} onPress={handleAddScene} disabled={scenes.length >= 10}>
+              <Text style={styles.addSceneText}>+ Add Slide</Text>
             </TouchableOpacity>
 
             <View style={styles.row}>
@@ -544,11 +574,19 @@ const styles = StyleSheet.create({
   loopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 },
   sectionLabel: { fontFamily: fonts.displayMedium, fontSize: 17, fontWeight: '600', color: colors.ink, marginBottom: 4 },
   sectionHint: { fontFamily: fonts.body, fontSize: 12, color: colors.mist, marginBottom: 14, lineHeight: 17 },
-  sceneHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  sceneNum: { width: 22, height: 22, borderRadius: 11, backgroundColor: colors.purpleMid, justifyContent: 'center', alignItems: 'center' },
-  sceneNumText: { color: '#fff', fontSize: 11, fontWeight: '700' },
-  removeText: { color: colors.danger, fontSize: 16 },
-  sceneImage: { width: '100%', height: 140, borderRadius: radii.sm, backgroundColor: 'rgba(255,255,255,0.35)' },
+  // Big tappable photo area — matches the website: the whole card is the
+  // "Tap to add photo" target, with the scene number and remove (✕)
+  // overlaid on top of the photo instead of in a separate header row.
+  scenePhotoTap: { width: '100%', aspectRatio: 4 / 5, backgroundColor: 'rgba(201,168,201,0.14)' },
+  sceneImage: { width: '100%', height: '100%' },
+  scenePlaceholder: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  scenePlaceholderText: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.purpleDark, fontWeight: '600' },
+  sceneUploadingOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.35)', alignItems: 'center', justifyContent: 'center' },
+  sceneNum: { position: 'absolute', top: 10, left: 10, width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(154,95,168,0.85)', justifyContent: 'center', alignItems: 'center' },
+  sceneNumText: { color: '#fff', fontSize: 11.5, fontWeight: '700' },
+  sceneRemoveBtn: { position: 'absolute', top: 8, right: 8, width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center' },
+  removeText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  sceneTextWrap: { padding: 14 },
   sceneFallback: { alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(201,168,201,0.18)' },
   errorText: { fontFamily: fonts.body, color: colors.danger, fontSize: 13, marginVertical: 10, textAlign: 'center' },
   addSceneButton: { borderWidth: 1.5, borderColor: colors.purpleMid, borderRadius: radii.pill, paddingVertical: 13, alignItems: 'center', marginVertical: 12 },
