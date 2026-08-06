@@ -105,7 +105,6 @@ function buildActiveOrbs(s, colours, shadeOverrides, manual) {
 export default function AuraCardSvg({ styleKey, size, pattern, colours, shadeOverrides, manual }) {
   const s = AURA_STYLES[styleKey];
   const baseOrbs = buildActiveOrbs(s, colours, shadeOverrides, manual);
-  const showStars = !manual && (pattern === 'cosmic' || (s.stars && pattern === 'radial'));
 
   const firstColor = firstOnColor(colours, shadeOverrides, manual);
   const bgFill = firstColor || (s.bg.type === 'solid' ? s.bg.colors[0] : `url(#bg-${styleKey})`);
@@ -168,7 +167,36 @@ export default function AuraCardSvg({ styleKey, size, pattern, colours, shadeOve
     );
   }
 
-  // radial / aura / mesh / cosmic all share the gradient-defs setup below
+  // 'radial' and 'cosmic' are ONE smooth multi-colour blend -- all the
+  // active colours as sequential stops from the centre outward, like a
+  // proper aura/sunset gradient -- not separate overlapping blobs (that
+  // blobby look is what 'mesh' is for). Previously both patterns reused
+  // the same corner-orb layout as 'mesh', which is also why Radial and
+  // Cosmic looked near-identical: the only difference was a few faint
+  // star dots on top of the same blotchy base. Cosmic is now this same
+  // smooth blend WITH stars over it; Radial is the blend alone.
+  if (pattern === 'radial' || pattern === 'cosmic') {
+    const stopColors = baseOrbs.length ? baseOrbs.map((o) => o.stops[0][1]) : s.bg.colors;
+    const gradId = `smooth-${styleKey}-${pattern}`;
+    return (
+      <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <Defs>
+          <RadialGradient id={gradId} cx="50%" cy="45%" r="75%">
+            {stopColors.map((c, i) => (
+              <Stop key={i} offset={`${(i / Math.max(1, stopColors.length - 1)) * 100}%`} stopColor={c} />
+            ))}
+            <Stop offset="100%" stopColor={stopColors[stopColors.length - 1]} />
+          </RadialGradient>
+        </Defs>
+        <Rect x="0" y="0" width={size} height={size} fill={`url(#${gradId})`} />
+        {pattern === 'cosmic' && STAR_DOTS.map((d, i) => (
+          <Circle key={`star-${i}`} cx={d.x * size} cy={d.y * size} r={d.r} fill="#ffffff" opacity={d.o} />
+        ))}
+      </Svg>
+    );
+  }
+
+  // 'aura' / 'mesh' still use the corner-orb layout below.
   // 'aura' is deliberately a single soft glow for a named Style (just its
   // mainOrb) -- but in manual mode there's no "main" colour, only however
   // many of the 4 COLOURS the user has toggled on, and all of them should
@@ -202,10 +230,6 @@ export default function AuraCardSvg({ styleKey, size, pattern, colours, shadeOve
 
       {orbs.map((orb, i) => (
         <Circle key={i} cx={orb.cx * size} cy={orb.cy * size} r={orb.r * size} fill={`url(#orb-${styleKey}-${pattern}-${i})`} />
-      ))}
-
-      {showStars && STAR_DOTS.map((d, i) => (
-        <Circle key={`star-${i}`} cx={d.x * size} cy={d.y * size} r={d.r} fill="#ffffff" opacity={d.o} />
       ))}
     </Svg>
   );
