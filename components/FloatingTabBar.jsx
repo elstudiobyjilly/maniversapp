@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming } from 'react-native-reanimated';
 import { colors } from '../constants/theme';
 import { useUiStore } from '../store/uiStore';
 
@@ -15,6 +15,13 @@ const ICONS = {
   more: 'grid',
   profile: 'person',
 };
+
+// On these 3 screens specifically (per explicit request), the bar starts
+// collapsed down to just a small circular Home button and expands into
+// the full pill on tap -- Dashboard/More/Profile keep the pill always
+// fully open, unchanged.
+const COLLAPSIBLE_ROUTES = new Set(['affirmations', 'stories', 'vision-board']);
+const COLLAPSED_SIZE = 60;
 
 // A fully custom tab bar (passed via <Tabs tabBar={...}>) is entirely
 // responsible for its own container styling -- React Navigation only
@@ -45,6 +52,24 @@ export default function FloatingTabBar({ state, descriptors, navigation }) {
   const routes = state.routes.filter((r) => Boolean(ICONS[r.name]));
   const slot = routes.length ? barWidth / routes.length : 0;
 
+  const activeRouteName = state.routes[state.index]?.name;
+  const isCollapsible = COLLAPSIBLE_ROUTES.has(activeRouteName);
+  // Always starts collapsed on landing on one of the 3 screens -- "when I
+  // tap it, it opens" implies closed by default, not remembering the last
+  // open/closed state across screens.
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => { setExpanded(false); }, [activeRouteName]);
+
+  const fullWidth = Dimensions.get('window').width - 40; // matches left:20/right:20
+  const widthValue = useSharedValue(isCollapsible ? COLLAPSED_SIZE : fullWidth);
+  const collapsedNow = isCollapsible && !expanded;
+
+  useEffect(() => {
+    widthValue.value = withSpring(collapsedNow ? COLLAPSED_SIZE : fullWidth, { damping: 18, stiffness: 220, mass: 0.7 });
+  }, [collapsedNow, fullWidth]);
+
+  const pillWidthStyle = useAnimatedStyle(() => ({ width: widthValue.value }));
+
   const indicatorX = useSharedValue(0);
   const activeIndexAmongVisible = routes.findIndex((r) => r.key === state.routes[state.index]?.key);
 
@@ -62,7 +87,7 @@ export default function FloatingTabBar({ state, descriptors, navigation }) {
   if (tabBarHidden) return null;
 
   return (
-    <View style={[styles.pill, { bottom: 8 + Math.max(0, insets.bottom - 12) }]}>
+    <Animated.View style={[styles.pill, pillWidthStyle, { bottom: 8 + Math.max(0, insets.bottom - 12) }]}>
       {/* borderRadius set directly on the BlurView, not just relying on
           the parent's overflow:hidden -- on iOS, BlurView clipped only by
           an ancestor's overflow can render past the intended rounded
@@ -70,35 +95,42 @@ export default function FloatingTabBar({ state, descriptors, navigation }) {
           actually glassy" even when the blur itself is working. */}
       <BlurView intensity={80} tint="extraLight" style={[StyleSheet.absoluteFill, { borderRadius: 31 }]} />
       <View style={styles.pillTint} pointerEvents="none" />
-      <View style={styles.row} onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}>
-        {barWidth > 0 && (
-          <Animated.View style={[styles.indicatorWrap, indicatorStyle]} pointerEvents="none">
-            <BlurView intensity={55} tint="light" style={styles.indicator}>
-              <View style={styles.indicatorTint} />
-            </BlurView>
-          </Animated.View>
-        )}
 
-        {routes.map((route) => {
-          const isFocused = state.routes[state.index]?.key === route.key;
+      {collapsedNow ? (
+        <TouchableOpacity style={styles.collapsedTouchable} activeOpacity={0.75} onPress={() => setExpanded(true)}>
+          <Ionicons name="home" size={24} color={colors.pinkDark} />
+        </TouchableOpacity>
+      ) : (
+        <View style={styles.row} onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}>
+          {barWidth > 0 && (
+            <Animated.View style={[styles.indicatorWrap, indicatorStyle]} pointerEvents="none">
+              <BlurView intensity={55} tint="light" style={styles.indicator}>
+                <View style={styles.indicatorTint} />
+              </BlurView>
+            </Animated.View>
+          )}
 
-          const onPress = () => {
-            const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-            if (!isFocused && !event.defaultPrevented) navigation.navigate(route.name);
-          };
+          {routes.map((route) => {
+            const isFocused = state.routes[state.index]?.key === route.key;
 
-          return (
-            <TouchableOpacity key={route.key} onPress={onPress} activeOpacity={0.7} style={styles.item}>
-              <Ionicons
-                name={ICONS[route.name] || 'ellipse'}
-                size={isFocused ? 25 : 23}
-                color={isFocused ? colors.pinkDark : 'rgba(200,88,120,0.45)'}
-              />
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    </View>
+            const onPress = () => {
+              const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+              if (!isFocused && !event.defaultPrevented) navigation.navigate(route.name);
+            };
+
+            return (
+              <TouchableOpacity key={route.key} onPress={onPress} activeOpacity={0.7} style={styles.item}>
+                <Ionicons
+                  name={ICONS[route.name] || 'ellipse'}
+                  size={isFocused ? 25 : 23}
+                  color={isFocused ? colors.pinkDark : 'rgba(200,88,120,0.45)'}
+                />
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
+    </Animated.View>
   );
 }
 
@@ -106,7 +138,6 @@ const styles = StyleSheet.create({
   pill: {
     position: 'absolute',
     left: 20,
-    right: 20,
     height: 62,
     borderRadius: 31,
     borderWidth: 1,
@@ -119,6 +150,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     overflow: 'hidden',
   },
+  collapsedTouchable: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   // A light translucent wash over the BlurView -- true frosted glass
   // (blurred content showing through) rather than a flat near-opaque
   // background colour, matching GlassCard's own glass treatment.
