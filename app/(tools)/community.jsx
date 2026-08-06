@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { useEffect, useState, useRef, useMemo, useCallback, memo } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getCommunityPosts, createCommunityPost, loveCommunityPost, deleteCommunityPost, createCheckout } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
 import GlassCard from '../../components/GlassCard';
@@ -8,41 +9,133 @@ import Dropdown from '../../components/Dropdown';
 import UpgradeModal from '../../components/UpgradeModal';
 import ScreenHeader from '../../components/ScreenHeader';
 import Button from '../../components/Button';
+import ExpandableTextArea from '../../components/ExpandableTextArea';
 import { usePlanStore } from '../../store/planStore';
 import { colors, fonts, radii } from '../../constants/theme';
 import * as Linking from 'expo-linking';
 
+// Ported exactly from the website's compose selects (explore.js / features.html).
 const TYPE_OPTIONS = [
-  { value: 'intentions', label: 'Intentions' },
-  { value: 'success', label: 'Success Story' },
-  { value: 'technique', label: 'Techniques' },
+  { value: 'intention', label: '🌱 Intention' },
+  { value: 'success', label: '🎉 Success Story' },
+  { value: 'technique', label: '🌟 Technique' },
 ];
 const CATEGORY_OPTIONS = [
-  { value: 'general', label: 'General' },
-  { value: 'love', label: 'Love' },
-  { value: 'money', label: 'Money' },
-  { value: 'health', label: 'Health' },
-  { value: 'career', label: 'Career' },
+  { value: 'general', label: '🌸 General' },
+  { value: 'love', label: '💕 Love' },
+  { value: 'money', label: '💰 Money' },
+  { value: 'health', label: '🌿 Health' },
+  { value: 'career', label: '✨ Career' },
 ];
-const TYPE_FILTER_OPTIONS = [{ value: 'all', label: 'All Types' }, ...TYPE_OPTIONS];
-const CATEGORY_FILTER_OPTIONS = [{ value: 'all', label: 'All Categories' }, ...CATEGORY_OPTIONS];
+// The filter dropdowns use slightly different emoji from the compose ones on
+// the site itself — kept as-is for fidelity rather than "fixed" to match.
+const TYPE_FILTER_OPTIONS = [
+  { value: 'all', label: '🌟 Type' },
+  { value: 'intention', label: '🌱 Intentions' },
+  { value: 'success', label: '🎉 Success' },
+  { value: 'technique', label: '✨ Technique' },
+];
+const CATEGORY_FILTER_OPTIONS = [
+  { value: 'all', label: '🌸 Category' },
+  { value: 'general', label: '✨ General' },
+  { value: 'love', label: '💕 Love' },
+  { value: 'money', label: '💰 Money' },
+  { value: 'career', label: '🚀 Career' },
+  { value: 'health', label: '🌿 Health' },
+];
 const TRUNCATE_AT = 220;
 
+// Anonymous posts get a "Soul {emoji} {N}" pseudonym, generated once per
+// post id and stable only within this screen's lifetime — matches the
+// website's in-memory _communityAnonMap (resets every page load).
+const ANON_EMOJIS = ['🌸', '✨', '🌙', '💫', '🦋', '🌿', '💕', '🔮', '🌺', '⭐'];
+
+// Pure -- lives outside the component so it's never recreated on render.
+function timeAgo(dateStr) {
+  const mins = Math.floor((Date.now() - new Date(dateStr).getTime()) / 60000);
+  if (mins < 1) return 'now';
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h`;
+  return `${Math.floor(hrs / 24)}d`;
+}
+
+// The feed is the expensive part of this screen -- every post is its own
+// GlassCard, which renders its own BlurView. With any real number of
+// posts, re-diffing all of them on EVERY keystroke in the compose box
+// above (since typing changes state in the parent, which re-renders its
+// whole tree by default) is enough JS-thread work to visibly stall the
+// native keyboard-show animation mid-slide -- the "keyboard pops up
+// halfway and retracts" glitch. Isolating the feed in its own memoized
+// component means it only re-renders when posts/filters/expanded/
+// myUsername actually change, never just because the user is typing.
+const PostsFeed = memo(function PostsFeed({ loading, posts, expanded, myUsername, onLove, onDelete, onToggleExpand, getPostLabel }) {
+  if (loading) return <Text style={styles.muted}>Loading feed...</Text>;
+  if (posts.length === 0) return <Text style={styles.muted}>No posts yet — be the first ✨</Text>;
+  return posts.map((p) => {
+    const isLong = p.content.length > TRUNCATE_AT;
+    const isExpanded = expanded.has(p.id);
+    const displayText = isLong && !isExpanded ? p.content.slice(0, TRUNCATE_AT).trim() + '…' : p.content;
+    return (
+      <GlassCard key={p.id} style={styles.feedCard}>
+        <View style={styles.feedHead}>
+          <Text style={styles.feedName}>{getPostLabel(p)}</Text>
+          <View style={styles.feedHeadRight}>
+            <TouchableOpacity onPress={() => onLove(p.id)} style={styles.lovePill}>
+              <Text style={styles.lovePillText}>{p.i_loved ? '💕' : '🤍'} {p.love_count}</Text>
+            </TouchableOpacity>
+            <Text style={styles.metaText}>{timeAgo(p.created_at)}</Text>
+          </View>
+        </View>
+        <Text style={styles.feedText}>
+          {displayText}
+          {isLong && (
+            <Text style={styles.moreLink} onPress={() => onToggleExpand(p.id)}> {isExpanded ? 'less' : 'more'}</Text>
+          )}
+        </Text>
+        {p.username === myUsername && (
+          <TouchableOpacity onPress={() => onDelete(p.id)} style={styles.deleteRow}>
+            <Text style={styles.deleteIconText}>🗑️ Delete</Text>
+          </TouchableOpacity>
+        )}
+      </GlassCard>
+    );
+  });
+});
+
 export default function Community() {
+  const insets = useSafeAreaInsets();
   const { hasFeature, refresh } = usePlanStore();
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [posts, setPosts] = useState([]);
   const [content, setContent] = useState('');
-  const [postType, setPostType] = useState('intentions');
+  const [postType, setPostType] = useState('intention');
   const [category, setCategory] = useState('general');
   const [typeFilter, setTypeFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [mineOnly, setMineOnly] = useState(false);
   const [expanded, setExpanded] = useState(new Set());
-  const myUsername = useAuthStore((s) => s.user?.username);
+  const user = useAuthStore((s) => s.user);
+  const myUsername = user?.username;
   const [loading, setLoading] = useState(true);
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState('');
+
+  const anonMap = useRef({});
+  const anonCount = useRef(0);
+  // useCallback so PostsFeed (memoized below) gets a stable function
+  // reference across renders triggered by typing -- otherwise a brand new
+  // getPostLabel every keystroke would defeat the memo and force the
+  // whole feed to re-render anyway.
+  const getPostLabel = useCallback((p) => {
+    if (p.username === myUsername) return 'You ✨';
+    if (p.show_name && p.display_name) return `${p.display_name.split(' ')[0]} 🌸`;
+    if (!anonMap.current[p.id]) {
+      anonMap.current[p.id] = `Soul ${ANON_EMOJIS[anonCount.current % ANON_EMOJIS.length]} ${anonCount.current + 1}`;
+      anonCount.current += 1;
+    }
+    return anonMap.current[p.id];
+  }, [myUsername]);
 
   const load = async () => {
     try { setPosts(await getCommunityPosts()); } catch (e) { setError(e.message || 'Could not load feed'); }
@@ -50,7 +143,7 @@ export default function Community() {
 
   useEffect(() => { refresh(); load().finally(() => setLoading(false)); }, []);
 
-  const handlePost = async (showName) => {
+  const submitPost = async (showName) => {
     if (!hasFeature('community_post')) {
       setShowUpgrade(true);
       return;
@@ -67,66 +160,67 @@ export default function Community() {
     } finally { setPosting(false); }
   };
 
-  const handleLove = async (postId) => {
+  const handlePost = (showName) => {
+    if (!showName) { submitPost(false); return; }
+    const firstName = (user?.full_name || user?.username || '').split(' ')[0] || 'Your name';
+    Alert.alert(
+      'Share with your name?',
+      `Your first name "${firstName}" will be visible to everyone in the community.`,
+      [{ text: 'Cancel', style: 'cancel' }, { text: 'Share', onPress: () => submitPost(true) }]
+    );
+  };
+
+  const handleLove = useCallback(async (postId) => {
     setPosts((prev) => prev.map((p) => p.id === postId
       ? { ...p, i_loved: !p.i_loved, love_count: p.i_loved ? p.love_count - 1 : p.love_count + 1 }
       : p));
     try { await loveCommunityPost(postId); } catch (_) {}
-  };
+  }, []);
 
-  const handleDelete = async (postId) => {
+  const handleDelete = useCallback(async (postId) => {
     try {
       await deleteCommunityPost(postId);
       setPosts((prev) => prev.filter((p) => p.id !== postId));
     } catch (e) { setError(e.message || 'Could not delete'); }
-  };
+  }, []);
 
-  const toggleExpand = (id) => {
+  const toggleExpand = useCallback((id) => {
     setExpanded((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
-  };
+  }, []);
 
-  const timeAgo = (dateStr) => {
-    const mins = Math.floor((Date.now() - new Date(dateStr).getTime()) / 60000);
-    if (mins < 1) return 'now';
-    if (mins < 60) return `${mins}m`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h`;
-    return `${Math.floor(hrs / 24)}d`;
-  };
-
-  const visiblePosts = posts.filter((p) => {
+  // Memoized so typing in the compose box (which changes `content`, not
+  // any of these) doesn't produce a new array reference every keystroke --
+  // that new reference would defeat PostsFeed's memo just as surely as an
+  // unstable callback would.
+  const visiblePosts = useMemo(() => posts.filter((p) => {
     if (mineOnly && p.username !== myUsername) return false;
     if (typeFilter !== 'all' && (p.post_type || '').toLowerCase() !== typeFilter) return false;
     if (categoryFilter !== 'all' && (p.category || '').toLowerCase() !== categoryFilter) return false;
     return true;
-  });
+  }), [posts, mineOnly, typeFilter, categoryFilter, myUsername]);
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 50, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 46, paddingBottom: 40 }}>
         <ScreenHeader lead="Community" accent="Wall" subtitle="Share your manifestations. Send love. Rise together. 🌸" />
 
         <GlassCard style={{ marginTop: 16, marginBottom: 18 }}>
-          <View style={styles.writeBox}>
-            <TextInput
-              style={styles.composeInput}
-              placeholder="I am manifesting my dream... / I just manifested... 🌸"
-              placeholderTextColor="rgba(46,37,48,0.4)"
-              value={content}
-              onChangeText={setContent}
-              multiline
-              maxLength={500}
-            />
-          </View>
-          <Text style={styles.charCount}>{content.length}/500</Text>
+          <ExpandableTextArea
+            value={content}
+            onChangeText={(t) => setContent(t.slice(0, 500))}
+            placeholder="I am manifesting my dream... / I just manifested... 🌸"
+            modalTitle="Share with the Community"
+            minHeight={110}
+          />
+          <Text style={styles.charCount}>{content.length} / 500</Text>
 
-          <View style={{ gap: 8, marginTop: 12 }}>
-            <Dropdown label="Type" value={postType} options={TYPE_OPTIONS} onSelect={setPostType} fullWidth />
-            <Dropdown label="Category" value={category} options={CATEGORY_OPTIONS} onSelect={setCategory} fullWidth />
+          <View style={styles.intentionRow}>
+            <View style={{ flex: 1 }}><Dropdown label="Type" value={postType} options={TYPE_OPTIONS} onSelect={setPostType} fullWidth matchButton /></View>
+            <View style={{ flex: 1 }}><Dropdown label="Category" value={category} options={CATEGORY_OPTIONS} onSelect={setCategory} fullWidth matchButton /></View>
           </View>
 
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -138,56 +232,26 @@ export default function Community() {
         </GlassCard>
 
         <View style={styles.filterTopRow}>
-          <TouchableOpacity style={[styles.filterPill, typeFilter === 'all' && categoryFilter === 'all' && !mineOnly && styles.filterPillActive]} onPress={() => { setTypeFilter('all'); setCategoryFilter('all'); setMineOnly(false); }}>
-            <Text style={[styles.filterPillText, typeFilter === 'all' && categoryFilter === 'all' && !mineOnly && styles.filterPillTextActive]}>All</Text>
+          <TouchableOpacity style={[styles.filterPillSm, typeFilter === 'all' && categoryFilter === 'all' && !mineOnly && styles.filterPillActive]} onPress={() => { setTypeFilter('all'); setCategoryFilter('all'); setMineOnly(false); }}>
+            <Text style={[styles.filterPillTextSm, typeFilter === 'all' && categoryFilter === 'all' && !mineOnly && styles.filterPillTextActive]}>All</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.filterPill, mineOnly && styles.filterPillActive]} onPress={() => setMineOnly(!mineOnly)}>
-            <Text style={[styles.filterPillText, mineOnly && styles.filterPillTextActive]}>Mine</Text>
+          <View style={styles.filterGridItem}><Dropdown label="Type" value={typeFilter} options={TYPE_FILTER_OPTIONS} onSelect={setTypeFilter} fullWidth compact /></View>
+          <View style={styles.filterGridItem}><Dropdown label="Category" value={categoryFilter} options={CATEGORY_FILTER_OPTIONS} onSelect={setCategoryFilter} fullWidth compact /></View>
+          <TouchableOpacity style={[styles.filterPillSm, mineOnly && styles.filterPillActive]} onPress={() => setMineOnly(!mineOnly)}>
+            <Text style={[styles.filterPillTextSm, mineOnly && styles.filterPillTextActive]}>Mine</Text>
           </TouchableOpacity>
-        </View>
-        <View style={{ gap: 8, marginBottom: 16 }}>
-          <Dropdown label="Filter by Type" value={typeFilter} options={TYPE_FILTER_OPTIONS} onSelect={setTypeFilter} fullWidth />
-          <Dropdown label="Filter by Category" value={categoryFilter} options={CATEGORY_FILTER_OPTIONS} onSelect={setCategoryFilter} fullWidth />
         </View>
 
-        {loading ? (
-          <Text style={styles.muted}>Loading feed...</Text>
-        ) : visiblePosts.length === 0 ? (
-          <Text style={styles.muted}>No posts yet — be the first ✨</Text>
-        ) : (
-          visiblePosts.map((p, i) => {
-            const isLong = p.content.length > TRUNCATE_AT;
-            const isExpanded = expanded.has(p.id);
-            const displayText = isLong && !isExpanded ? p.content.slice(0, TRUNCATE_AT).trim() + '…' : p.content;
-            return (
-              <View key={p.id} style={[styles.feedRow, i === visiblePosts.length - 1 && { borderBottomWidth: 0 }]}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>{(p.display_name || p.username || '?')[0].toUpperCase()}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.feedText}>
-                    <Text style={styles.feedName}>{p.display_name || p.username} </Text>
-                    {displayText}
-                    {isLong && (
-                      <Text style={styles.moreLink} onPress={() => toggleExpand(p.id)}> {isExpanded ? 'less' : 'more'}</Text>
-                    )}
-                  </Text>
-                  <View style={styles.metaRow}>
-                    <Text style={styles.metaText}>{timeAgo(p.created_at)}</Text>
-                    <TouchableOpacity onPress={() => handleLove(p.id)} style={styles.metaIcon}>
-                      <Text style={styles.metaIconText}>{p.i_loved ? '💗' : '🤍'} {p.love_count}</Text>
-                    </TouchableOpacity>
-                    {p.username === myUsername && (
-                      <TouchableOpacity onPress={() => handleDelete(p.id)} style={styles.metaIcon}>
-                        <Text style={styles.deleteIconText}>🗑️</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                </View>
-              </View>
-            );
-          })
-        )}
+        <PostsFeed
+          loading={loading}
+          posts={visiblePosts}
+          expanded={expanded}
+          myUsername={myUsername}
+          onLove={handleLove}
+          onDelete={handleDelete}
+          onToggleExpand={toggleExpand}
+          getPostLabel={getPostLabel}
+        />
       </ScrollView>
 
       <UpgradeModal
@@ -209,21 +273,26 @@ const styles = StyleSheet.create({
   charCount: { fontFamily: fonts.body, fontSize: 11, color: colors.mist2, textAlign: 'right', marginTop: 6 },
   errorText: { fontFamily: fonts.body, color: colors.danger, fontSize: 13, marginTop: 10, textAlign: 'center' },
   shareRow: { flexDirection: 'row', gap: 8, marginTop: 14 },
-  filterTopRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
-  filterPill: { backgroundColor: 'rgba(255,255,255,0.55)', borderRadius: 50, paddingVertical: 10, paddingHorizontal: 18, borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)' },
+  intentionRow: { flexDirection: 'row', gap: 8, marginTop: 12, alignItems: 'center' },
+  filterTopRow: { flexDirection: 'row', flexWrap: 'nowrap', gap: 6, marginBottom: 16 },
+  filterGridItem: { flex: 1.3, minWidth: 0 },
+  filterPill: { width: '48%', backgroundColor: 'rgba(255,255,255,0.55)', borderRadius: 50, paddingVertical: 8, paddingHorizontal: 14, borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)', alignItems: 'center' },
   filterPillActive: { backgroundColor: '#c9a8c9', borderColor: '#c9a8c9' },
-  filterPillText: { color: '#2e2530', fontSize: 12, fontWeight: '500' },
+  filterPillText: { color: '#2e2530', fontSize: 11.5, fontWeight: '500' },
   filterPillTextActive: { color: '#fff', fontWeight: '700' },
+  filterPillSm: { flex: 0.7, backgroundColor: 'rgba(255,255,255,0.55)', borderRadius: 50, paddingVertical: 7, paddingHorizontal: 8, borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)', alignItems: 'center', minWidth: 0 },
+  filterPillTextSm: { color: '#2e2530', fontSize: 10.5, fontWeight: '500' },
   muted: { color: '#6b5c66', fontSize: 13, textAlign: 'center', marginTop: 20 },
-  feedRow: { flexDirection: 'row', gap: 10, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(46,37,48,0.08)' },
-  avatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#c9a8c9', justifyContent: 'center', alignItems: 'center' },
-  avatarText: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  feedText: { color: '#2e2530', fontSize: 14, lineHeight: 19 },
-  feedName: { fontWeight: '700', color: '#2e2530' },
-  moreLink: { color: '#6b5c66', fontSize: 13, fontWeight: '600' },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 5 },
+
+  feedCard: { marginBottom: 12 },
+  feedHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  feedHeadRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  feedName: { fontFamily: fonts.bodyMedium, fontWeight: '700', color: colors.ink, fontSize: 13 },
+  feedText: { fontFamily: fonts.displayItalic, color: colors.ink2, fontSize: 14, lineHeight: 20, fontStyle: 'italic' },
+  moreLink: { fontFamily: fonts.bodyMedium, color: colors.mist, fontSize: 13, fontWeight: '600', fontStyle: 'normal' },
+  lovePill: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(248,184,200,0.2)', borderRadius: radii.pill, paddingVertical: 4, paddingHorizontal: 9 },
+  lovePillText: { fontSize: 11.5, color: colors.pinkDark, fontWeight: '600' },
   metaText: { color: '#6b5c66', fontSize: 11 },
-  metaIcon: { flexDirection: 'row', alignItems: 'center' },
-  metaIconText: { fontSize: 11, color: '#6b5c66' },
-  deleteIconText: { fontSize: 12 },
+  deleteRow: { alignSelf: 'flex-start', marginTop: 10 },
+  deleteIconText: { fontSize: 11.5, color: colors.mist },
 });

@@ -1,189 +1,300 @@
-import { useEffect, useRef, useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  ActivityIndicator,
-  Animated,
-} from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import * as Speech from 'expo-speech';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import ScreenHeader from '../../components/ScreenHeader';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import TabPill from '../../components/TabPill';
 import Button from '../../components/Button';
+import ExpandableTextArea from '../../components/ExpandableTextArea';
 import { colors, fonts, radii } from '../../constants/theme';
-import { getScripts, addScript, updateScript, deleteScript } from '../../services/api';
+import { getScripts, addScript, updateScript, deleteScript, getScriptMyDay, saveScriptMyDay } from '../../services/api';
 
-// ─── Single script entry with edit + delete ───────────────────────────────────
-function ScriptEntry({ item, onEdit, onDeleted }) {
-  const opacity = useRef(new Animated.Value(1)).current;
-  const scale = useRef(new Animated.Value(1)).current;
-  const [deleting, setDeleting] = useState(false);
-
-  const handleDelete = () => {
-    if (deleting) return;
-    setDeleting(true);
-    Animated.parallel([
-      Animated.timing(opacity, { toValue: 0, duration: 450, useNativeDriver: true }),
-      Animated.timing(scale, { toValue: 0.88, duration: 450, useNativeDriver: true }),
-    ]).start(async () => {
-      try { await deleteScript(item.id); } catch (_) {}
-      onDeleted(item.id);
-    });
-  };
-
-  return (
-    <Animated.View style={{ opacity, transform: [{ scale }], marginBottom: 12 }}>
-      <GlassCard>
-        {/* Date + action row */}
-        <View style={styles.entryHeader}>
-          <Text style={styles.dateText}>{item.script_date}</Text>
-          <View style={styles.entryActions}>
-            <TouchableOpacity
-              onPress={() => onEdit(item)}
-              style={styles.actionBtn}
-              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-            >
-              <Text style={styles.editBtnText}>Edit</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={handleDelete}
-              disabled={deleting}
-              style={[styles.actionBtn, styles.actionBtnDelete]}
-              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-            >
-              <Text style={styles.deleteBtnText}>✕</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-        <Text style={styles.entryText}>{item.content}</Text>
-      </GlassCard>
-    </Animated.View>
-  );
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function labelForDateKey(key) {
+  const [y, m, d] = key.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+function startOfWeekMonday(d) {
+  const day = d.getDay();
+  const diff = day === 0 ? 6 : day - 1;
+  const mon = new Date(d);
+  mon.setDate(d.getDate() - diff);
+  return mon;
+}
+function weekLabel(wk) {
+  const start = new Date(wk);
+  const end = new Date(wk); end.setDate(end.getDate() + 6);
+  return `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
 }
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
+// Dream Life Script content is stored as "title\n\nbody" when a title is
+// set, matching the website's encoding (so it round-trips through the
+// same generic /scripting/ endpoint the site uses).
+function parseDream(item) {
+  const body = item.content || '';
+  const lines = body.split('\n\n');
+  if (lines.length > 1) return { title: lines[0].trim(), body: lines.slice(1).join('\n\n').trim() };
+  return { title: '', body };
+}
+
 export default function Scripting() {
-  const [content, setContent] = useState('');
-  const [editingId, setEditingId] = useState(null); // null = new, id = editing existing
-  const [list, setList] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [saved, setSaved] = useState(false);
+  const insets = useSafeAreaInsets();
+  const [tab, setTab] = useState('daily'); // 'daily' | 'dream'
 
-  const inputRef = useRef(null);
+  // ── Daily Script ──────────────────────────────────────────────────────
+  const [dailyText, setDailyText] = useState('');
+  const [dailyEntries, setDailyEntries] = useState({}); // { 'YYYY-MM-DD': content }
+  const [loadingDaily, setLoadingDaily] = useState(true);
+  const [savingDaily, setSavingDaily] = useState(false);
+  const [expandedDailyKey, setExpandedDailyKey] = useState(null);
+  const [expandedWeeks, setExpandedWeeks] = useState(new Set());
+  const autosaveTimer = useRef(null);
 
-  const load = async () => {
-    try { setList(await getScripts()); } catch (e) { setError(e.message || 'Could not load'); }
-  };
-
-  useEffect(() => { load().finally(() => setLoading(false)); }, []);
-
-  // Open an entry in the input box for editing
-  const handleEdit = (item) => {
-    setContent(item.content);
-    setEditingId(item.id);
-    setError('');
-    setSaved(false);
-    // Scroll to top / focus input
-    setTimeout(() => inputRef.current?.focus(), 100);
-  };
-
-  const handleCancel = () => {
-    setContent('');
-    setEditingId(null);
-    setError('');
-  };
-
-  const handleSave = async () => {
-    if (!content.trim()) { setError('Write your script for the day.'); return; }
-    setError(''); setSaving(true);
+  const loadDaily = async () => {
     try {
-      if (editingId) {
-        // Update existing
-        const updated = await updateScript(editingId, content.trim());
-        setList((prev) => prev.map((s) => (s.id === editingId ? { ...s, ...updated } : s)));
+      const data = await getScriptMyDay();
+      const map = {};
+      (Array.isArray(data) ? data : []).forEach((r) => { map[r.script_date] = r.content; });
+      setDailyEntries(map);
+      if (map[todayKey()]) setDailyText(map[todayKey()]);
+    } catch (_) {} finally { setLoadingDaily(false); }
+  };
+
+  useEffect(() => { loadDaily(); }, []);
+
+  const handleDailyChange = (val) => {
+    setDailyText(val);
+    clearTimeout(autosaveTimer.current);
+    autosaveTimer.current = setTimeout(() => {
+      if (!val.trim()) return;
+      const key = todayKey();
+      setDailyEntries((prev) => ({ ...prev, [key]: val }));
+      saveScriptMyDay(val, key).catch(() => {});
+    }, 1500);
+  };
+
+  const handleSaveDaily = async () => {
+    if (!dailyText.trim()) { Alert.alert('Write your script first ✨'); return; }
+    setSavingDaily(true);
+    const key = todayKey();
+    try {
+      await saveScriptMyDay(dailyText.trim(), key);
+      setDailyEntries((prev) => ({ ...prev, [key]: dailyText.trim() }));
+    } catch (_) {} finally { setSavingDaily(false); }
+  };
+  const handleClearDaily = () => setDailyText('');
+  const handleEditDaily = (key) => { setDailyText(dailyEntries[key] || ''); if (key !== todayKey()) { /* editing loads content but still saves to today, matching the site's single-writer-box model */ } };
+  const handleDeleteDaily = (key) => {
+    // No backend delete endpoint exists for this resource (matches the
+    // website, which only clears its local cache) — removes from this
+    // session's view only.
+    setDailyEntries((prev) => { const next = { ...prev }; delete next[key]; return next; });
+  };
+  const readAloud = (text) => { Speech.stop(); Speech.speak(text, { rate: 0.88 }); };
+
+  const dailyGroups = useMemo(() => {
+    const today = todayKey();
+    const pastKeys = Object.keys(dailyEntries).filter((k) => k !== today).sort().reverse();
+    const weeks = {};
+    pastKeys.forEach((k) => {
+      const wk = startOfWeekMonday(new Date(k)).toISOString().slice(0, 10);
+      if (!weeks[wk]) weeks[wk] = [];
+      weeks[wk].push(k);
+    });
+    return Object.keys(weeks).sort().reverse().map((wk) => ({ key: wk, label: weekLabel(wk), days: weeks[wk].sort().reverse() }));
+  }, [dailyEntries]);
+
+  const toggleWeek = (key) => setExpandedWeeks((prev) => {
+    const next = new Set(prev);
+    next.has(key) ? next.delete(key) : next.add(key);
+    return next;
+  });
+
+  // ── Dream Life Script ─────────────────────────────────────────────────
+  const [dreamTitle, setDreamTitle] = useState('');
+  const [dreamBody, setDreamBody] = useState('');
+  const [dreamList, setDreamList] = useState([]);
+  const [loadingDream, setLoadingDream] = useState(true);
+  const [savingDream, setSavingDream] = useState(false);
+  const [editingDreamId, setEditingDreamId] = useState(null);
+  const [expandedDreamId, setExpandedDreamId] = useState(null);
+
+  const loadDream = async () => {
+    try { setDreamList(await getScripts()); } catch (_) {} finally { setLoadingDream(false); }
+  };
+  useEffect(() => { loadDream(); }, []);
+
+  const handleSaveDream = async () => {
+    if (!dreamBody.trim()) { Alert.alert('Write your script first ✨'); return; }
+    setSavingDream(true);
+    const content = dreamTitle.trim() ? `${dreamTitle.trim()}\n\n${dreamBody.trim()}` : dreamBody.trim();
+    try {
+      if (editingDreamId) {
+        const updated = await updateScript(editingDreamId, content);
+        setDreamList((prev) => prev.map((s) => (s.id === editingDreamId ? { ...s, ...updated } : s)));
       } else {
-        // Add new
-        const row = await addScript(content.trim());
-        setList((prev) => [row, ...prev]);
+        const row = await addScript(content);
+        setDreamList((prev) => [row, ...prev]);
       }
-      setContent('');
-      setEditingId(null);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
-    } catch (e) {
-      setError(e.message || 'Could not save');
-    } finally { setSaving(false); }
+      setDreamTitle(''); setDreamBody(''); setEditingDreamId(null);
+    } catch (_) {} finally { setSavingDream(false); }
   };
-
-  const handleDeleted = (id) => {
-    setList((prev) => prev.filter((s) => s.id !== id));
-    // If we were editing the deleted entry, clear the form
-    if (editingId === id) handleCancel();
+  const handleClearDream = () => { setDreamTitle(''); setDreamBody(''); setEditingDreamId(null); };
+  const handleEditDream = (item) => {
+    const { title, body } = parseDream(item);
+    setDreamTitle(title); setDreamBody(body); setEditingDreamId(item.id);
   };
-
-  const isEditing = editingId !== null;
+  const handleDeleteDream = async (id) => {
+    try { await deleteScript(id); } catch (_) {}
+    setDreamList((prev) => prev.filter((s) => s.id !== id));
+    if (editingDreamId === id) handleClearDream();
+  };
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 46 }]} keyboardShouldPersistTaps="handled">
+        <ScreenHeader lead="Your" accent="Scripting" subtitle="Write your desires as if they have already happened. ✨" />
 
-        <ScreenHeader lead="Script" accent="ing" subtitle={`Write your day as if it already happened ✨`} />
+        <TabPill
+          style={{ marginBottom: 16 }}
+          value={tab}
+          onChange={setTab}
+          options={[
+            { value: 'daily', label: '☀️ Daily Script' },
+            { value: 'dream', label: '🌙 Dream Life Script' },
+          ]}
+        />
 
-        {/* Input card */}
-        <GlassCard style={styles.mb20}>
-          {isEditing && (
-            <View style={styles.editingBadge}>
-              <Text style={styles.editingBadgeText}>Editing script</Text>
-              <TouchableOpacity onPress={handleCancel} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-                <Text style={styles.cancelText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-          {!isEditing && (
-            <Text style={styles.intro}>Script your ideal day in the past tense</Text>
-          )}
-          <TextInput
-            ref={inputRef}
-            style={styles.input}
-            placeholder="Today was absolutely incredible. I woke up feeling..."
-            placeholderTextColor="#9a8896"
-            value={content}
-            onChangeText={setContent}
-            multiline
-          />
-          {!!error && <Text style={styles.errorText}>{error}</Text>}
-          {saved && <Text style={styles.confirmedText}>{isEditing ? 'Updated ✨' : 'Saved ✨'}</Text>}
-          <Button title={isEditing ? 'Update Script ✨' : 'Save Script ✨'} onPress={handleSave} loading={saving} fullWidth style={{ marginTop: 4 }} />
-        </GlassCard>
+        {tab === 'daily' ? (
+          <>
+            <GlassCard style={styles.mb16}>
+              <Text style={styles.label}>☀️ WRITE TODAY'S SCRIPT</Text>
+              <ExpandableTextArea
+                value={dailyText}
+                onChangeText={handleDailyChange}
+                placeholder="Today I woke up feeling deeply grateful. My life is beautiful..."
+                modalTitle="Today's Script"
+                minHeight={180}
+              />
+              <View style={styles.btnRow}>
+                <Button title="💾 Save" size="sm" onPress={handleSaveDaily} loading={savingDaily} />
+                <Button title="Clear" size="sm" variant="ghost" onPress={handleClearDaily} />
+              </View>
+            </GlassCard>
 
-        {/* Script list */}
-        {loading ? (
-          <ActivityIndicator color="#c9a8c9" style={{ marginTop: 20 }} />
-        ) : list.length === 0 ? (
-          <GlassCard style={styles.emptyCard}>
-            <Text style={styles.emptyIcon}>📜</Text>
-            <Text style={styles.emptyTitle}>No scripts yet</Text>
-            <Text style={styles.emptySubtitle}>Your scripted days will appear here</Text>
-          </GlassCard>
+            {loadingDaily ? (
+              <ActivityIndicator color={colors.purpleMid} style={{ marginTop: 20 }} />
+            ) : (
+              <>
+                {dailyEntries[todayKey()] && (
+                  <>
+                    <Text style={styles.subHeading}>Today</Text>
+                    <View style={styles.dayRow}>
+                      <Text style={styles.dayRowLabel}>{labelForDateKey(todayKey())} ✨</Text>
+                      <View style={styles.dayRowActions}>
+                        <TouchableOpacity style={styles.readBtn} onPress={() => setExpandedDailyKey(expandedDailyKey === todayKey() ? null : todayKey())}><Text style={styles.readBtnText}>📖 Read</Text></TouchableOpacity>
+                        <TouchableOpacity onPress={() => readAloud(dailyEntries[todayKey()])}><Text style={styles.iconText}>🔊</Text></TouchableOpacity>
+                        <TouchableOpacity onPress={() => handleEditDaily(todayKey())}><Text style={styles.iconText}>✏️</Text></TouchableOpacity>
+                        <TouchableOpacity onPress={() => handleDeleteDaily(todayKey())}><Text style={styles.iconText}>✕</Text></TouchableOpacity>
+                      </View>
+                    </View>
+                    {expandedDailyKey === todayKey() && <Text style={styles.expandedText}>{dailyEntries[todayKey()]}</Text>}
+                  </>
+                )}
+
+                {dailyGroups.length > 0 && <Text style={[styles.subHeading, { marginTop: 14 }]}>Past Entries</Text>}
+                {dailyGroups.map((week) => {
+                  const open = expandedWeeks.has(week.key);
+                  return (
+                    <View key={week.key} style={styles.weekWrap}>
+                      <TouchableOpacity style={styles.weekHeader} onPress={() => toggleWeek(week.key)}>
+                        <Text style={styles.weekLabel}>{week.label} ({week.days.length})</Text>
+                        <Text style={styles.weekChevron}>{open ? '▾' : '▸'}</Text>
+                      </TouchableOpacity>
+                      {open && week.days.map((k) => (
+                        <View key={k}>
+                          <View style={styles.dayRow}>
+                            <Text style={styles.dayRowLabel}>{labelForDateKey(k)}</Text>
+                            <View style={styles.dayRowActions}>
+                              <TouchableOpacity style={styles.readBtn} onPress={() => setExpandedDailyKey(expandedDailyKey === k ? null : k)}><Text style={styles.readBtnText}>📖 Read</Text></TouchableOpacity>
+                              <TouchableOpacity onPress={() => readAloud(dailyEntries[k])}><Text style={styles.iconText}>🔊</Text></TouchableOpacity>
+                              <TouchableOpacity onPress={() => handleDeleteDaily(k)}><Text style={styles.iconText}>✕</Text></TouchableOpacity>
+                            </View>
+                          </View>
+                          {expandedDailyKey === k && <Text style={styles.expandedText}>{dailyEntries[k]}</Text>}
+                        </View>
+                      ))}
+                    </View>
+                  );
+                })}
+              </>
+            )}
+          </>
         ) : (
           <>
-            <Text style={styles.sectionHeading}>Your scripts</Text>
-            {list.map((item) => (
-              <ScriptEntry
-                key={item.id}
-                item={item}
-                onEdit={handleEdit}
-                onDeleted={handleDeleted}
+            <GlassCard style={styles.mb16}>
+              <Text style={styles.dreamIntro}>🌙 Dream Life Script</Text>
+              <Text style={styles.dreamDesc}>Your permanent vision — the full picture of the life you are calling in. Rewrite and refine anytime.</Text>
+              <View style={styles.inputBoxSm}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Script title (e.g. My Dream Life — 2026)"
+                  placeholderTextColor="rgba(46,37,48,0.4)"
+                  value={dreamTitle}
+                  onChangeText={setDreamTitle}
+                />
+              </View>
+              <ExpandableTextArea
+                value={dreamBody}
+                onChangeText={setDreamBody}
+                placeholder="I am so grateful and happy now that I wake up every morning in my beautiful home by the ocean..."
+                modalTitle="Dream Life Script"
+                minHeight={190}
+                style={{ marginTop: 8 }}
               />
-            ))}
+              <View style={styles.btnRow}>
+                <Button title={editingDreamId ? '💾 Update' : '💾 Save'} size="sm" onPress={handleSaveDream} loading={savingDream} />
+                <Button title="Clear" size="sm" variant="ghost" onPress={handleClearDream} />
+              </View>
+            </GlassCard>
+
+            {loadingDream ? (
+              <ActivityIndicator color={colors.purpleMid} style={{ marginTop: 20 }} />
+            ) : dreamList.length === 0 ? (
+              <Text style={styles.muted}>No dream life scripts yet. Write your first one above ✨</Text>
+            ) : (
+              <>
+                <Text style={styles.subHeading}>Saved Dream Life Scripts</Text>
+                {dreamList.map((item) => {
+                  const { title, body } = parseDream(item);
+                  const open = expandedDreamId === item.id;
+                  return (
+                    <GlassCard key={item.id} style={{ marginBottom: 10 }}>
+                      <View style={styles.dreamRowHead}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.dreamRowTitle} numberOfLines={1}>{title || 'Dream Life Script'}</Text>
+                          <Text style={styles.dreamRowDate}>{item.created_at ? new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</Text>
+                        </View>
+                        <View style={styles.dayRowActions}>
+                          <TouchableOpacity style={styles.readBtn} onPress={() => setExpandedDreamId(open ? null : item.id)}><Text style={styles.readBtnText}>📖 Read</Text></TouchableOpacity>
+                          <TouchableOpacity onPress={() => readAloud(body)}><Text style={styles.iconText}>🔊</Text></TouchableOpacity>
+                          <TouchableOpacity onPress={() => handleEditDream(item)}><Text style={styles.iconText}>✏️</Text></TouchableOpacity>
+                          <TouchableOpacity onPress={() => handleDeleteDream(item.id)}><Text style={styles.iconText}>✕</Text></TouchableOpacity>
+                        </View>
+                      </View>
+                      {open && <Text style={styles.expandedText}>{body}</Text>}
+                    </GlassCard>
+                  );
+                })}
+              </>
+            )}
           </>
         )}
-
       </ScrollView>
     </GradientBackground>
   );
@@ -191,72 +302,32 @@ export default function Scripting() {
 
 const styles = StyleSheet.create({
   scroll: { padding: 20, paddingTop: 24, paddingBottom: 60 },
+  mb16: { marginBottom: 16 },
+  label: { fontFamily: fonts.bodyMedium, fontSize: 10.5, color: colors.purpleDark, fontWeight: '700', letterSpacing: 0.6, marginBottom: 8, textTransform: 'uppercase' },
+  inputBox: { borderWidth: 1, borderColor: 'rgba(154,95,168,0.22)', borderRadius: radii.sm, padding: 12, backgroundColor: 'rgba(255,255,255,0.5)' },
+  inputBoxSm: { borderWidth: 1, borderColor: 'rgba(154,95,168,0.22)', borderRadius: radii.sm, padding: 12, backgroundColor: 'rgba(255,255,255,0.5)' },
+  input: { fontFamily: fonts.body, fontSize: 14, color: colors.ink },
+  btnRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  muted: { fontFamily: fonts.displayItalic, fontSize: 13.5, color: colors.mist, fontStyle: 'italic', textAlign: 'center', marginTop: 16 },
 
-  mb20: { marginBottom: 20 },
+  subHeading: { fontFamily: fonts.bodyMedium, fontSize: 10.5, color: colors.mist, fontWeight: '600', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 },
 
-  editingBadge: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(154,95,168,0.15)',
-  },
-  editingBadgeText: { fontSize: 12, color: '#9a5fa8', fontWeight: '600', letterSpacing: 0.4 },
-  cancelText: { fontSize: 12, color: '#9a8896', fontWeight: '500' },
+  dayRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.6)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.2)', borderRadius: radii.sm, paddingVertical: 16, paddingHorizontal: 14, marginBottom: 3, minHeight: 58 },
+  dayRowLabel: { fontFamily: fonts.body, fontSize: 14, color: colors.ink2 },
+  dayRowActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  readBtn: { backgroundColor: colors.purpleMid, borderRadius: radii.pill, paddingVertical: 4, paddingHorizontal: 10 },
+  readBtnText: { color: '#fff', fontSize: 10.5, fontWeight: '600' },
+  iconText: { fontSize: 13, color: colors.mist },
+  expandedText: { fontFamily: fonts.displayItalic, fontSize: 16, color: colors.ink2, fontStyle: 'italic', lineHeight: 23, backgroundColor: 'rgba(255,255,255,0.4)', borderRadius: radii.sm, padding: 12, marginBottom: 8 },
 
-  intro: { color: '#6b5c66', fontSize: 13, fontWeight: '500', marginBottom: 14, textAlign: 'center' },
-  input: {
-    backgroundColor: 'rgba(255,255,255,0.5)',
-    borderRadius: 14,
-    padding: 14,
-    fontSize: 14,
-    color: '#2e2530',
-    minHeight: 130,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(201,168,201,0.25)',
-    textAlignVertical: 'top',
-  },
-  errorText: { color: '#c04040', fontSize: 13, marginBottom: 10, textAlign: 'center' },
-  confirmedText: { color: '#7da888', fontSize: 13, marginBottom: 10, textAlign: 'center', fontWeight: '600' },
+  weekWrap: { marginBottom: 8 },
+  weekHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(245,240,252,0.6)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.25)', borderRadius: radii.sm, paddingVertical: 9, paddingHorizontal: 12, marginBottom: 6 },
+  weekLabel: { fontFamily: fonts.displayMedium, fontSize: 16.5, color: colors.purpleDark },
+  weekChevron: { fontSize: 12, color: colors.mist },
 
-  sectionHeading: {
-    fontSize: 11,
-    color: '#9a5fa8',
-    fontWeight: '700',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    marginBottom: 12,
-  },
-
-  entryHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  dateText: { fontSize: 11, color: '#9a8896', fontWeight: '500' },
-  entryActions: { flexDirection: 'row', gap: 6 },
-  actionBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.6)',
-    borderWidth: 1,
-    borderColor: 'rgba(154,95,168,0.2)',
-  },
-  actionBtnDelete: {
-    borderColor: 'rgba(192,64,64,0.2)',
-  },
-  editBtnText: { fontSize: 11, color: '#9a5fa8', fontWeight: '600' },
-  deleteBtnText: { fontSize: 11, color: '#9a8896', fontWeight: '600' },
-
-  entryText: { color: '#2e2530', fontSize: 14, lineHeight: 22 },
-
-  emptyCard: { alignItems: 'center', paddingVertical: 32 },
-  emptyIcon: { fontSize: 36, marginBottom: 10 },
-  emptyTitle: { fontSize: 15, fontWeight: '600', color: '#2e2530', marginBottom: 4 },
-  emptySubtitle: { fontSize: 13, color: '#6b5c66' },
+  dreamIntro: { fontFamily: fonts.displayMedium, fontSize: 17, color: colors.ink, marginBottom: 4 },
+  dreamDesc: { fontFamily: fonts.body, fontSize: 12, color: colors.mist, lineHeight: 18, marginBottom: 12 },
+  dreamRowHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  dreamRowTitle: { fontFamily: fonts.displayMedium, fontSize: 15, color: colors.ink },
+  dreamRowDate: { fontFamily: fonts.body, fontSize: 10.5, color: colors.mist, marginTop: 2 },
 });

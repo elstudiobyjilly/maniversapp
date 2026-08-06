@@ -1,5 +1,9 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Animated, Easing } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getFunToolData, saveFunToolData } from '../../services/api';
+
+const BUBBLE_KEY = 'mv_bubble_local';
 
 const BUBBLE_MODES = {
   shield: {
@@ -33,6 +37,27 @@ export default function ProtectionBubbleTool() {
 
   const modeData = BUBBLE_MODES[mode];
   const steps = modeData.steps;
+
+  useEffect(() => {
+    (async () => {
+      let state = null;
+      try {
+        const local = await AsyncStorage.getItem(BUBBLE_KEY);
+        if (local) state = JSON.parse(local);
+      } catch (e) {}
+      try {
+        const remote = await getFunToolData('fun_bubble');
+        if (remote) state = remote;
+      } catch (e) {}
+      if (state && state.mode && BUBBLE_MODES[state.mode]) setMode(state.mode);
+    })();
+  }, []);
+
+  const persist = useCallback(async (nextMode) => {
+    const state = { mode: nextMode };
+    try { await AsyncStorage.setItem(BUBBLE_KEY, JSON.stringify(state)); } catch (e) {}
+    try { await saveFunToolData('fun_bubble', state); } catch (e) {}
+  }, []);
 
   useEffect(() => {
     const anim = Animated.loop(
@@ -80,6 +105,7 @@ export default function ProtectionBubbleTool() {
     stopTimer();
     setMode(m);
     setStep(-1);
+    persist(m);
   };
 
   const handleBegin = () => {

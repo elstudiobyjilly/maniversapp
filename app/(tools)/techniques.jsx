@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-nati
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import ScreenHeader from '../../components/ScreenHeader';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const TECHNIQUES = [
   { ic: '3️⃣', name: '369 Method', tag: 'Writing', desc: "Write your affirmation 3 times in the morning, 6 times in the afternoon, and 9 times at night — for 33-45 days. Based on Nikola Tesla's belief that 3, 6 and 9 are the keys to the universe.", best: 'Morning, afternoon and evening — same time each day', steps: ['Write your affirmation 3× immediately upon waking', 'Write it 6× in the afternoon (lunch or 3pm)', 'Write it 9× before bed, feel the emotion as you write', 'Continue for 33 days minimum', 'Use present tense: "I am", "I have", "I feel"'] },
@@ -25,11 +26,12 @@ const TECHNIQUES = [
 ];
 
 export default function Techniques() {
+  const insets = useSafeAreaInsets();
   const [expanded, setExpanded] = useState(null);
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 50, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 46, paddingBottom: 40 }}>
         <ScreenHeader lead="Manifestation" accent="Techniques" subtitle="17 proven techniques — pick one, commit, and watch it work." />
 
         {TECHNIQUES.map((t, i) => {

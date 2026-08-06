@@ -4,62 +4,40 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import GradientBackground from '../../components/GradientBackground';
 import GlassCard from '../../components/GlassCard';
 import ScreenHeader from '../../components/ScreenHeader';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Button from '../../components/Button';
+import ExpandableTextArea from '../../components/ExpandableTextArea';
 import { colors, fonts, radii } from '../../constants/theme';
-import { getKv, saveKv, createDesire, deleteDesire, getDesires, createCheckout } from '../../services/api';
+import {
+  createCheckout,
+  getRoadmaps, createRoadmap, updateRoadmap, deleteRoadmap,
+  getRoadmapDayLogs, createRoadmapDayLog, deleteRoadmapDayLog,
+} from '../../services/api';
 import UpgradeModal from '../../components/UpgradeModal';
 import { usePlanStore } from '../../store/planStore';
 import * as Linking from 'expo-linking';
+// Shared with the Home dashboard's Desire Action widget so both read/write
+// the same /roadmap + /roadmap/log records with identical day bridging.
+import {
+  CURRENT_KEY, START_KEY_PREFIX, PRACTICES_KEY_PREFIX, DURATIONS, PRACTICE_OPTIONS, DEFAULT_PRACTICES,
+  DAY_LETTERS, toDateKey, startOfDay, addDays, fmtShort, buildLogsMap, dayNumberFor,
+} from '../../constants/desireAction';
 
-const DESIRES_KEY = 'mv_dt_desires';
-const CURRENT_KEY = 'mv_dt_current';
-const LOG_KEY_PREFIX = 'mv_dt_logs_';
-
-const DURATIONS = [7, 21, 30, 40, 66];
-const PRACTICE_OPTIONS = [
-  'Scripting', 'Visualisation', '369 Method', 'Gratitude', 'Meditation', 'Feel It',
-  'Mirror Work', "Ho'oponopono", 'Affirmations', '5×55 Method', 'Pillow Method',
-  'Two Cup Method', 'Water Manifestation', 'EFT Tapping', 'Future Self Journaling',
-  'Subliminal Listening', 'Vision Board',
-];
-const DEFAULT_PRACTICES = ['Scripting', 'Visualisation', 'Gratitude'];
-const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-
-function toDateKey(d) {
-  return d.toISOString().slice(0, 10);
-}
-function startOfDay(d) {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
-function addDays(d, n) {
-  const x = new Date(d);
-  x.setDate(x.getDate() + n);
-  return x;
-}
-function fmtShort(d) {
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-}
 
 export default function DesireActionTool() {
-  const { limits, loaded, refresh } = usePlanStore();
+  const insets = useSafeAreaInsets();
+  const { refresh } = usePlanStore();
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [upgradeMsg, setUpgradeMsg] = useState('');
-  // Real desire count from the backend (/desires), used purely to enforce
-  // the shared 2-total-ever free cap -- this tracker's local desires still
-  // live in KV (dt_desires) but each NEW one now also creates a real
-  // /desires row so it counts against the same cap as the website's
-  // Desires panel, per plan-gate.js (both storage keys share one limit).
-  const [backendDesireCount, setBackendDesireCount] = useState(null);
 
   const [desires, setDesires] = useState([]);
+  const [rawLogs, setRawLogs] = useState([]); // full /roadmap/log/ list, all desires
   const [currentId, setCurrentId] = useState(null);
-  const [logs, setLogs] = useState({}); // logs for current desire
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDay, setSelectedDay] = useState(null);
   const [noteText, setNoteText] = useState('');
   const [addOpen, setAddOpen] = useState(false);
+  const [addSaving, setAddSaving] = useState(false);
   const [addTitle, setAddTitle] = useState('');
   const [addStart, setAddStart] = useState(toDateKey(new Date()));
   const [addDur, setAddDur] = useState(21);
@@ -67,88 +45,57 @@ export default function DesireActionTool() {
   const [addCustom, setAddCustom] = useState('');
 
   const [editOpen, setEditOpen] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editStart, setEditStart] = useState('');
   const [editDur, setEditDur] = useState(21);
   const [editPracs, setEditPracs] = useState([]);
 
   // ── Load ──────────────────────────────────────────────────────────────
-  useEffect(() => {
+  const loadAll = useCallback(async (preferId) => {
     refresh();
-    getDesires().then((d) => setBackendDesireCount(d.length)).catch(() => {});
-    (async () => {
-      try {
-        const localD = await AsyncStorage.getItem(DESIRES_KEY);
-        const localCur = await AsyncStorage.getItem(CURRENT_KEY);
-        let d = localD ? JSON.parse(localD) : [];
-        setDesires(d);
-        if (d.length) {
-          const cur = localCur || d[0].id;
-          setCurrentId(cur);
-          const localLogs = await AsyncStorage.getItem(LOG_KEY_PREFIX + cur);
-          if (localLogs) setLogs(JSON.parse(localLogs));
+    try {
+      const [roadmaps, logsList] = await Promise.all([getRoadmaps(), getRoadmapDayLogs()]);
+      const withStart = await Promise.all(roadmaps.map(async (r) => {
+        let startDate = null;
+        try { startDate = await AsyncStorage.getItem(START_KEY_PREFIX + r.id); } catch (e) {}
+        if (!startDate) startDate = (r.created_at || '').slice(0, 10) || toDateKey(new Date());
+        const endDate = toDateKey(addDays(new Date(startDate), (r.days || 21) - 1));
+        let practices = r.practices || [];
+        if (!practices.length) {
+          try {
+            const stored = await AsyncStorage.getItem(PRACTICES_KEY_PREFIX + r.id);
+            if (stored) practices = JSON.parse(stored);
+          } catch (e) {}
         }
-      } catch (e) {}
-      setLoaded(true);
+        return { id: r.id, title: r.desire, days: r.days, practices, startDate, endDate };
+      }));
+      setDesires(withStart);
+      setRawLogs(logsList);
+      const localCur = await AsyncStorage.getItem(CURRENT_KEY).catch(() => null);
+      const cur = preferId ?? (withStart.find((d) => d.id === localCur * 1) ? localCur * 1 : withStart[0]?.id) ?? null;
+      setCurrentId(cur);
+    } catch (e) {}
+  }, [refresh]);
 
-      // background refresh from backend
-      try {
-        const remoteDesiresRaw = await getKv('dt_desires');
-        if (remoteDesiresRaw) {
-          const remoteDesires = JSON.parse(remoteDesiresRaw);
-          if (Array.isArray(remoteDesires) && remoteDesires.length) {
-            await AsyncStorage.setItem(DESIRES_KEY, JSON.stringify(remoteDesires));
-            setDesires(remoteDesires);
-          }
-        }
-        const remoteLogsRaw = await getKv('dt_logs');
-        if (remoteLogsRaw) {
-          const remoteLogs = JSON.parse(remoteLogsRaw); // { [desireId]: logs }
-          for (const k of Object.keys(remoteLogs)) {
-            const existing = await AsyncStorage.getItem(LOG_KEY_PREFIX + k);
-            if (!existing) await AsyncStorage.setItem(LOG_KEY_PREFIX + k, JSON.stringify(remoteLogs[k]));
-          }
-        }
-      } catch (e) {}
-    })();
-  }, []);
+  useEffect(() => { loadAll(); }, []);
 
-  // when currentId changes, load its logs + reset view state
   useEffect(() => {
-    if (!currentId) return;
-    (async () => {
-      try {
-        const l = await AsyncStorage.getItem(LOG_KEY_PREFIX + currentId);
-        setLogs(l ? JSON.parse(l) : {});
-      } catch (e) { setLogs({}); }
-      setWeekOffset(0);
-      setSelectedDay(null);
-    })();
+    if (currentId != null) { AsyncStorage.setItem(CURRENT_KEY, String(currentId)).catch(() => {}); }
+    setWeekOffset(0);
+    setSelectedDay(null);
   }, [currentId]);
 
   const currentDesire = desires.find((d) => d.id === currentId) || null;
-
-  // ── Persistence helpers ──────────────────────────────────────────────
-  const persistDesires = useCallback(async (next) => {
-    setDesires(next);
-    try { await AsyncStorage.setItem(DESIRES_KEY, JSON.stringify(next)); } catch (e) {}
-    try { await saveKv('dt_desires', JSON.stringify(next)); } catch (e) {}
-  }, []);
-
-  const persistLogs = useCallback(async (desireId, nextLogs) => {
-    setLogs(nextLogs);
-    try { await AsyncStorage.setItem(LOG_KEY_PREFIX + desireId, JSON.stringify(nextLogs)); } catch (e) {}
-    try {
-      // sync ALL logs map to backend, matching website behaviour
-      const allLogsRaw = {};
-      for (const d of desires) {
-        if (d.id === desireId) { allLogsRaw[d.id] = nextLogs; continue; }
-        const l = await AsyncStorage.getItem(LOG_KEY_PREFIX + d.id);
-        allLogsRaw[d.id] = l ? JSON.parse(l) : {};
-      }
-      await saveKv('dt_logs', JSON.stringify(allLogsRaw));
-    } catch (e) {}
-  }, [desires]);
+  const baseLogs = useMemo(
+    () => (currentDesire ? buildLogsMap(rawLogs, currentDesire.title) : {}),
+    [rawLogs, currentDesire]
+  );
+  // Checkbox taps show their new state immediately instead of waiting on
+  // the delete+create round trip -- otherwise a slow network makes the
+  // checkbox look unresponsive/missing rather than just toggled.
+  const [optimisticLogs, setOptimisticLogs] = useState({});
+  const logs = useMemo(() => ({ ...baseLogs, ...optimisticLogs }), [baseLogs, optimisticLogs]);
 
   // ── Derived: progress ────────────────────────────────────────────────
   const progress = useMemo(() => {
@@ -222,22 +169,44 @@ export default function DesireActionTool() {
     setNoteText((logs[dateKey] || {}).note || '');
   };
 
+  // A day's log has no PATCH on the backend -- editing means delete the
+  // existing row (if any) and create a fresh one with the merged fields.
+  const saveDayLog = useCallback(async (dateKey, { practices, note }) => {
+    if (!currentDesire) return;
+    const existing = baseLogs[dateKey];
+    const day = dayNumberFor(dateKey, currentDesire.startDate);
+    const completedNames = Object.keys(practices).filter((p) => practices[p]);
+    try {
+      if (existing?.id) { try { await deleteRoadmapDayLog(existing.id); } catch (e) {} }
+      const created = await createRoadmapDayLog({
+        day, desire: currentDesire.title, practices: completedNames, action: note || '', date: dateKey,
+      });
+      setRawLogs((cur) => [
+        ...cur.filter((l) => !(existing?.id && l.id === existing.id)),
+        created,
+      ]);
+    } catch (e) {
+      Alert.alert('Could not save', e.message || 'Please try again.');
+    } finally {
+      setOptimisticLogs((cur) => { const next = { ...cur }; delete next[dateKey]; return next; });
+    }
+  }, [currentDesire, baseLogs]);
+
   const handleTogglePractice = (practice) => {
-    if (!selectedDay || !currentId) return;
-    const nextLogs = { ...logs };
-    if (!nextLogs[selectedDay]) nextLogs[selectedDay] = {};
-    if (!nextLogs[selectedDay].practices) nextLogs[selectedDay] = { ...nextLogs[selectedDay], practices: {} };
-    nextLogs[selectedDay] = {
-      ...nextLogs[selectedDay],
-      practices: { ...nextLogs[selectedDay].practices, [practice]: !nextLogs[selectedDay].practices?.[practice] },
-    };
-    persistLogs(currentId, nextLogs);
+    if (!selectedDay || !currentDesire) return;
+    const cur = logs[selectedDay]?.practices || {};
+    const nextPractices = { ...cur, [practice]: !cur[practice] };
+    // Reflect the tap immediately (see optimisticLogs above), then persist.
+    setOptimisticLogs((prev) => ({
+      ...prev,
+      [selectedDay]: { ...(logs[selectedDay] || {}), practices: nextPractices },
+    }));
+    saveDayLog(selectedDay, { practices: nextPractices, note: logs[selectedDay]?.note || noteText });
   };
 
   const handleSaveNote = () => {
-    if (!selectedDay || !currentId) return;
-    const nextLogs = { ...logs, [selectedDay]: { ...(logs[selectedDay] || {}), note: noteText } };
-    persistLogs(currentId, nextLogs);
+    if (!selectedDay || !currentDesire) return;
+    saveDayLog(selectedDay, { practices: logs[selectedDay]?.practices || {}, note: noteText });
   };
 
   // ── Handlers: add desire ────────────────────────────────────────────
@@ -255,47 +224,31 @@ export default function DesireActionTool() {
     setAddPracs((cur) => (cur.includes(p) ? cur.filter((x) => x !== p) : [...cur, p]));
   };
   const handleSaveNewDesire = async () => {
+    if (addSaving) return; // guards against a double-tap firing two POSTs (was creating duplicate desires)
     if (!addTitle.trim()) { Alert.alert('Enter your desire ✨'); return; }
 
-    // Enforce the SHARED free cap (desires_total: 2) before creating --
-    // this mirrors website's plan-gate.js, which counts mv_desires_cache +
-    // mv_dt_desires together against one limit.
-    const cap = limits?.desires_total;
-    if (cap != null && backendDesireCount != null && backendDesireCount >= cap) {
-      setUpgradeMsg(`You've reached your ${cap} free desires -- upgrade to track more at once.`);
-      setShowUpgrade(true);
-      return;
-    }
-
     const customList = addCustom.split('\n').map((s) => s.trim()).filter(Boolean);
-    const desire = {
-      id: 'dt_' + Date.now(),
-      title: addTitle.trim(),
-      startDate: addStart,
-      endDate: addEndDate,
-      practices: [...addPracs, ...customList],
-      createdAt: new Date().toISOString(),
-    };
+    const title = addTitle.trim();
+    const practices = [...addPracs, ...customList];
 
-    // Create the REAL backend desire too, so it counts against the shared
-    // cap and can be linked from other features (Vision Board, etc).
+    setAddSaving(true);
     try {
-      await createDesire({ title: addTitle.trim(), target_date: addEndDate });
-      setBackendDesireCount((c) => (c == null ? 1 : c + 1));
+      const created = await createRoadmap({ desire: title, days: addDur, weeks: [], practices });
+      try { await AsyncStorage.setItem(START_KEY_PREFIX + created.id, addStart); } catch (e) {}
+      try { await AsyncStorage.setItem(PRACTICES_KEY_PREFIX + created.id, JSON.stringify(practices)); } catch (e) {}
+      await loadAll(created.id);
+      setAddOpen(false);
+      Alert.alert('Desire tracker started ✨');
     } catch (e) {
       if (e.status === 403) {
         setUpgradeMsg(e.message || 'Upgrade to track more desires.');
         setShowUpgrade(true);
-        return; // don't save locally either -- keep both systems in sync
+      } else {
+        Alert.alert('Could not start tracker', e.message || 'Please try again.');
       }
-      // Non-plan errors (network, etc) -- still let the local tracker work
+    } finally {
+      setAddSaving(false);
     }
-
-    const next = [...desires, desire];
-    persistDesires(next);
-    setAddOpen(false);
-    setCurrentId(desire.id);
-    Alert.alert('Desire tracker started ✨');
   };
 
   // ── Handlers: edit desire ───────────────────────────────────────────
@@ -313,24 +266,47 @@ export default function DesireActionTool() {
   };
   const editEndDate = useMemo(() => toDateKey(addDays(new Date(editStart || new Date()), editDur - 1)), [editStart, editDur]);
 
-  const handleSaveEditDesire = () => {
+  // PATCH /roadmap/{id} updates desire/days/practices in place and keeps
+  // the roadmap's id and day logs intact server-side (the backend migrates
+  // any day logs itself when the desire text changes). Start date has no
+  // backend field, so it stays a local-only override same as on create.
+  const handleSaveEditDesire = async () => {
+    if (editSaving) return; // guards against a double-tap firing two PATCHes
     if (!currentDesire) return;
     if (!editTitle.trim()) { Alert.alert('Enter your desire ✨'); return; }
-    const next = desires.map((d) => (d.id === currentId ? { ...d, title: editTitle.trim(), startDate: editStart, endDate: editEndDate, practices: editPracs } : d));
-    persistDesires(next);
-    setEditOpen(false);
-    Alert.alert('Desire updated ✨');
+    const title = editTitle.trim();
+    const id = currentDesire.id;
+
+    setEditSaving(true);
+    try {
+      await updateRoadmap(id, { desire: title, days: editDur, practices: editPracs });
+      try { await AsyncStorage.setItem(START_KEY_PREFIX + id, editStart); } catch (e) {}
+      try { await AsyncStorage.setItem(PRACTICES_KEY_PREFIX + id, JSON.stringify(editPracs)); } catch (e) {}
+
+      await loadAll(id);
+      setEditOpen(false);
+      Alert.alert('Desire updated ✨');
+    } catch (e) {
+      Alert.alert('Could not update', e.message || 'Please try again.');
+    } finally {
+      setEditSaving(false);
+    }
   };
 
   const handleDeleteDesire = () => {
-    if (!currentId) return;
+    if (!currentDesire) return;
+    const id = currentDesire.id;
+    const title = currentDesire.title;
     Alert.alert('Delete this desire and all its logs?', null, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
-        try { await AsyncStorage.removeItem(LOG_KEY_PREFIX + currentId); } catch (e) {}
-        const next = desires.filter((d) => d.id !== currentId);
-        persistDesires(next);
-        setCurrentId(next.length ? next[0].id : null);
+        const toRemove = rawLogs.filter((l) => l.desire === title);
+        for (const l of toRemove) { try { await deleteRoadmapDayLog(l.id); } catch (e) {} }
+        try { await deleteRoadmap(id); } catch (e) {}
+        try { await AsyncStorage.removeItem(START_KEY_PREFIX + id); } catch (e) {}
+        try { await AsyncStorage.removeItem(PRACTICES_KEY_PREFIX + id); } catch (e) {}
+        const remaining = desires.filter((d) => d.id !== id);
+        await loadAll(remaining.length ? remaining[0].id : null);
         Alert.alert('Desire removed');
       } },
     ]);
@@ -339,7 +315,7 @@ export default function DesireActionTool() {
   // ── Render ───────────────────────────────────────────────────────────
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 50, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 46, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
         <ScreenHeader lead="🗺️ Desire" accent="Action" subtitle="Track your daily practices. Watch your desires unfold. ✨" />
 
         <GlassCard style={{ marginBottom: 16 }}>
@@ -419,7 +395,12 @@ export default function DesireActionTool() {
                   {new Date(selectedDay).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
                 </Text>
                 {(currentDesire.practices || []).length === 0 ? (
-                  <Text style={styles.noPracsText}>No practices set for this desire.</Text>
+                  <View style={styles.noPracsWrap}>
+                    <Text style={styles.noPracsText}>No practices set for this desire — pick some to see checkboxes here.</Text>
+                    <TouchableOpacity style={styles.noPracsBtn} onPress={openEdit}>
+                      <Text style={styles.noPracsBtnText}>✏️ Choose Daily Practices</Text>
+                    </TouchableOpacity>
+                  </View>
                 ) : (
                   (currentDesire.practices || []).map((p, i) => {
                     const checked = !!(logs[selectedDay]?.practices && logs[selectedDay].practices[p]);
@@ -436,17 +417,14 @@ export default function DesireActionTool() {
                 )}
 
                 <Text style={styles.noteLbl}>ACTION / NOTE</Text>
-                <View style={styles.inputBordered}>
-                  <TextInput
-                    style={styles.noteInput}
-                    multiline
-                    placeholder="What action did you take? How did you feel?..."
-                    placeholderTextColor="rgba(46,37,48,0.4)"
-                    value={noteText}
-                    onChangeText={setNoteText}
-                    onBlur={handleSaveNote}
-                  />
-                </View>
+                <ExpandableTextArea
+                  value={noteText}
+                  onChangeText={setNoteText}
+                  onBlur={handleSaveNote}
+                  placeholder="What action did you take? How did you feel?..."
+                  modalTitle="Action / Note"
+                  minHeight={110}
+                />
               </GlassCard>
             )}
 
@@ -514,19 +492,16 @@ export default function DesireActionTool() {
               </View>
 
               <Text style={styles.fieldLbl}>Custom Practices <Text style={styles.fieldLblHint}>(one per line)</Text></Text>
-              <View style={styles.inputBordered}>
-                <TextInput
-                  style={[styles.modalInput, { minHeight: 56 }]}
-                  multiline
-                  placeholder={'e.g. Gratitude walk\nCold shower intention'}
-                  placeholderTextColor="rgba(46,37,48,0.4)"
-                  value={addCustom}
-                  onChangeText={setAddCustom}
-                />
-              </View>
+              <ExpandableTextArea
+                value={addCustom}
+                onChangeText={setAddCustom}
+                placeholder={'e.g. Gratitude walk\nCold shower intention'}
+                modalTitle="Custom Practices"
+                minHeight={90}
+              />
 
               <View style={styles.modalBtnRow}>
-                <Button title="✨ Start Tracking" onPress={handleSaveNewDesire} fullWidth />
+                <Button title="✨ Start Tracking" onPress={handleSaveNewDesire} loading={addSaving} disabled={addSaving} fullWidth />
                 <TouchableOpacity style={styles.cancelBtn} onPress={() => setAddOpen(false)}>
                   <Text style={styles.cancelBtnText}>Cancel</Text>
                 </TouchableOpacity>
@@ -579,7 +554,7 @@ export default function DesireActionTool() {
               </View>
 
               <View style={styles.modalBtnRow}>
-                <Button title="Save Changes" onPress={handleSaveEditDesire} fullWidth />
+                <Button title="Save Changes" onPress={handleSaveEditDesire} loading={editSaving} disabled={editSaving} fullWidth />
                 <TouchableOpacity style={styles.cancelBtn} onPress={() => setEditOpen(false)}>
                   <Text style={styles.cancelBtnText}>Cancel</Text>
                 </TouchableOpacity>
@@ -641,6 +616,9 @@ const styles = StyleSheet.create({
 
   dayDetailTitle: { fontSize: 16, fontStyle: 'italic', fontWeight: '400', color: '#2e2530', marginBottom: 12 },
   noPracsText: { fontSize: 13, color: '#6b5c66', marginBottom: 10 },
+  noPracsWrap: { marginBottom: 10 },
+  noPracsBtn: { alignSelf: 'flex-start', paddingVertical: 9, paddingHorizontal: 14, borderRadius: 50, backgroundColor: 'rgba(154,95,168,0.12)', borderWidth: 1, borderColor: 'rgba(154,95,168,0.3)' },
+  noPracsBtnText: { fontSize: 12.5, color: '#9a5fa8', fontWeight: '600' },
   pracRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
   pracRowDivider: { borderBottomWidth: 1, borderBottomColor: 'rgba(154,95,168,0.12)' },
   checkbox: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, borderColor: 'rgba(154,95,168,0.3)', justifyContent: 'center', alignItems: 'center' },

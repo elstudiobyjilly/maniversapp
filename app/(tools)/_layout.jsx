@@ -1,53 +1,79 @@
 import { Stack, useRouter } from 'expo-router';
-import { TouchableOpacity } from 'react-native';
+import { TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 
-export default function ToolsLayout() {
+// Small frosted-glass back button -- floats over the content via
+// headerTransparent (doesn't reserve header height / push content down,
+// so screens' own in-content titles don't need to move), for when the
+// OS edge-swipe-back gesture isn't available or is awkward to use:
+// iPad/Android split-screen, external displays, the Mac Catalyst build,
+// etc. Deliberately subtle (low-opacity glass, no solid background,
+// small) rather than a prominent button -- "there but not shouting".
+function BackButton() {
   const router = useRouter();
-
-  const BackButton = () => (
-    <TouchableOpacity onPress={() => router.back()} style={{ paddingHorizontal: 8, paddingVertical: 4 }}>
-      <Ionicons name="chevron-back" size={26} color="#2e2530" />
+  return (
+    <TouchableOpacity onPress={() => router.back()} hitSlop={10} activeOpacity={0.7}>
+      <BlurView intensity={35} tint="light" style={styles.backBtn}>
+        <Ionicons name="chevron-back" size={17} color="rgba(46,37,48,0.6)" />
+      </BlurView>
     </TouchableOpacity>
   );
+}
 
+export default function ToolsLayout() {
   return (
     <Stack
       screenOptions={{
-        headerStyle: { backgroundColor: '#fdf2f8' },
-        headerTintColor: '#2e2530',
-        headerTitleStyle: { fontWeight: '500' },
+        headerShown: true,
+        headerTransparent: true,
+        headerTitle: '',
         headerShadowVisible: false,
         headerLeft: () => <BackButton />,
+        // Edge-swipe-back still works on phones (this used to also set
+        // fullScreenGestureEnabled: true, which installed a pan gesture
+        // recognizer across the ENTIRE screen and ended up contesting taps
+        // on write boxes right as the keyboard tried to open -- removed
+        // for that reason, see prior commit). The BackButton above covers
+        // the cases swipe-back can't reach: iPad/Android split-screen,
+        // external displays, Mac Catalyst, etc.
+        gestureEnabled: true,
       }}
     >
-      <Stack.Screen name="oracle" options={{ title: 'Oracle' }} />
       <Stack.Screen name="gratitude" options={{ title: 'Gratitude' }} />
       <Stack.Screen name="beliefs" options={{ title: 'Limiting Beliefs' }} />
       <Stack.Screen name="letgo" options={{ title: 'Let Go' }} />
       <Stack.Screen name="futureself" options={{ title: 'Future Self' }} />
-      <Stack.Screen name="identity" options={{ title: 'Identity' }} />
-      <Stack.Screen name="roadmap" options={{ title: 'Roadmap' }} />
       <Stack.Screen name="scripting" options={{ title: 'Scripting' }} />
-      <Stack.Screen name="reps" options={{ title: 'Reps' }} />
-      <Stack.Screen name="tracker" options={{ title: 'Habit Tracker' }} />
       <Stack.Screen name="manifested" options={{ title: 'Manifested' }} />
       <Stack.Screen name="desire-action" options={{ title: 'Desire Action' }} />
-      <Stack.Screen name="synclog" options={{ title: 'Synchronicity Log' }} />
-      <Stack.Screen name="journal" options={{ title: 'Journal' }} />
-      <Stack.Screen name="abundance-cheque" options={{ title: 'Abundance Cheque' }} />
-      <Stack.Screen name="daily-intention" options={{ title: 'Daily Intention' }} />
-      <Stack.Screen name="horoscope" options={{ title: 'Horoscope' }} />
-      <Stack.Screen name="community" options={{ title: '', headerTransparent: true }} />
-      <Stack.Screen name="discover" options={{ title: '', headerTransparent: true }} />
-      <Stack.Screen name="reviews" options={{ title: 'Reviews' }} />
+      <Stack.Screen name="community" options={{ title: '' }} />
+      <Stack.Screen name="discover" options={{ title: '' }} />
       <Stack.Screen name="feelit" options={{ title: 'Feel It' }} />
-      <Stack.Screen name="methods" options={{ title: '', headerTransparent: true }} />
-      <Stack.Screen name="meditate" options={{ title: '', headerTransparent: true }} />
+      <Stack.Screen name="meditate" options={{ title: '' }} />
       <Stack.Screen name="aura-card" options={{ title: 'Aura Card' }} />
-      <Stack.Screen name="practice-tools" options={{ title: 'Practice Tools' }} />
+      <Stack.Screen name="practice" options={{ title: '' }} />
+      <Stack.Screen name="desire-hub" options={{ title: 'My Desire Hub' }} />
+      <Stack.Screen name="desire/[id]" options={{ title: '' }} />
+      <Stack.Screen name="daily" options={{ title: 'Daily' }} />
+      <Stack.Screen name="tracker" options={{ title: 'Tracker' }} />
+      <Stack.Screen name="reps" options={{ title: 'Reps' }} />
+      <Stack.Screen name="techniques" options={{ title: 'Techniques' }} />
     </Stack>
   );
 }
 
-  
+const styles = StyleSheet.create({
+  backBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    marginLeft: 14,
+    marginTop: 2,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
+  },
+});

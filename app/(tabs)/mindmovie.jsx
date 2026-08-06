@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, Image, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Modal, Switch } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Audio } from 'expo-av';
 import {
   getMindMovies, createMindMovie, updateMindMovie, deleteMindMovie,
   uploadImage, finalizeMindMovie, generateMindMovieAudio, createCheckout,
+  startSession, completeSession,
 } from '../../services/api';
+import { safeImageUri } from '../../services/imageUri';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import Dropdown from '../../components/Dropdown';
@@ -36,7 +40,30 @@ const DURATION_OPTIONS = [
   { value: 12, label: '12 sec' },
 ];
 
+// A scene's img is legitimately null whenever the picture never made it to
+// storage — the backend strips any non-http value before saving (hub.js's
+// _cloudinaryOnly does the same on the website). Rendering <Image uri={null}>
+// just draws nothing, which is why saved movies looked empty; show a real
+// placeholder instead, and fall back the same way if the URL 404s later.
+function SceneImage({ uri, style, iconSize = 22 }) {
+  const [failed, setFailed] = useState(false);
+  // Same fix as Vision Board: R2 keys with spaces/special characters in the
+  // filename hit iOS's "Protocol error" in RN's Image, which — unlike a
+  // browser <img> — doesn't auto-encode the URL before requesting it.
+  const safeUri = safeImageUri(uri);
+  if (!safeUri || failed) {
+    return (
+      <View style={[style, styles.sceneFallback]}>
+        <Text style={{ fontSize: iconSize, opacity: 0.5 }}>🎬</Text>
+      </View>
+    );
+  }
+  return <Image source={{ uri: safeUri }} style={style} onError={() => setFailed(true)} />;
+}
+
 export default function MindMovie() {
+  const insets = useSafeAreaInsets();
+  const { playId } = useLocalSearchParams();
   const { limits, loaded, hasFeature, refresh } = usePlanStore();
   const [checkingPlan, setCheckingPlan] = useState(true);
   const [showUpgrade, setShowUpgrade] = useState(false);
@@ -74,14 +101,34 @@ export default function MindMovie() {
   const [playingMovie, setPlayingMovie] = useState(null);
   const [sceneIndex, setSceneIndex] = useState(0);
   const [narrationLoading, setNarrationLoading] = useState(false);
+  const [paused, setPaused] = useState(false);
   const soundRef = useRef(null);
   const fallbackTimerRef = useRef(null);
+  // For the timed (no-audio) fallback path, pause/resume needs to remember
+  // how much of the slide's duration is left instead of just clearing it.
+  const fallbackRemainingRef = useRef(0);
+  const fallbackStartedAtRef = useRef(0);
+  const fallbackGoNextRef = useRef(null);
+  // Open /sessions row for the movie currently playing, so watching a Mind
+  // Movie reaches the Tracker's totals/streak like affirmations do.
+  const trackedSessionId = useRef(null);
 
   const load = async () => {
     try { setMovies(await getMindMovies()); } catch (e) { setError(e.message || 'Could not load movies'); }
   };
 
   useEffect(() => { load().finally(() => setLoading(false)); }, []);
+
+  // Tapping a movie tile on Home's Mind Movies widget links here with
+  // ?playId=<id> so playback starts immediately instead of landing on
+  // the library/create tab.
+  const autoPlayedRef = useRef(false);
+  useEffect(() => {
+    if (playId && movies.length && !autoPlayedRef.current) {
+      const target = movies.find((m) => String(m.id) === String(playId));
+      if (target && !target.locked) { autoPlayedRef.current = true; startPlayback(target); }
+    }
+  }, [playId, movies]);
 
   const resetForm = () => {
     setTitle(''); setMood('spiritual'); setSlideDur(5); setLoop(false); setScenes([]); setEditingId(null); setVoice('luna');
@@ -206,14 +253,24 @@ export default function MindMovie() {
   const playScene = async (movie, index) => {
     await cleanupPlayback();
     setSceneIndex(index);
+    setPaused(false);
     const scene = movie.scenes[index];
 
     const goNext = () => {
       const next = index + 1;
       if (next < movie.scenes.length) playScene(movie, next);
       else if (movie.loop) playScene(movie, 0);
-      else setPlayingMovie(null);
+      else {
+        // Watched to the end — close the Tracker session as completed.
+        const id = trackedSessionId.current;
+        if (id) {
+          trackedSessionId.current = null;
+          completeSession(id, 1).catch(() => {});
+        }
+        setPlayingMovie(null);
+      }
     };
+    fallbackGoNextRef.current = goNext;
 
     // Prefer the pre-generated cached narration URL for this movie's
     // locked voice over live TTS.
@@ -227,21 +284,60 @@ export default function MindMovie() {
         soundRef.current = sound;
         sound.setOnPlaybackStatusUpdate((status) => { if (status.didJustFinish) goNext(); });
       } catch (e) {
-        fallbackTimerRef.current = setTimeout(goNext, (movie.slideDur || 5) * 1000);
+        const ms = (movie.slideDur || 5) * 1000;
+        fallbackRemainingRef.current = ms;
+        fallbackStartedAtRef.current = Date.now();
+        fallbackTimerRef.current = setTimeout(goNext, ms);
       } finally { setNarrationLoading(false); }
     } else {
-      fallbackTimerRef.current = setTimeout(goNext, (movie.slideDur || 5) * 1000);
+      const ms = (movie.slideDur || 5) * 1000;
+      fallbackRemainingRef.current = ms;
+      fallbackStartedAtRef.current = Date.now();
+      fallbackTimerRef.current = setTimeout(goNext, ms);
     }
   };
 
-  const startPlayback = (movie) => {
+  const startPlayback = async (movie) => {
     setPlayingMovie(movie);
     playScene(movie, 0);
+    // Best-effort tracking — never let it interrupt playback.
+    try {
+      const sess = await startSession({ affirmationId: null, repeatTarget: 1 });
+      trackedSessionId.current = sess?.id ?? null;
+    } catch (_) { trackedSessionId.current = null; }
   };
 
+  // Closing early leaves the session open-but-incomplete, matching the
+  // affirmation/story players.
   const closePlayback = async () => {
     await cleanupPlayback();
+    trackedSessionId.current = null;
     setPlayingMovie(null);
+  };
+
+  const togglePause = async () => {
+    if (soundRef.current) {
+      if (paused) { await soundRef.current.playAsync(); } else { await soundRef.current.pauseAsync(); }
+      setPaused(!paused);
+      return;
+    }
+    // Timed fallback path — pause clears the timer and remembers what's
+    // left; resume restarts a timer for the remaining duration.
+    if (paused) {
+      fallbackStartedAtRef.current = Date.now();
+      fallbackTimerRef.current = setTimeout(() => fallbackGoNextRef.current?.(), fallbackRemainingRef.current);
+      setPaused(false);
+    } else {
+      clearTimeout(fallbackTimerRef.current);
+      const elapsed = Date.now() - fallbackStartedAtRef.current;
+      fallbackRemainingRef.current = Math.max(0, fallbackRemainingRef.current - elapsed);
+      setPaused(true);
+    }
+  };
+
+  const goToScene = (movie, index) => {
+    if (index < 0 || index >= movie.scenes.length) return;
+    playScene(movie, index);
   };
 
   if (checkingPlan || loading) {
@@ -273,7 +369,7 @@ export default function MindMovie() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 50, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 14, paddingBottom: 130 }}>
         <ScreenHeader lead="Mind" accent="Movie" subtitle="Write your dream life. Watch it. Feel it. Become it. 🎬" />
 
         <TabPill
@@ -324,7 +420,7 @@ export default function MindMovie() {
                   <View style={styles.sceneNum}><Text style={styles.sceneNumText}>{i + 1}</Text></View>
                   <TouchableOpacity onPress={() => removeScene(i)}><Text style={styles.removeText}>✕</Text></TouchableOpacity>
                 </View>
-                <Image source={{ uri: scene.img }} style={styles.sceneImage} />
+                <SceneImage uri={scene.img} style={styles.sceneImage} iconSize={24} />
                 <View style={[styles.inputBox, { marginTop: 10 }]}>
                   <TextInput
                     style={styles.input}
@@ -362,7 +458,7 @@ export default function MindMovie() {
                 <Text style={styles.muted}>{m.scenes?.length || 0} slides · {m.slideDur || 5}s · {m.loop ? 'Loop' : 'Once'} · {(m.voice || 'luna')}</Text>
                 <ScrollView horizontal style={{ marginTop: 10, marginBottom: 12 }}>
                   {(m.scenes || []).map((s, i) => (
-                    <Image key={i} source={{ uri: s.img }} style={styles.thumb} />
+                    <SceneImage key={i} uri={s.img} style={styles.thumb} iconSize={16} />
                   ))}
                 </ScrollView>
                 <View style={styles.row}>
@@ -381,13 +477,46 @@ export default function MindMovie() {
       <Modal visible={!!playingMovie} animationType="fade" onRequestClose={closePlayback}>
         {playingMovie && (
           <View style={styles.playerContainer}>
-            <Image source={{ uri: playingMovie.scenes[sceneIndex]?.img }} style={styles.playerImage} />
+            <View style={[styles.playerTopBar, { paddingTop: insets.top + 10 }]}>
+              <Text style={styles.playerTitle} numberOfLines={1}>{playingMovie.title}</Text>
+              <View style={styles.playerTopActions}>
+                <TouchableOpacity style={styles.playerIconButton} onPress={togglePause}>
+                  <Text style={styles.playerIconButtonText}>{paused ? '▶' : '❚❚'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.playerIconButton} onPress={closePlayback}>
+                  <Text style={styles.playerIconButtonText}>✕ Exit</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <SceneImage uri={playingMovie.scenes[sceneIndex]?.img} style={styles.playerImage} iconSize={54} />
+
             <View style={styles.playerCaptionWrap}>
               {narrationLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.playerCaption}>{playingMovie.scenes[sceneIndex]?.text}</Text>}
+              <View style={styles.playerProgressTrack}>
+                <View style={[styles.playerProgressFill, { width: `${((sceneIndex + 1) / playingMovie.scenes.length) * 100}%` }]} />
+              </View>
             </View>
-            <TouchableOpacity style={styles.closePlayer} onPress={closePlayback}>
-              <Text style={styles.closePlayerText}>✕</Text>
-            </TouchableOpacity>
+
+            <View style={[styles.playerBottomBar, { paddingBottom: insets.bottom + 20 }]}>
+              <Text style={styles.playerCounter}>{sceneIndex + 1} / {playingMovie.scenes.length}</Text>
+              <View style={styles.playerNavGroup}>
+                <TouchableOpacity
+                  style={[styles.playerNavButton, sceneIndex === 0 && styles.playerNavButtonDisabled]}
+                  onPress={() => goToScene(playingMovie, sceneIndex - 1)}
+                  disabled={sceneIndex === 0}
+                >
+                  <Text style={styles.playerNavButtonText}>‹</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.playerNavButton, sceneIndex === playingMovie.scenes.length - 1 && !playingMovie.loop && styles.playerNavButtonDisabled]}
+                  onPress={() => goToScene(playingMovie, sceneIndex + 1)}
+                  disabled={sceneIndex === playingMovie.scenes.length - 1 && !playingMovie.loop}
+                >
+                  <Text style={styles.playerNavButtonText}>›</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
         )}
       </Modal>
@@ -410,7 +539,7 @@ const styles = StyleSheet.create({
   upsellPerk: { fontFamily: fonts.body, fontSize: 13, color: colors.ink2, marginBottom: 8, textAlign: 'center' },
   lockBadge: { fontFamily: fonts.bodyMedium, fontSize: 10, color: colors.goldDeep, backgroundColor: 'rgba(224,192,128,0.25)', borderRadius: radii.pill, paddingVertical: 2, paddingHorizontal: 8, fontWeight: '600' },
   label: { fontFamily: fonts.bodyMedium, fontSize: 10.5, color: colors.purpleDark, fontWeight: '700', letterSpacing: 0.6, marginBottom: 8, textTransform: 'uppercase' },
-  inputBox: { borderWidth: 1.5, borderColor: 'rgba(154,95,168,0.3)', borderRadius: radii.sm, padding: 12, backgroundColor: 'rgba(255,255,255,0.5)' },
+  inputBox: { borderWidth: 1, borderColor: 'rgba(154,95,168,0.22)', borderRadius: radii.sm, padding: 12, backgroundColor: 'rgba(255,255,255,0.5)' },
   input: { fontFamily: fonts.body, fontSize: 14.5, color: colors.ink },
   loopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 },
   sectionLabel: { fontFamily: fonts.displayMedium, fontSize: 17, fontWeight: '600', color: colors.ink, marginBottom: 4 },
@@ -420,6 +549,7 @@ const styles = StyleSheet.create({
   sceneNumText: { color: '#fff', fontSize: 11, fontWeight: '700' },
   removeText: { color: colors.danger, fontSize: 16 },
   sceneImage: { width: '100%', height: 140, borderRadius: radii.sm, backgroundColor: 'rgba(255,255,255,0.35)' },
+  sceneFallback: { alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(201,168,201,0.18)' },
   errorText: { fontFamily: fonts.body, color: colors.danger, fontSize: 13, marginVertical: 10, textAlign: 'center' },
   addSceneButton: { borderWidth: 1.5, borderColor: colors.purpleMid, borderRadius: radii.pill, paddingVertical: 13, alignItems: 'center', marginVertical: 12 },
   addSceneText: { fontFamily: fonts.bodyMedium, color: colors.purpleDark, fontWeight: '600', fontSize: 14 },
@@ -431,8 +561,19 @@ const styles = StyleSheet.create({
   thumb: { width: 56, height: 56, borderRadius: 10, marginRight: 8, backgroundColor: 'rgba(255,255,255,0.35)' },
   playerContainer: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
   playerImage: { width: '100%', height: '70%', resizeMode: 'contain' },
-  playerCaptionWrap: { position: 'absolute', bottom: 80, paddingHorizontal: 30, minHeight: 40, justifyContent: 'center' },
+  playerTopBar: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 18, zIndex: 2 },
+  playerTitle: { fontFamily: fonts.displayMedium, color: '#fff', fontSize: 15, fontWeight: '600', flex: 1, marginRight: 10 },
+  playerTopActions: { flexDirection: 'row', gap: 8 },
+  playerIconButton: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: radii.pill, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
+  playerIconButtonText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  playerCaptionWrap: { position: 'absolute', bottom: 80, left: 0, right: 0, paddingHorizontal: 30, minHeight: 40, justifyContent: 'center' },
   playerCaption: { fontFamily: fonts.displayItalic, color: '#fff', fontSize: 19, textAlign: 'center', fontWeight: '500', fontStyle: 'italic' },
-  closePlayer: { position: 'absolute', top: 50, right: 24, width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
-  closePlayerText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  playerProgressTrack: { height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.25)', marginTop: 14, overflow: 'hidden' },
+  playerProgressFill: { height: '100%', backgroundColor: '#fff', borderRadius: 2 },
+  playerBottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, zIndex: 2 },
+  playerCounter: { color: 'rgba(255,255,255,0.85)', fontFamily: fonts.bodyMedium, fontSize: 13, fontWeight: '600' },
+  playerNavGroup: { flexDirection: 'row', gap: 12 },
+  playerNavButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
+  playerNavButtonDisabled: { opacity: 0.35 },
+  playerNavButtonText: { color: '#fff', fontSize: 20, fontWeight: '700' },
 });

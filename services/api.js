@@ -156,6 +156,11 @@ export async function generateAffirmation(desire, opts = {}) {
     repeat_count: opts.repeat_count || 10,
   };
   if (opts.style) body.style = opts.style;
+  // "system" is the device's own TTS — there's no server-side system voice,
+  // so the backend renders with Luna and the client speaks locally instead.
+  // Matches life.js: voice_id: getSelectedVoice()==='system'?'luna':...
+  if (opts.voice_id) body.voice_id = opts.voice_id === 'system' ? 'luna' : opts.voice_id;
+  if (opts.label) body.label = opts.label;
   return req('POST', '/affirmations/generate', body);
 }
 
@@ -205,13 +210,17 @@ export async function saveMyAffLibrary(items) {
 
 // ── STORIES ───────────────────────────────────────────────────────────
 export async function generateStory(desire, opts = {}) {
-  return req('POST', '/stories/generate', {
+  const body = {
     desire,
     length: opts.length || 'medium',
     theme: opts.theme || 'general',
     story_mode: opts.story_mode || '',
     label: opts.label || '',
-  });
+  };
+  // Same system→luna mapping as affirmations: there's no server-side
+  // "system" voice, that's the device's own TTS.
+  if (opts.voice_id) body.voice_id = opts.voice_id === 'system' ? 'luna' : opts.voice_id;
+  return req('POST', '/stories/generate', body);
 }
 
 export async function saveStory({ title, content, desire = '', client_id = '', source = 'user' }) {
@@ -387,6 +396,17 @@ export function resolveMusicUrl(trackId) {
   return `https://manivers.com/sounds/${trackId}.mp3`;
 }
 
+// Server-side DSB-SC "Silent" subliminal audio -- returns a {uri, headers}
+// source for Audio.Sound.createAsync (the endpoint needs the auth header,
+// which createAsync supports passing straight through). Regenerated fresh
+// on every call server-side, never cached.
+export function getSilentAudioSource(affirmationId) {
+  return {
+    uri: `${API_BASE}/subliminal/silent-audio?affirmation_id=${affirmationId}`,
+    headers: _token ? { Authorization: 'Bearer ' + _token } : {},
+  };
+}
+
 // ── VISION BOARD ──────────────────────────────────────────────────────
 export async function getVisionBoard() {
   return req('GET', '/vision-board/');
@@ -549,6 +569,16 @@ export async function createRoadmap({ desire, days, weeks, practices = [] }) {
   return req('POST', '/roadmap/', { desire, days, weeks, practices });
 }
 
+// Updates a roadmap's desire/days/practices in place -- keeps its id and
+// day logs intact, unlike the old delete+recreate+migrate-logs dance.
+export async function updateRoadmap(rmId, { desire, days, practices } = {}) {
+  const body = {};
+  if (desire !== undefined) body.desire = desire;
+  if (days !== undefined) body.days = days;
+  if (practices !== undefined) body.practices = practices;
+  return req('PATCH', `/roadmap/${rmId}`, body);
+}
+
 export async function checkRoadmapAction(rmId, week, actionIdx, checked) {
   return req('PATCH', `/roadmap/${rmId}/check`, { week, action_idx: actionIdx, checked });
 }
@@ -559,6 +589,19 @@ export async function noteRoadmap(rmId, week, note) {
 
 export async function deleteRoadmap(rmId) {
   return req('DELETE', `/roadmap/${rmId}`);
+}
+
+// ── ROADMAP DAY LOGS ─────────────────────────────────────────────────
+export async function getRoadmapDayLogs() {
+  return req('GET', '/roadmap/log/');
+}
+
+export async function createRoadmapDayLog({ day, desire, practices = [], action = '', date }) {
+  return req('POST', '/roadmap/log/', { day, desire, practices, action, date });
+}
+
+export async function deleteRoadmapDayLog(logId) {
+  return req('DELETE', `/roadmap/log/${logId}`);
 }
 
 // ── SCRIPTING ─────────────────────────────────────────────────────────
@@ -576,6 +619,18 @@ export async function updateScript(entryId, content) {
 
 export async function deleteScript(entryId) {
   return req('DELETE', `/scripting/${entryId}`);
+}
+
+// "Daily Script" is a separate resource from the Dream Life Script above —
+// one upsert-by-date entry per day, matching the website's script-my-day
+// endpoints (no delete endpoint exists server-side; the site only clears
+// its local cache, so we mirror that instead of inventing one).
+export async function getScriptMyDay() {
+  return req('GET', '/practice/script-my-day');
+}
+
+export async function saveScriptMyDay(content, scriptDate) {
+  return req('POST', '/practice/script-my-day', { content, script_date: scriptDate });
 }
 
 // ── REPS ──────────────────────────────────────────────────────────────
@@ -690,6 +745,39 @@ export async function getProfile() {
 
 export async function updateProfile(body) {
   return req('PUT', '/profile', body);
+}
+
+// ── SESSIONS / TRACKER ───────────────────────────────────────────────
+export async function getSessionStats() {
+  return req('GET', '/sessions/stats');
+}
+
+// A "session" is one affirmation listening run. The Tracker's totals,
+// streak and days-practiced all derive from these rows, so the player must
+// start one when playback begins and complete it when playback finishes --
+// exactly what the website does in life.js.
+export async function startSession({ affirmationId = null, repeatTarget = 1, mode = 'listen' }) {
+  return req('POST', '/sessions/start', {
+    affirmation_id: affirmationId,
+    repeat_target: Math.max(1, Math.min(108, repeatTarget || 1)),
+    mode,
+  });
+}
+
+export async function completeSession(sessionId, repeatDone) {
+  return req('PUT', `/sessions/${sessionId}/complete`, { repeat_done: repeatDone });
+}
+
+// ── VOICE LOCK (Basic / Founding switchable voice) ───────────────────
+// Free is locked to Luna and Pro has every voice, so /voice/select only
+// applies to the single-voice plans -- getVoiceStatus() says which case
+// the current user is in, plus the 30-day switch cooldown.
+export async function getVoiceStatus() {
+  return req('GET', '/voice/status');
+}
+
+export async function selectVoice(voiceId) {
+  return req('PATCH', '/voice/select', { voice_id: voiceId });
 }
 
 // ── SUBSCRIPTIONS ─────────────────────────────────────────────────────

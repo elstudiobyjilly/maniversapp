@@ -1,208 +1,152 @@
 import { useRef, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Dimensions } from 'react-native';
-import Svg, { Defs, RadialGradient, LinearGradient, Stop, Circle, Rect } from 'react-native-svg';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Dimensions } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
 import GlassCard from '../../components/GlassCard';
 import GradientBackground from '../../components/GradientBackground';
 import ScreenHeader from '../../components/ScreenHeader';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Button from '../../components/Button';
+import ExpandableTextArea from '../../components/ExpandableTextArea';
+import ColorPickerModal from '../../components/ColorPickerModal';
+import { AuraCardFace } from '../../components/AuraCardCanvas';
 import { colors, fonts, radii } from '../../constants/theme';
+import {
+  hashStr, QUICK_ADD, AURA_AFFIRMATIONS, AURA_STYLES, STYLE_KEYS,
+  PATTERNS, PATTERN_LABELS, COLOUR_FAMILIES, FAMILY_SHADES, detectStyle,
+} from '../../constants/auraCard';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const CARD_SIZE = Math.min(SCREEN_WIDTH - 40, 400);
 
-// ─── Deterministic hash — same input always produces the same number ──────
-function hashStr(s) {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h << 5) - h + s.charCodeAt(i);
-  return Math.abs(h);
-}
-
-const AURA_AFFIRMATIONS = [
-  'I am magnetic to everything I desire.',
-  'My aura attracts only the highest good.',
-  'I radiate love, abundance and peace.',
-  'I am exactly where I am meant to be.',
-  'Everything I touch turns to gold.',
-  'I am a powerful creator of my reality.',
-  'My energy speaks before I do.',
-  'The universe conspires in my favour.',
-  'I attract miracles effortlessly.',
-  'My vibration is my superpower.',
-  'I am worthy of all that I desire.',
-  'Love and abundance flow to me freely.',
-  'I am in perfect alignment with my dreams.',
-  'My presence is a gift to the world.',
-  'I shine with undeniable light.',
-];
-
-// Shared center glow, layered on top of every style identically
-const CENTER_GLOW = { cx: 0.5, cy: 0.5, r: 0.18, stops: [[0, '#ffffff', 0.45], [100, '#ffffff', 0]] };
-
-// Hand-placed starfield dots for the midnight style only
-const STAR_DOTS = [
-  { x: 0.12, y: 0.12, r: 1.4, o: 0.5 }, { x: 0.85, y: 0.1, r: 1.1, o: 0.4 },
-  { x: 0.22, y: 0.28, r: 0.9, o: 0.35 }, { x: 0.92, y: 0.3, r: 1.3, o: 0.5 },
-  { x: 0.07, y: 0.55, r: 1, o: 0.4 }, { x: 0.9, y: 0.62, r: 0.9, o: 0.3 },
-  { x: 0.15, y: 0.85, r: 1.2, o: 0.45 }, { x: 0.88, y: 0.88, r: 1, o: 0.35 },
-  { x: 0.5, y: 0.08, r: 0.8, o: 0.3 }, { x: 0.35, y: 0.93, r: 1, o: 0.4 },
-];
-
-// ─── The 5 v1 styles — colours ported directly from the website source ────
-const AURA_STYLES = {
-  pastel: {
-    label: '🌸 Aura Blush',
-    dark: false,
-    bg: { type: 'solid', colors: ['#fef6f0'] },
-    mainOrb: { cx: 0.5, cy: 0.47, r: 0.55, stops: [[0, '#f28c95', 0.88], [40, '#f2bfb4', 0.62], [70, '#f1cca6', 0.32], [100, '#f1cca6', 0]] },
-    orb1: { cx: 0.15, cy: 0.18, r: 0.4, stops: [[0, '#c8b4f0', 0.42], [100, '#c8b4f0', 0]] },
-    orb2: { cx: 0.85, cy: 0.82, r: 0.4, stops: [[0, '#ffdcb4', 0.48], [100, '#ffdcb4', 0]] },
-    text: { name: 'rgba(60,38,50,.9)', subtitle: 'rgba(190,110,140,.85)', affirmation: 'rgba(78,55,65,.65)' },
-    lineColor: 'rgba(168,123,168,0.2)',
-  },
-  golden: {
-    label: '🌅 Blushing Sands',
-    dark: false,
-    bg: { type: 'linear', colors: ['#fef5e8', '#fdf0e5', '#fdeae0'] },
-    mainOrb: { cx: 0.5, cy: 0.47, r: 0.55, stops: [[0, '#f1cca6', 0.95], [40, '#f2bfb4', 0.72], [70, '#f28c95', 0.38], [100, '#f28c95', 0]] },
-    orb1: { cx: 0.15, cy: 0.18, r: 0.4, stops: [[0, '#f2e6b8', 0.55], [100, '#f2e6b8', 0]] },
-    orb2: { cx: 0.85, cy: 0.82, r: 0.4, stops: [[0, '#f28c95', 0.45], [100, '#f28c95', 0]] },
-    text: { name: 'rgba(58,35,30,.9)', subtitle: 'rgba(192,100,100,.82)', affirmation: 'rgba(78,52,48,.65)' },
-    lineColor: 'rgba(168,123,168,0.2)',
-  },
-  midnight: {
-    label: '🌙 Midnight Aura',
-    dark: true,
-    bg: { type: 'linear', colors: ['#0d0818', '#130c22', '#0e0618'] },
-    mainOrb: { cx: 0.5, cy: 0.47, r: 0.55, stops: [[0, '#b464ff', 0.65], [55, '#783cc8', 0.35], [100, '#783cc8', 0]] },
-    orb1: { cx: 0.15, cy: 0.18, r: 0.4, stops: [[0, '#5078ff', 0.4], [100, '#5078ff', 0]] },
-    orb2: { cx: 0.85, cy: 0.82, r: 0.4, stops: [[0, '#dc50b4', 0.35], [100, '#dc50b4', 0]] },
-    text: { name: 'rgba(250,235,255,.95)', subtitle: 'rgba(200,155,255,.88)', affirmation: 'rgba(185,160,240,.72)' },
-    lineColor: 'rgba(255,255,255,0.14)',
-    stars: true,
-  },
-  sage: {
-    label: '🌿 Sage Aura',
-    dark: false,
-    bg: { type: 'linear', colors: ['#f2f8f4', '#eef5f0'] },
-    mainOrb: { cx: 0.5, cy: 0.47, r: 0.55, stops: [[0, '#8cc8a5', 0.82], [40, '#a0d7b4', 0.5], [70, '#b4e6c8', 0.22], [100, '#b4e6c8', 0]] },
-    orb1: { cx: 0.15, cy: 0.18, r: 0.4, stops: [[0, '#c8f0c8', 0.4], [100, '#c8f0c8', 0]] },
-    orb2: { cx: 0.85, cy: 0.82, r: 0.4, stops: [[0, '#a0c8aa', 0.45], [100, '#a0c8aa', 0]] },
-    text: { name: 'rgba(30,55,40,.88)', subtitle: 'rgba(70,130,90,.82)', affirmation: 'rgba(45,70,50,.65)' },
-    lineColor: 'rgba(168,123,168,0.2)',
-  },
-  // Approximated — not pulled from an exact website value, sits between
-  // pastel and golden in warmth as a reasonable stand-in for v1.
-  rose: {
-    label: '🌹 Rose Aura',
-    dark: false,
-    bg: { type: 'linear', colors: ['#fdf0f2', '#fce8ec'] },
-    mainOrb: { cx: 0.5, cy: 0.47, r: 0.55, stops: [[0, '#e86e8c', 0.85], [40, '#f0a0af', 0.55], [70, '#f5c3c8', 0.3], [100, '#f5c3c8', 0]] },
-    orb1: { cx: 0.15, cy: 0.18, r: 0.4, stops: [[0, '#dca0d2', 0.4], [100, '#dca0d2', 0]] },
-    orb2: { cx: 0.85, cy: 0.82, r: 0.4, stops: [[0, '#f5aaa0', 0.45], [100, '#f5aaa0', 0]] },
-    text: { name: 'rgba(70,30,45,.9)', subtitle: 'rgba(200,80,120,.85)', affirmation: 'rgba(85,45,58,.65)' },
-    lineColor: 'rgba(168,123,168,0.2)',
-  },
-};
-
-const STYLE_KEYS = Object.keys(AURA_STYLES);
-
-// Keyword auto-match, ported from the website. NOTE: the website's table also
-// maps peace/calm/free/freedom/crystal/clear -> a 6th "crystal" style that
-// isn't part of this v1's 5 built styles, so that group is omitted here and
-// simply falls through to the pastel default like any other unmatched text.
-function detectStyle(text) {
-  const t = text.toLowerCase();
-  if (/love|loved|heart|romance/.test(t)) return 'rose';
-  if (/wealth|money|abundant|rich|gold/.test(t)) return 'golden';
-  if (/heal|health|body|nature|sage/.test(t)) return 'sage';
-  if (/dream|magic|moon|star|mystic|night|cosmos/.test(t)) return 'midnight';
-  return 'pastel';
-}
-
-// ─── SVG gradient-orb composition, shared across all 5 styles ─────────────
-function AuraCardSvg({ styleKey, size }) {
-  const s = AURA_STYLES[styleKey];
-  const orbs = [s.mainOrb, s.orb1, s.orb2, CENTER_GLOW];
-
-  return (
-    <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      <Defs>
-        {s.bg.type === 'linear' && (
-          <LinearGradient id={`bg-${styleKey}`} x1="10%" y1="0%" x2="90%" y2="100%">
-            {s.bg.colors.map((c, i) => (
-              <Stop key={i} offset={`${(i / (s.bg.colors.length - 1)) * 100}%`} stopColor={c} />
-            ))}
-          </LinearGradient>
-        )}
-        {orbs.map((orb, i) => (
-          <RadialGradient key={i} id={`orb-${styleKey}-${i}`}>
-            {orb.stops.map((stop, j) => (
-              <Stop key={j} offset={`${stop[0]}%`} stopColor={stop[1]} stopOpacity={stop[2]} />
-            ))}
-          </RadialGradient>
-        ))}
-      </Defs>
-
-      <Rect x="0" y="0" width={size} height={size} fill={s.bg.type === 'solid' ? s.bg.colors[0] : `url(#bg-${styleKey})`} />
-
-      {orbs.map((orb, i) => (
-        <Circle key={i} cx={orb.cx * size} cy={orb.cy * size} r={orb.r * size} fill={`url(#orb-${styleKey}-${i})`} />
-      ))}
-
-      {s.stars && STAR_DOTS.map((d, i) => (
-        <Circle key={`star-${i}`} cx={d.x * size} cy={d.y * size} r={d.r} fill="#ffffff" opacity={d.o} />
-      ))}
-    </Svg>
-  );
-}
 
 export default function AuraCard() {
-  const [nameInput, setNameInput] = useState('');
-  const [manualStyle, setManualStyle] = useState(null);
-  const [card, setCard] = useState(null);
+  const insets = useSafeAreaInsets();
+  const [wordsText, setWordsText] = useState('');
+  const [manualStyle, setManualStyle] = useState(null); // null = Auto
+  // Style (Auto/named presets) and manually customising COLOURS are
+  // mutually exclusive design modes -- picking one always wipes the
+  // other, exactly like the toggle between a ready-made outfit and
+  // building your own. `manualColors` tracks which mode is currently
+  // active; while true, no Style chip (not even Auto) shows selected,
+  // and the card renders purely from the 4 COLOURS toggles/shades.
+  const [manualColors, setManualColors] = useState(false);
+  const [pattern, setPattern] = useState('radial');
+  const [colours, setColours] = useState({ purple: true, pink: true, blue: true, gold: true });
+  const [shadeOverrides, setShadeOverrides] = useState({});
+  const [pickerFor, setPickerFor] = useState(null);
+  const [savedColors, setSavedColors] = useState([]);
+  // The preview is always live — it reacts to Style/Colours/Pattern as you
+  // pick them, it doesn't wait for a "Generate" tap. Generate Card just
+  // (re)rolls the footer quote; Clear Card hides the preview until you
+  // touch a control again.
+  const [quote, setQuote] = useState(AURA_AFFIRMATIONS[0]);
+  const [cardHidden, setCardHidden] = useState(false);
+  const [customHex, setCustomHex] = useState('');
   const [error, setError] = useState('');
   const [downloading, setDownloading] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [info, setInfo] = useState('');
 
   const cardRef = useRef(null);
-  const activeStyleKey = card ? card.styleKey : manualStyle;
+  const activeStyleKey = manualStyle || detectStyle(wordsText || 'aura');
 
-  const handleNameChange = (text) => {
-    setNameInput(text);
-    setManualStyle(null); // a fresh name gets a fresh auto-suggestion
+  // Style picker: fixed 2 rows, N scrollable columns (pairs of chips) instead
+  // of wrapping every chip across many rows.
+  const styleOptions = [
+    { key: null, label: '✨ Auto' },
+    ...STYLE_KEYS.map((key) => ({ key, label: AURA_STYLES[key].label })),
+  ];
+  const styleColumns = [];
+  for (let i = 0; i < styleOptions.length; i += 2) styleColumns.push(styleOptions.slice(i, i + 2));
+
+  const handleQuickAdd = (word) => {
+    setWordsText((prev) => {
+      const lines = prev.split('\n').filter(Boolean);
+      if (lines.some((l) => l.trim().toLowerCase() === word.toLowerCase())) return prev;
+      return [...lines, word].join('\n');
+    });
   };
 
   const handleGenerate = () => {
-    const trimmed = nameInput.trim();
-    if (!trimmed) { setError('Type a name or word first ✨'); return; }
-    setError(''); setInfo('');
-    const styleKey = manualStyle || detectStyle(trimmed);
-    const hash = hashStr(trimmed.toLowerCase());
-    const affirmation = AURA_AFFIRMATIONS[hash % AURA_AFFIRMATIONS.length];
-    setCard({ name: trimmed, styleKey, affirmation });
+    const lines = wordsText.split('\n').map((l) => l.trim()).filter(Boolean);
+    const joined = lines.join(' ') || 'aura';
+    const hash = hashStr(joined.toLowerCase() + Date.now());
+    // Prefer the user's own last line as the footer quote; fall back to the
+    // curated affirmation bank (re-rolled each tap) so there's always
+    // something fresh to show.
+    const nextQuote = lines.length ? lines[lines.length - 1] : AURA_AFFIRMATIONS[hash % AURA_AFFIRMATIONS.length];
+    setQuote(nextQuote);
+    setCardHidden(false);
+    setError('');
   };
 
+  // Each named Style is its own complete, designed look (own colours, own
+  // pattern) -- picking one should always render exactly as designed, not
+  // get filtered/recoloured by whatever the COLOURS row happened to be set
+  // to from a previous style. So selecting a style resets COLOURS back to
+  // its "everything on, no custom shades" default, letting the style's own
+  // baked-in palette apply untouched. (Manually toggling/recolouring a
+  // family afterwards still works as a deliberate override on top of it.)
   const handlePickStyle = (key) => {
-    setManualStyle(key);
-    if (card) setCard((c) => ({ ...c, styleKey: key }));
+    setManualStyle(key); // null when 'Auto' is tapped
+    setManualColors(false); // wipe manual colour design -- Style wins
+    setColours({ purple: true, pink: true, blue: true, gold: true });
+    setShadeOverrides({});
+    setCardHidden(false);
   };
 
   const handleShuffle = () => {
-    const current = activeStyleKey;
-    let next;
-    do { next = STYLE_KEYS[Math.floor(Math.random() * STYLE_KEYS.length)]; } while (next === current && STYLE_KEYS.length > 1);
-    setManualStyle(next);
-    if (card) setCard((c) => ({ ...c, styleKey: next }));
+    const nextStyle = STYLE_KEYS[Math.floor(Math.random() * STYLE_KEYS.length)];
+    const nextPattern = PATTERNS[Math.floor(Math.random() * PATTERNS.length)];
+    setManualStyle(nextStyle);
+    setManualColors(false);
+    setPattern(nextPattern);
+    setColours({ purple: true, pink: true, blue: true, gold: true });
+    setShadeOverrides({});
+    setCardHidden(false);
+  };
+
+  const handleClearCard = () => setCardHidden(true);
+
+  // Toggling a colour on/off, or picking a custom shade, is "designing it
+  // yourself" -- it switches into manual mode, which wipes the Style
+  // selection (no chip stays highlighted) exactly the way picking a Style
+  // wipes manual colours above.
+  const toggleColour = (key) => { setColours((prev) => ({ ...prev, [key]: !prev[key] })); setManualColors(true); setPickerFor(null); setCardHidden(false); };
+  const openShadePicker = (key) => setPickerFor((cur) => (cur === key ? null : key));
+  const pickShade = (key, hex) => {
+    setShadeOverrides((prev) => ({ ...prev, [key]: hex }));
+    setColours((prev) => ({ ...prev, [key]: true }));
+    setManualColors(true);
+    setPickerFor(null);
+    setCardHidden(false);
+    setCustomHex('');
+  };
+
+  const handleApplyCustomHex = () => {
+    if (!pickerFor) return;
+    const hex = customHex.trim().replace(/^#?/, '#');
+    if (!/^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/.test(hex)) {
+      setError('Enter a valid hex colour, e.g. #ff8cba');
+      return;
+    }
+    setError('');
+    pickShade(pickerFor, hex);
+  };
+  const handleResetColours = () => {
+    setColours({ purple: true, pink: true, blue: true, gold: true });
+    setShadeOverrides({});
+    setManualColors(false); // back to defaults -- Style is back in charge
+    setPickerFor(null);
+    setCardHidden(false);
   };
 
   const handleDownload = async () => {
     setError(''); setInfo(''); setDownloading(true);
     try {
-      const uri = await captureRef(cardRef, { format: 'png', quality: 1 });
+      const uri = await captureRef(cardRef, { format: 'png', quality: 1, width: 1080, height: 1080 });
       const { granted } = await MediaLibrary.requestPermissionsAsync();
       if (!granted) { setError('Photo library permission is needed to save your card.'); return; }
       await MediaLibrary.saveToLibraryAsync(uri);
@@ -216,7 +160,7 @@ export default function AuraCard() {
   const handleShare = async () => {
     setError(''); setInfo(''); setSharing(true);
     try {
-      const uri = await captureRef(cardRef, { format: 'png', quality: 1 });
+      const uri = await captureRef(cardRef, { format: 'png', quality: 1, width: 1080, height: 1080 });
       const available = await Sharing.isAvailableAsync();
       if (!available) { setInfo('Sharing isn\'t available on this device.'); return; }
       await Sharing.shareAsync(uri);
@@ -225,79 +169,119 @@ export default function AuraCard() {
     } finally { setSharing(false); }
   };
 
-  const activeStyle = activeStyleKey ? AURA_STYLES[activeStyleKey] : null;
-
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-
-        <ScreenHeader lead="Aura" accent="Card" subtitle={`Turn your name into a shareable energy reading ✨`} />
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 46 }]} keyboardShouldPersistTaps="handled">
+        <ScreenHeader lead="Your" accent="Aura Card" subtitle="A word, a list, an affirmation set — make it yours. Share it. Start the trend. ✨" />
 
         <GlassCard style={styles.mb20}>
-          <Text style={styles.intro}>Type your name, a word, or an intention</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="e.g. Luna, Abundance, Wildflower..."
-            placeholderTextColor="#9a8896"
-            value={nameInput}
-            onChangeText={handleNameChange}
+          <Text style={styles.label}>✨ YOUR WORDS, AFFIRMATIONS & GRATITUDE</Text>
+          <ExpandableTextArea
+            value={wordsText}
+            onChangeText={setWordsText}
+            placeholder={'Abundant\nI am magnetic and loved\nI am grateful for everything flowing to me\nMoney comes easily and effortlessly\nI attract all that I desire...'}
+            modalTitle="Your Words"
+            minHeight={140}
+            style={{ marginBottom: 12 }}
           />
 
+          <Text style={styles.quickAddLabel}>Quick add:</Text>
           <View style={styles.chipRow}>
-            {STYLE_KEYS.map((key) => (
-              <TouchableOpacity
-                key={key}
-                style={[styles.chip, activeStyleKey === key && styles.chipActive]}
-                onPress={() => handlePickStyle(key)}
-              >
-                <Text style={[styles.chipText, activeStyleKey === key && styles.chipTextActive]}>{AURA_STYLES[key].label}</Text>
+            {QUICK_ADD.map((w) => (
+              <TouchableOpacity key={w} style={styles.quickChip} onPress={() => handleQuickAdd(w)}>
+                <Text style={styles.quickChipText}>{w}</Text>
               </TouchableOpacity>
             ))}
-            <TouchableOpacity style={styles.chip} onPress={handleShuffle}>
-              <Text style={styles.chipText}>🎲 Shuffle</Text>
-            </TouchableOpacity>
           </View>
 
           {!!error && <Text style={styles.errorText}>{error}</Text>}
-          <Button title="Generate ✨" onPress={handleGenerate} fullWidth />
+          <Button title="✨ Generate Card" onPress={handleGenerate} fullWidth style={{ marginTop: 10 }} />
+
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.label}>STYLE</Text>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity style={styles.smallBtn} onPress={handleClearCard}>
+                <Text style={styles.smallBtnText}>Clear Card</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.smallBtn} onPress={handleShuffle}>
+                <Text style={styles.smallBtnText}>🔀 Shuffle</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          {/* Two fixed rows, scrolling horizontally in columns, instead of
+              wrapping the 18 style chips across many rows. */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.styleGridScroll}>
+            {styleColumns.map((col, ci) => (
+              <View key={ci} style={styles.styleGridCol}>
+                {col.map((opt) => (
+                  <TouchableOpacity
+                    key={opt.key ?? 'auto'}
+                    style={[styles.chip, !manualColors && manualStyle === opt.key && styles.chipActive]}
+                    onPress={() => handlePickStyle(opt.key)}
+                  >
+                    <Text style={[styles.chipText, !manualColors && manualStyle === opt.key && styles.chipTextActive]}>{opt.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ))}
+          </ScrollView>
+
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.label}>COLOURS</Text>
+            <TouchableOpacity style={styles.smallBtn} onPress={handleResetColours}>
+              <Text style={styles.smallBtnText}>↺ Reset</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.colourHint}>Tap the dot to open the colour picker · tap on/off to toggle it</Text>
+          <View style={styles.coloursRow}>
+            {COLOUR_FAMILIES.map((f) => (
+              <View key={f.key} style={styles.colourItem}>
+                <TouchableOpacity onPress={() => openShadePicker(f.key)}>
+                  <View style={[styles.colourDot, { backgroundColor: shadeOverrides[f.key] || f.swatch }, !colours[f.key] && styles.colourDotOff]} />
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.colourOnPill, !colours[f.key] && styles.colourOnPillOff]} onPress={() => toggleColour(f.key)}>
+                  <Text style={styles.colourOnText}>{colours[f.key] ? 'on' : 'off'}</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+
+          <ColorPickerModal
+            visible={!!pickerFor}
+            initialHex={pickerFor ? (shadeOverrides[pickerFor] || COLOUR_FAMILIES.find((f) => f.key === pickerFor)?.swatch) : '#e898b8'}
+            savedColors={savedColors}
+            onClose={() => setPickerFor(null)}
+            onSave={(hex, keepOpen) => {
+              if (!savedColors.includes(hex)) setSavedColors((prev) => [hex, ...prev].slice(0, 20));
+              if (!keepOpen) pickShade(pickerFor, hex);
+            }}
+          />
+
+          <Text style={[styles.label, { marginTop: 16 }]}>PATTERN</Text>
+          <View style={styles.chipRow}>
+            {PATTERNS.map((p) => (
+              <TouchableOpacity key={p} style={[styles.chip, pattern === p && styles.chipActive]} onPress={() => { setPattern(p); setCardHidden(false); }}>
+                <Text style={[styles.chipText, pattern === p && styles.chipTextActive]}>{PATTERN_LABELS[p]}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </GlassCard>
 
-        {card && activeStyle && (
+        {!cardHidden && (
           <>
             <View style={styles.cardOuter}>
-              <View ref={cardRef} collapsable={false} style={[styles.cardCapture, { width: CARD_SIZE, height: CARD_SIZE }]}>
-                <AuraCardSvg styleKey={activeStyleKey} size={CARD_SIZE} />
-                <View style={styles.overlay}>
-                  <View style={{ flex: 2.2 }} />
-                  <View style={[styles.decorLine, { backgroundColor: activeStyle.lineColor, width: CARD_SIZE * 0.16 }]} />
-                  <View style={{ flex: 1 }} />
-                  <Text
-                    adjustsFontSizeToFit
-                    numberOfLines={1}
-                    style={[styles.nameText, { color: activeStyle.text.name, fontSize: CARD_SIZE * 0.1 }]}
-                  >
-                    {card.name.toUpperCase()}
-                  </Text>
-                  <Text style={[styles.subtitleText, { color: activeStyle.text.subtitle, fontSize: CARD_SIZE * 0.032 }]}>
-                    ✨ Your Energy · Your Aura ✨
-                  </Text>
-                  <View style={{ flex: 1 }} />
-                  <Text
-                    numberOfLines={3}
-                    style={[styles.affirmationText, { color: activeStyle.text.affirmation, fontSize: CARD_SIZE * 0.038 }]}
-                  >
-                    {card.affirmation}
-                  </Text>
-                  <View style={{ flex: 1.4 }} />
-                  <View style={[styles.decorLine, { backgroundColor: activeStyle.lineColor, width: CARD_SIZE * 0.16 }]} />
-                  <View style={{ flex: 0.6 }} />
-                  <Text style={[styles.watermark, { fontSize: CARD_SIZE * 0.03 }]}>manivers.com</Text>
-                  <View style={{ flex: 0.5 }} />
-                </View>
-              </View>
+              <AuraCardFace
+                innerRef={cardRef}
+                styleKey={activeStyleKey}
+                size={CARD_SIZE}
+                pattern={pattern}
+                colours={colours}
+                shadeOverrides={shadeOverrides}
+                quote={quote}
+                manual={manualColors}
+              />
             </View>
 
-            <Text style={styles.styleLabel}>{activeStyle.label}</Text>
             {info ? <Text style={styles.infoText}>{info}</Text> : null}
 
             <View style={styles.actionRow}>
@@ -320,20 +304,29 @@ const styles = StyleSheet.create({
   scroll: { padding: 20, paddingTop: 24, paddingBottom: 60 },
 
   mb20: { marginBottom: 20 },
+  label: { fontFamily: fonts.bodyMedium, fontSize: 10.5, color: colors.purpleDark, fontWeight: '700', letterSpacing: 0.6, marginBottom: 8, textTransform: 'uppercase' },
+  sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, marginBottom: 4 },
+  smallBtn: { backgroundColor: 'rgba(255,255,255,0.6)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)', borderRadius: radii.pill, paddingVertical: 6, paddingHorizontal: 12 },
+  smallBtnText: { fontFamily: fonts.bodyMedium, fontSize: 11, color: colors.ink2, fontWeight: '600' },
 
-  intro: { color: '#6b5c66', fontSize: 13, fontWeight: '500', marginBottom: 14, textAlign: 'center' },
   input: {
     backgroundColor: 'rgba(255,255,255,0.5)',
     borderRadius: 14,
     padding: 14,
     fontSize: 14,
     color: '#2e2530',
-    marginBottom: 14,
+    marginBottom: 12,
+    minHeight: 110,
+    textAlignVertical: 'top',
     borderWidth: 1,
     borderColor: 'rgba(201,168,201,0.25)',
   },
 
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
+  quickAddLabel: { fontFamily: fonts.body, fontSize: 12, color: colors.mist, marginBottom: 8 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
+  quickChip: { backgroundColor: 'rgba(201,168,201,0.15)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)', borderRadius: radii.pill, paddingVertical: 7, paddingHorizontal: 13 },
+  quickChipText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.ink2, fontWeight: '500' },
+
   chip: {
     backgroundColor: 'rgba(255,255,255,0.5)',
     borderRadius: 50,
@@ -346,20 +339,34 @@ const styles = StyleSheet.create({
   chipText: { color: '#2e2530', fontSize: 12 },
   chipTextActive: { color: '#fff', fontWeight: '600' },
 
+  styleGridScroll: { gap: 8, paddingBottom: 4, paddingRight: 4 },
+  styleGridCol: { gap: 8 },
+
+  colourHint: { fontFamily: fonts.body, fontSize: 11, color: colors.mist, marginBottom: 10, fontStyle: 'italic' },
+  coloursRow: { flexDirection: 'row', gap: 18, marginBottom: 4 },
+  colourItem: { alignItems: 'center', gap: 6 },
+  colourDot: { width: 26, height: 26, borderRadius: 13, borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)' },
+  colourDotOff: { opacity: 0.25 },
+  colourOnPill: { backgroundColor: 'rgba(201,168,201,0.2)', borderRadius: radii.pill, paddingVertical: 2, paddingHorizontal: 8 },
+  colourOnPillOff: { backgroundColor: 'rgba(0,0,0,0.05)' },
+  colourOnText: { fontFamily: fonts.bodyMedium, fontSize: 10, color: colors.ink2, fontWeight: '600' },
+  shadeRow: { flexDirection: 'row', gap: 10, marginTop: 10, marginBottom: 4 },
+  shadeSwatch: { width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(0,0,0,0.12)' },
+  customHexRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
+  customHexPreview: { width: 26, height: 26, borderRadius: 13, borderWidth: 1, borderColor: 'rgba(0,0,0,0.12)', backgroundColor: 'rgba(0,0,0,0.05)' },
+  customHexInput: {
+    flex: 1, fontFamily: fonts.body, fontSize: 13, color: colors.ink,
+    backgroundColor: 'rgba(255,255,255,0.5)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)',
+    borderRadius: radii.pill, paddingVertical: 7, paddingHorizontal: 14,
+  },
+  customHexApply: { backgroundColor: 'rgba(201,168,201,0.25)', borderRadius: radii.pill, paddingVertical: 7, paddingHorizontal: 14 },
+  customHexApplyText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.purpleDark, fontWeight: '700' },
+
   errorText: { color: '#c04040', fontSize: 13, marginBottom: 10, textAlign: 'center' },
   infoText: { color: '#9a5fa8', fontSize: 12, textAlign: 'center', marginBottom: 12 },
 
   cardOuter: { alignItems: 'center', marginBottom: 12 },
-  cardCapture: { borderRadius: 24, overflow: 'hidden' },
-  overlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', paddingHorizontal: '8%' },
 
-  decorLine: { height: 1 },
-  nameText: { fontWeight: '300', letterSpacing: 3, textAlign: 'center' },
-  subtitleText: { fontStyle: 'italic', marginTop: 6, textAlign: 'center' },
-  affirmationText: { textAlign: 'center', lineHeight: 20 },
-  watermark: { color: 'rgba(155,109,255,0.55)', letterSpacing: 1 },
-
-  styleLabel: { textAlign: 'center', fontSize: 12, color: '#6b5c66', fontWeight: '500', marginBottom: 16 },
 
   actionRow: { flexDirection: 'row', gap: 10, justifyContent: 'center' },
   actionBtn: {

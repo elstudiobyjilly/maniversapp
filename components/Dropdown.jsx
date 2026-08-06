@@ -1,38 +1,71 @@
-import { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { colors, fonts, radii } from '../constants/theme';
+import { useRef, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Pressable, ScrollView, Dimensions } from 'react-native';
+import { colors, fonts, radii, shadows } from '../constants/theme';
 
-// Inline accordion dropdown — tapping the trigger expands the options directly
-// below it in normal layout flow (pushes content down), matching the website's
-// inline-panel behavior. No modal, no absolute positioning, no clipping inside
-// blurred/glass containers.
-export default function Dropdown({ label, value, options, onSelect, fullWidth, disabled }) {
+// Floating overlay dropdown — tapping the trigger opens the option list as a
+// popover positioned just below it, on top of the page (matches the
+// website's floating panel). It never pushes surrounding content down like
+// an inline accordion would.
+export default function Dropdown({ label, value, options, onSelect, fullWidth, disabled, compact, matchButton }) {
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState(null);
+  const triggerRef = useRef(null);
   const selectedLabel = options.find((o) => o.value === value)?.label || label;
+
+  const openMenu = () => {
+    if (disabled) return;
+    triggerRef.current?.measureInWindow((x, y, width, height) => {
+      const screenH = Dimensions.get('window').height;
+      const maxMenuHeight = 280;
+      const openUpward = y + height + maxMenuHeight > screenH - 40;
+      setPos({ x, y, width, height, openUpward });
+      setOpen(true);
+    });
+  };
 
   return (
     <View style={fullWidth ? { width: '100%' } : undefined}>
       <TouchableOpacity
-        style={[styles.trigger, fullWidth && styles.triggerFullWidth, disabled && styles.triggerDisabled]}
-        onPress={() => !disabled && setOpen(!open)}
+        ref={triggerRef}
+        style={[styles.trigger, fullWidth && styles.triggerFullWidth, compact && styles.triggerCompact, matchButton && styles.triggerBtnMatch, disabled && styles.triggerDisabled]}
+        onPress={openMenu}
         disabled={disabled}
       >
-        <Text style={[styles.triggerText, disabled && styles.triggerTextDisabled]}>{selectedLabel}</Text>
-        {!disabled && <Text style={[styles.chevron, open && styles.chevronOpen]}>▾</Text>}
+        <Text style={[styles.triggerText, compact && styles.triggerTextCompact, matchButton && styles.triggerTextBtnMatch, disabled && styles.triggerTextDisabled]} numberOfLines={1}>{selectedLabel}</Text>
+        {!disabled && <Text style={[styles.chevron, compact && styles.chevronCompact, matchButton && styles.chevronBtnMatch, open && styles.chevronOpen]}>▾</Text>}
       </TouchableOpacity>
 
-      {open && !disabled && (
-        <View style={styles.panel}>
-          {options.map((opt) => (
-            <TouchableOpacity
-              key={opt.value}
-              style={[styles.option, opt.value === value && styles.optionActive]}
-              onPress={() => { onSelect(opt.value); setOpen(false); }}
+      {open && pos && (
+        <Modal transparent visible animationType="fade" onRequestClose={() => setOpen(false)}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpen(false)}>
+            <View
+              style={[
+                styles.panel,
+                {
+                  position: 'absolute',
+                  left: pos.x,
+                  width: Math.max(pos.width, 180),
+                  maxHeight: 280,
+                  ...(pos.openUpward
+                    ? { bottom: Dimensions.get('window').height - pos.y + 6 }
+                    : { top: pos.y + pos.height + 6 }),
+                },
+              ]}
             >
-              <Text style={[styles.optionText, opt.value === value && styles.optionTextActive]}>{opt.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+              <ScrollView bounces={false}>
+                {options.map((opt) => (
+                  <TouchableOpacity
+                    key={opt.value}
+                    style={[styles.option, opt.value === value && styles.optionActive]}
+                    onPress={() => { onSelect(opt.value); setOpen(false); }}
+                  >
+                    <Text style={[styles.optionText, opt.value === value && styles.optionTextActive]}>{opt.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </Pressable>
+        </Modal>
       )}
     </View>
   );
@@ -41,19 +74,32 @@ export default function Dropdown({ label, value, options, onSelect, fullWidth, d
 const styles = StyleSheet.create({
   trigger: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6,
-    backgroundColor: 'rgba(255,255,255,0.6)', borderRadius: radii.sm,
-    paddingVertical: 12, paddingHorizontal: 16,
+    backgroundColor: 'rgba(255,255,255,0.7)', borderRadius: radii.pill,
+    paddingVertical: 9, paddingHorizontal: 16,
     borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)',
   },
   triggerFullWidth: { width: '100%' },
+  triggerCompact: { paddingVertical: 6, paddingHorizontal: 10, gap: 3 },
+  // Matches Button's size="sm" pad/text exactly (paddingVertical 7,
+  // fontSize 11.5, 1px border) so the Intention/General dropdowns sit at
+  // the same height as the Share Anonymously/Share with Name buttons
+  // below them -- a uniform control row instead of visibly mismatched
+  // pill sizes. Distinct from `compact` (used by the All/Type/Category/
+  // Mine filter row, which needs to stay tighter to fit one line).
+  triggerBtnMatch: { paddingVertical: 7, paddingHorizontal: 12, gap: 3 },
   triggerDisabled: { opacity: 0.55 },
-  triggerText: { fontFamily: fonts.bodyMedium, color: colors.ink, fontSize: 13, fontWeight: '500' },
+  triggerText: { fontFamily: fonts.bodyMedium, color: colors.ink, fontSize: 12.5, fontWeight: '500' },
+  triggerTextCompact: { fontSize: 10.5 },
+  triggerTextBtnMatch: { fontSize: 11.5 },
   triggerTextDisabled: { color: colors.mist2 },
   chevron: { color: colors.mist2, fontSize: 12 },
+  chevronCompact: { fontSize: 10 },
+  chevronBtnMatch: { fontSize: 11 },
   chevronOpen: { transform: [{ rotate: '180deg' }] },
   panel: {
-    backgroundColor: 'rgba(255,255,255,0.7)', borderRadius: radii.sm, marginTop: 6,
+    backgroundColor: '#fff', borderRadius: radii.sm,
     borderWidth: 1, borderColor: 'rgba(201,168,201,0.25)', overflow: 'hidden',
+    ...shadows.card,
   },
   option: { paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(46,37,48,0.06)' },
   optionActive: { backgroundColor: 'rgba(201,168,201,0.18)' },

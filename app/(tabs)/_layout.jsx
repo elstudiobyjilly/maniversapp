@@ -1,33 +1,34 @@
 import { Tabs } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { colors, fonts } from '../../constants/theme';
+import FloatingTabBar from '../../components/FloatingTabBar';
 
-// Matches the website's nav bar tokens (--nav-bg / --nav-border / active =
-// purple-mid) instead of generic default-blue tab bar colors.
+// Custom tab bar (components/FloatingTabBar.jsx) replaces the built-in
+// bottom tab bar entirely -- it renders the sliding "liquid glass"
+// indicator behind the active icon (iOS 18 tab bar style: tap a tab and a
+// frosted pill glides over to it) and the pink icon colours, matching the
+// app's actual pink accent instead of the previous purple. ALL of the
+// pill's own styling (position/size/blur/shadow/border) now lives inside
+// FloatingTabBar itself -- `tabBarStyle` here would do nothing, since
+// React Navigation only applies it to its own built-in bar renderer, never
+// to a custom `tabBar`. (That's exactly what broke this the first time:
+// tabBarStyle silently stopped applying the moment a custom tabBar was
+// introduced, collapsing the pill into an unstyled full-height sliver.)
 export default function TabsLayout() {
   return (
-    <Tabs screenOptions={{
-      headerShown: false,
-      tabBarActiveTintColor: colors.purpleDark,
-      tabBarInactiveTintColor: colors.mist2,
-      tabBarStyle: {
-        backgroundColor: 'rgba(255,248,251,0.96)',
-        borderTopColor: 'rgba(248,184,200,0.28)',
-        borderTopWidth: 1,
-        height: 64,
-        paddingBottom: 8,
-        paddingTop: 6,
-      },
-      tabBarLabelStyle: { fontSize: 9.5, fontFamily: fonts.bodyMedium, marginTop: 1 },
-    }}>
-      <Tabs.Screen name="dashboard" options={{ title: 'Home', tabBarIcon: ({ color, size }) => <Ionicons name="home" color={color} size={size} /> }} />
-      <Tabs.Screen name="affirmations" options={{ title: 'Affirm', tabBarIcon: ({ color, size }) => <Ionicons name="sparkles" color={color} size={size} /> }} />
-      <Tabs.Screen name="stories" options={{ title: 'Stories', tabBarIcon: ({ color, size }) => <Ionicons name="book" color={color} size={size} /> }} />
-      <Tabs.Screen name="mindmovie" options={{ title: 'Movie', tabBarIcon: ({ color, size }) => <Ionicons name="film" color={color} size={size} /> }} />
-      <Tabs.Screen name="subliminal" options={{ title: 'Sub', tabBarIcon: ({ color, size }) => <Ionicons name="moon" color={color} size={size} /> }} />
-      <Tabs.Screen name="vision-board" options={{ title: 'Vision', tabBarIcon: ({ color, size }) => <Ionicons name="images" color={color} size={size} /> }} />
-      <Tabs.Screen name="more" options={{ title: 'More', tabBarIcon: ({ color, size }) => <Ionicons name="grid" color={color} size={size} /> }} />
-      <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarIcon: ({ color, size }) => <Ionicons name="person" color={color} size={size} /> }} />
+    <Tabs
+      tabBar={(props) => <FloatingTabBar {...props} />}
+      screenOptions={{ headerShown: false }}
+    >
+      <Tabs.Screen name="dashboard" options={{ title: 'Home' }} />
+      <Tabs.Screen name="affirmations" options={{ title: 'Affirm' }} />
+      <Tabs.Screen name="stories" options={{ title: 'Stories' }} />
+      {/* Mind Movie & Subliminal moved off the bottom tab bar to cut phone-nav
+          clutter — still fully reachable as screens via the More tab's tile/
+          list, href:null just removes their tab bar button. */}
+      <Tabs.Screen name="mindmovie" options={{ href: null }} />
+      <Tabs.Screen name="subliminal" options={{ href: null }} />
+      <Tabs.Screen name="vision-board" options={{ title: 'Vision' }} />
+      <Tabs.Screen name="more" options={{ title: 'More' }} />
+      <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
     </Tabs>
   );
 }
