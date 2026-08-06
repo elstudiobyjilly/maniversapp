@@ -322,7 +322,7 @@ const styles = StyleSheet.create({
 
   weekWrap: { marginBottom: 8 },
   weekHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(245,240,252,0.6)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.25)', borderRadius: radii.sm, paddingVertical: 9, paddingHorizontal: 12, marginBottom: 6 },
-  weekLabel: { fontFamily: fonts.displayMedium, fontSize: 14.5, color: colors.purpleDark },
+  weekLabel: { fontFamily: fonts.displayMedium, fontSize: 16.5, color: colors.purpleDark },
   weekChevron: { fontSize: 12, color: colors.mist },
 
   dreamIntro: { fontFamily: fonts.displayMedium, fontSize: 17, color: colors.ink, marginBottom: 4 },
