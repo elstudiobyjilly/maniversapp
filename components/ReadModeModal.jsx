@@ -15,9 +15,16 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 // Rough sentence split for stories (the website tracks "Sentence N/M" the
 // same way) -- affirmation sets pass their real per-line array instead via
 // the `lines` prop, so this only kicks in when `lines` isn't given.
+// Avoids a lookbehind assertion (not reliably supported across every
+// Hermes version) by marking each split point with a lookahead-only match
+// against a placeholder token that can't occur in real text, then
+// splitting on that token -- same result as a lookbehind split, with no
+// risk of the regex itself throwing at runtime.
+const SPLIT_TOKEN = '';
 function splitSentences(text) {
   return (text || '')
-    .split(/(?<=[.!?])\s+(?=[A-Z"'])/)
+    .replace(/([.!?])\s+(?=[A-Z"'])/g, `$1${SPLIT_TOKEN}`)
+    .split(SPLIT_TOKEN)
     .map((s) => s.trim())
     .filter(Boolean);
 }
