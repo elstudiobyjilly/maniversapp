@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, ActivityIndicator, Dimensions } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet, ActivityIndicator, Dimensions, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useSharedValue, useAnimatedStyle, useAnimatedReaction, runOnJS, withTiming } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -31,7 +31,11 @@ const CANVAS_HEIGHT = 2000;
 // The board's visible frame — fixed size. Zooming scales/pans the content
 // inside this frame; the frame itself never resizes.
 const VIEWPORT_WIDTH = SCREEN_WIDTH - 32;
-const VIEWPORT_HEIGHT = Math.max(420, Math.min(900, SCREEN_HEIGHT - 380));
+// The toolbar is now two compact, horizontally-scrollable rows instead of
+// a wrapping cluster of pills that could eat 3-4 rows of vertical space —
+// that freed-up room goes straight to the board, which is why this now
+// only reserves 300px above/below instead of 380.
+const VIEWPORT_HEIGHT = Math.max(420, Math.min(960, SCREEN_HEIGHT - 300));
 const ITEM_SIZE = 120;
 // Zoom range. Max was 2x, which wasn't enough to actually inspect a busy
 // board. The minimum is NOT a flat constant — see minZoomFor() below,
@@ -638,42 +642,62 @@ export default function VisionBoard() {
 
   return (
     <GradientBackground>
+      {/* The page itself has to scroll -- previously this whole screen was
+          a plain View (no ScrollView), so once the toolbar wrapped across
+          several rows there was simply no way to reach anything below the
+          board (including the "+ Add Image" button). Fullscreen mode still
+          renders outside this ScrollView since it fills the whole screen
+          on its own. */}
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={fullscreen ? { flex: 1 } : { paddingBottom: 40 }}
+        scrollEnabled={!fullscreen}
+      >
       {!fullscreen && (
         <View style={{ paddingTop: insets.top + 14, paddingHorizontal: 16 }}>
           <ScreenHeader lead="Your" accent="Vision Board" subtitle="Pin your dreams. See them. Feel them. Receive them." />
 
-          <View style={styles.controlRow}>
-            <Button title="📸 Add Photos" size="sm" onPress={handleAddImage} loading={uploading} disabled={isLocked} />
-            <TouchableOpacity style={styles.controlPill} onPress={handleFromMindMovies} disabled={loadingMM}>
-              {loadingMM ? <ActivityIndicator size="small" color="#2e2530" /> : <Text style={styles.controlText}>🎬 From Mind Movies</Text>}
-            </TouchableOpacity>
+          {/* Row 1: editing actions (hidden while locked, since none of
+              them apply to a locked board) + Lock/Fullscreen, which always
+              apply. Horizontally scrollable so it never needs to wrap. */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.toolRow} contentContainerStyle={styles.toolRowContent}>
+            {!isLocked && (
+              <>
+                <TouchableOpacity style={styles.controlPill} onPress={handleAddImage} disabled={uploading}>
+                  {uploading ? <ActivityIndicator size="small" color="#2e2530" /> : <Text style={styles.controlText}>📸 Add Photos</Text>}
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.controlPill} onPress={handleFromMindMovies} disabled={loadingMM}>
+                  {loadingMM ? <ActivityIndicator size="small" color="#2e2530" /> : <Text style={styles.controlText}>🎬 Movies</Text>}
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.controlPill} onPress={handleDownload} disabled={downloading}>
+                  {downloading ? <ActivityIndicator size="small" color="#2e2530" /> : <Text style={styles.controlText}>⬇️ Board</Text>}
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.controlPill} onPress={handleWallpaper} disabled={savingWallpaper}>
+                  {savingWallpaper ? <ActivityIndicator size="small" color="#2e2530" /> : <Text style={styles.controlText}>📱 Wallpaper</Text>}
+                </TouchableOpacity>
+              </>
+            )}
             <TouchableOpacity style={[styles.controlPill, isLocked && styles.controlPillActive]} onPress={handleToggleLock}>
               <Text style={[styles.controlText, isLocked && styles.controlTextActive]}>{isLocked ? '🔒 Locked' : '🔓 Lock'}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.controlPill} onPress={() => setFullscreen(true)}>
-              <Text style={styles.controlText}>⛶ Fullscreen</Text>
+              <Text style={styles.controlText}>⛶ Full</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.controlPill} onPress={handleTidy}>
-              <Text style={styles.controlText}>✨ Tidy</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.controlPill, selectMode && styles.controlPillActive]} onPress={handleGroupToggle}>
-              <Text style={[styles.controlText, selectMode && styles.controlTextActive]}>🗂 Group{selectMode && selectedIndices.length ? ` (${selectedIndices.length})` : ''}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.controlPill} onPress={handleDownload} disabled={downloading}>
-              {downloading ? <ActivityIndicator size="small" color="#2e2530" /> : <Text style={styles.controlText}>⬇️ Board</Text>}
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.controlPill} onPress={handleWallpaper} disabled={savingWallpaper}>
-              {savingWallpaper ? <ActivityIndicator size="small" color="#2e2530" /> : <Text style={styles.controlText}>📱 Wallpaper</Text>}
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.controlPill} onPress={handleShare} disabled={sharing}>
-              {sharing ? <ActivityIndicator size="small" color="#2e2530" /> : <Text style={styles.controlText}>🔗 Share</Text>}
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.controlPill, styles.controlPillDanger]} onPress={handleClear}>
-              <Text style={[styles.controlText, styles.controlTextDanger]}>🗑️ Clear</Text>
-            </TouchableOpacity>
-          </View>
+            {!isLocked && (
+              <>
+                <TouchableOpacity style={styles.controlPill} onPress={handleTidy}>
+                  <Text style={styles.controlText}>✨ Tidy</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.controlPill, selectMode && styles.controlPillActive]} onPress={handleGroupToggle}>
+                  <Text style={[styles.controlText, selectMode && styles.controlTextActive]}>🗂 Group{selectMode && selectedIndices.length ? ` (${selectedIndices.length})` : ''}</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </ScrollView>
 
-          <View style={styles.zoomRow}>
+          {/* Row 2: zoom controls + Share/Clear, which always apply
+              regardless of lock state. Also horizontally scrollable. */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.toolRow} contentContainerStyle={styles.toolRowContent}>
             <TouchableOpacity style={styles.zoomBtn} onPress={() => setZoomTo(zoom.value - 0.1)}>
               <Text style={styles.zoomBtnText}>−</Text>
             </TouchableOpacity>
@@ -684,7 +708,13 @@ export default function VisionBoard() {
             <TouchableOpacity style={styles.fitBtn} onPress={() => { setZoomTo(minZoom); panX.value = withTiming(0); panY.value = withTiming(0); }}>
               <Text style={styles.fitBtnText}>⟳ Fit</Text>
             </TouchableOpacity>
-          </View>
+            <TouchableOpacity style={styles.controlPill} onPress={handleShare} disabled={sharing}>
+              {sharing ? <ActivityIndicator size="small" color="#2e2530" /> : <Text style={styles.controlText}>🔗 Share</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.iconPill, styles.controlPillDanger]} onPress={handleClear}>
+              <Text style={styles.controlTextDanger}>🗑️</Text>
+            </TouchableOpacity>
+          </ScrollView>
 
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
           {info ? <Text style={styles.infoText}>{info}</Text> : null}
@@ -694,12 +724,6 @@ export default function VisionBoard() {
       )}
 
       {canvasNode}
-
-      {fullscreen && (
-        <TouchableOpacity style={styles.fullscreenClose} onPress={() => setFullscreen(false)}>
-          <Text style={styles.fullscreenCloseText}>✕ Exit Fullscreen</Text>
-        </TouchableOpacity>
-      )}
 
       {!fullscreen && (
         <Button
@@ -714,6 +738,16 @@ export default function VisionBoard() {
           // this button needs to clear it manually.
           style={{ marginHorizontal: 16, marginTop: 14, marginBottom: 104 }}
         />
+      )}
+      </ScrollView>
+
+      {/* Rendered as ScrollView siblings, not children -- these are
+          full-screen overlays and must stay fixed over the viewport
+          regardless of the page's current scroll position. */}
+      {fullscreen && (
+        <TouchableOpacity style={styles.fullscreenClose} onPress={() => setFullscreen(false)}>
+          <Text style={styles.fullscreenCloseText}>✕ Exit Fullscreen</Text>
+        </TouchableOpacity>
       )}
 
       {categorizingIndex != null && (
@@ -751,14 +785,19 @@ const styles = StyleSheet.create({
   upsellIcon: { fontSize: 44, marginBottom: 10 },
   upsellPerks: { alignSelf: 'stretch', marginBottom: 24 },
   upsellPerk: { fontFamily: fonts.body, fontSize: 13, color: colors.ink2, marginBottom: 8, textAlign: 'center' },
-  controlRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10, alignItems: 'center' },
-  controlPill: { backgroundColor: 'rgba(255,255,255,0.6)', borderRadius: radii.pill, paddingVertical: 9, paddingHorizontal: 14, borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)', minWidth: 44, alignItems: 'center' },
+  // Two compact, horizontally-scrollable rows instead of a wrapping
+  // cluster of pills -- that used to eat 3-4 rows of vertical space
+  // depending on screen width, which was most of the "can't scroll to
+  // reach the board" problem along with the missing ScrollView itself.
+  toolRow: { marginBottom: 8 },
+  toolRowContent: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 8 },
+  controlPill: { backgroundColor: 'rgba(255,255,255,0.6)', borderRadius: radii.pill, paddingVertical: 8, paddingHorizontal: 13, borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)', minWidth: 40, alignItems: 'center' },
+  iconPill: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.6)', borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)', alignItems: 'center', justifyContent: 'center' },
   controlPillActive: { backgroundColor: colors.pinkAccent, borderColor: colors.pinkAccent },
   controlPillDanger: { borderColor: colors.dangerBorder },
   controlText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.ink, fontWeight: '500' },
   controlTextActive: { color: '#fff' },
-  controlTextDanger: { color: colors.danger },
-  zoomRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
+  controlTextDanger: { color: colors.danger, fontSize: 14 },
   zoomBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.6)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(201,168,201,0.3)' },
   zoomBtnText: { fontFamily: fonts.bodyMedium, fontSize: 16, color: colors.ink, fontWeight: '600' },
   zoomPct: { fontFamily: fonts.body, fontSize: 13, color: colors.mist, minWidth: 40, textAlign: 'center' },
