@@ -308,6 +308,13 @@ function FeelEditModal({ visible, card, onClose, onSave, onDelete }) {
   );
 }
 
+// Module-level, not component state -- survives navigating away and back
+// within the same app session (resets only on a full reload), so the
+// second+ time this screen opens it can paint instantly from what was
+// last fetched instead of blanking to a spinner while re-fetching data
+// that almost certainly hasn't changed since the last visit.
+let cachedFeelItCards = null;
+
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 export default function FeelIt() {
   const insets = useSafeAreaInsets();
@@ -315,9 +322,11 @@ export default function FeelIt() {
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [upgradeMsg, setUpgradeMsg] = useState('');
 
-  // My Feel Cards state
-  const [myCards, setMyCards] = useState([]);
-  const [loadingCards, setLoadingCards] = useState(true);
+  // My Feel Cards state -- seeded from the cache when there is one, so a
+  // repeat visit renders the real cards on the very first frame; only a
+  // cold start (no cache yet) shows the loading spinner.
+  const [myCards, setMyCards] = useState(cachedFeelItCards || []);
+  const [loadingCards, setLoadingCards] = useState(!cachedFeelItCards);
   // Default view is the full-screen swipeable single-card reader (matches
   // the website) -- the grid is only reached via the X/"view all" action.
   const [feelView, setFeelView] = useState('fullscreen'); // 'grid' | 'fullscreen'
@@ -325,14 +334,30 @@ export default function FeelIt() {
   const [editingCard, setEditingCard] = useState(null); // card object, or {} for new
   const [editVisible, setEditVisible] = useState(false);
 
+  // Keeps the module-level cache in lockstep with every local mutation
+  // (save/edit/delete), not just the initial fetch -- so leaving and
+  // coming back never flashes stale cached data before the background
+  // refresh corrects it.
+  const setCards = (updater) => {
+    setMyCards((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      cachedFeelItCards = next;
+      return next;
+    });
+  };
+
   const loadCards = async () => {
     try {
       const data = await getFeelItCards();
       const sorted = [...data].sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
-      setMyCards(sorted);
+      setCards(sorted);
     } catch (_) {}
   };
 
+  // Always refetch in the background to stay in sync (e.g. edits made on
+  // the website) -- but only the cold-start case ties this to the loading
+  // spinner; a cached repeat visit refreshes silently underneath what's
+  // already on screen.
   useEffect(() => { refresh(); loadCards().finally(() => setLoadingCards(false)); }, []);
 
   const openCard = (index) => { setStackIndex(index); setFeelView('fullscreen'); };
@@ -346,7 +371,7 @@ export default function FeelIt() {
     setEditVisible(false);
     if (editingCard && editingCard.id) {
       const updated = { ...editingCard, state: title, what: body, color };
-      setMyCards((prev) => prev.map((c) => (c.id === editingCard.id ? updated : c)));
+      setCards((prev) => prev.map((c) => (c.id === editingCard.id ? updated : c)));
       try { await updateFeelItCard(editingCard.id, { state: title, what: body, color }); } catch (_) {}
     } else {
       const cap = limits?.feelit_cards_total;
@@ -357,7 +382,7 @@ export default function FeelIt() {
       }
       try {
         const row = await saveFeelItCard({ state: title, what: body, color, display_order: myCards.length });
-        setMyCards((prev) => [...prev, row]);
+        setCards((prev) => [...prev, row]);
       } catch (e) {
         if (e.status === 403) { setUpgradeMsg(e.message || 'Upgrade for more Feel It cards.'); setShowUpgrade(true); }
       }
@@ -371,7 +396,7 @@ export default function FeelIt() {
         setEditVisible(false);
         setFeelView('grid');
         try { await deleteFeelItCard(targetCard.id); } catch (_) {}
-        setMyCards((prev) => prev.filter((c) => c.id !== targetCard.id));
+        setCards((prev) => prev.filter((c) => c.id !== targetCard.id));
       } },
     ]);
   };
